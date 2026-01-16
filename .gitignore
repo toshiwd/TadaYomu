@@ -1,3 +1,4 @@
+
 # Gradle
 .gradle/
 build/
@@ -8,23 +9,8 @@ local.properties
 # IDE files
 .idea/
 .DS_Store
+*.iml
 
-# Keystore files
+# Keystore
 *.jks
 *.keystore
-
-# Captures
-captures/
-
-# Misc
-.cxx/
-*.apk
-*.aab
-*.ap_
-*.apks
-*.dex
-*.class
-*.jar
-*.so
-*.swp
-*~
