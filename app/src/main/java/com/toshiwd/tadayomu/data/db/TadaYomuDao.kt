@@ -11,30 +11,30 @@ interface TadaYomuDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertWork(work: Work): Long
 
-    @Query("SELECT * FROM works WHERE title = :title AND author = :author")
-    suspend fun getWorkByTitleAndAuthor(title: String, author: String): Work?
-
-    @Query("UPDATE works SET lastImportedDate = :lastImportedDate WHERE id = :workId")
-    suspend fun updateWorkLastImportedDate(workId: Long, lastImportedDate: Long)
+    @Query("UPDATE works SET lastOpenedAt = :timestamp WHERE id = :workId")
+    suspend fun updateWorkLastOpened(workId: Long, timestamp: Long)
 
     // --- Chapter --- //
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertChapter(chapter: Chapter): Long
 
-    @Query("SELECT EXISTS(SELECT 1 FROM chapters WHERE workId = :workId AND chapterNumber = :chapterNumber)")
-    suspend fun existsChapter(workId: Long, chapterNumber: Int): Boolean
+    @Query("SELECT * FROM chapters WHERE workId = :workId ORDER BY chapterIndex ASC")
+    suspend fun getChaptersByWorkId(workId: Long): List<Chapter>
 
-    @Query("SELECT * FROM chapters WHERE workId = :workId ORDER BY chapterNumber ASC")
-    fun getChaptersForWork(workId: Long): Flow<List<Chapter>>
+    @Query("SELECT * FROM chapters WHERE id = :chapterId")
+    suspend fun getChapter(chapterId: Long): Chapter?
 
     // --- ReadingState --- //
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertReadingState(readingState: ReadingState)
 
-    @Query("SELECT * FROM reading_states WHERE workId = :workId")
-    suspend fun getReadingState(workId: Long): ReadingState?
+    @Query("SELECT * FROM reading_states WHERE chapterId = :chapterId")
+    suspend fun getReadingState(chapterId: Long): ReadingState?
+
+    @Query("SELECT rs.* FROM reading_states rs INNER JOIN chapters c ON rs.chapterId = c.id WHERE c.workId = :workId ORDER BY rs.updatedAt DESC LIMIT 1")
+    suspend fun getLastReadingStateForWork(workId: Long): ReadingState?
 
     // --- Combined (for Bookshelf) --- //
 
@@ -42,14 +42,13 @@ interface TadaYomuDao {
         SELECT
             w.id AS workId,
             w.title,
-            w.author,
-            w.lastImportedDate,
-            (SELECT COUNT(id) FROM chapters WHERE workId = w.id) AS chapterCount,
-            rs.chapterNumber AS lastReadChapterNumber,
-            rs.progress AS lastReadProgress
+            '' AS author, -- MVPでは著者なし
+            w.createdAt AS lastImportedDate, -- 表示用マッピング
+            0 AS chapterCount, -- MVPでは簡易化
+            0 AS lastReadChapterNumber,
+            0.0 AS lastReadProgress
         FROM works AS w
-        LEFT JOIN reading_states AS rs ON w.id = rs.workId
-        ORDER BY w.lastImportedDate DESC
+        ORDER BY w.lastOpenedAt DESC, w.createdAt DESC
     """)
     fun getWorkInfoList(): Flow<List<WorkInfo>>
 }

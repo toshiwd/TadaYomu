@@ -1,5 +1,6 @@
 package com.toshiwd.tadayomu.ui.library
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.toshiwd.tadayomu.data.db.WorkInfo
@@ -20,9 +21,9 @@ class LibraryViewModel(
             initialValue = emptyList()
         )
 
-    fun addDummyWork() {
+    fun importFile(uri: Uri) {
         viewModelScope.launch {
-            repository.addDummyWork()
+            repository.importFile(uri)
         }
     }
 }

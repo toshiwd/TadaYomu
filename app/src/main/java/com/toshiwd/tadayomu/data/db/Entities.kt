@@ -8,8 +8,9 @@ import androidx.room.PrimaryKey
 data class Work(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val title: String,
-    val author: String,
-    val lastImportedDate: Long
+    val createdAt: Long,
+    val updatedAt: Long,
+    val lastOpenedAt: Long?
 )
 
 @Entity(
@@ -21,13 +22,17 @@ data class Work(
 data class Chapter(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val workId: Long,
-    val chapterNumber: Int,
-    val title: String = ""
+    val chapterIndex: Int,
+    val title: String,
+    val contentPath: String, // 端末内のファイルパス
+    val createdAt: Long,
+    val updatedAt: Long
 )
 
 @Entity(tableName = "reading_states")
 data class ReadingState(
-    @PrimaryKey val workId: Long,
-    val chapterNumber: Int,
-    val progress: Float
+    @PrimaryKey val chapterId: Long,
+    val scrollPosition: Int, // WebViewのスクロール位置
+    val scrollPercent: Float,
+    val updatedAt: Long
 )

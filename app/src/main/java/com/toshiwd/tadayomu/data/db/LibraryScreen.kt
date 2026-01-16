@@ -1,5 +1,7 @@
 package com.toshiwd.tadayomu.ui.library
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -14,13 +16,20 @@ import com.toshiwd.tadayomu.data.db.WorkInfo
 
 @Composable
 fun LibraryScreen(
-    viewModel: LibraryViewModel
+    viewModel: LibraryViewModel,
+    onWorkClick: (Long) -> Unit
 ) {
     val works by viewModel.libraryWorks.collectAsState()
+    
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let { viewModel.importFile(it) }
+    }
 
     Scaffold(
         floatingActionButton = {
-            FloatingActionButton(onClick = { viewModel.addDummyWork() }) {
+            FloatingActionButton(onClick = { launcher.launch(arrayOf("text/plain", "text/html")) }) {
                 Text("+")
             }
         }
@@ -36,7 +45,7 @@ fun LibraryScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(works) { work ->
-                    WorkItem(work)
+                    WorkItem(work, onClick = { onWorkClick(work.workId) })
                 }
             }
         }
@@ -44,14 +53,15 @@ fun LibraryScreen(
 }
 
 @Composable
-fun WorkItem(work: WorkInfo) {
+fun WorkItem(work: WorkInfo, onClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        onClick = onClick
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(text = work.title, style = MaterialTheme.typography.titleMedium)
-            Text(text = "著者: ${work.author}", style = MaterialTheme.typography.bodyMedium)
+            // Text(text = "著者: ${work.author}", style = MaterialTheme.typography.bodyMedium)
             Text(
                 text = "最終インポート: ${java.text.SimpleDateFormat("yyyy/MM/dd HH:mm").format(java.util.Date(work.lastImportedDate))}",
                 style = MaterialTheme.typography.bodySmall
