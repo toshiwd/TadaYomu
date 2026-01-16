@@ -24,7 +24,7 @@ class MainActivity : ComponentActivity() {
         // Manual DI Setup
         val database = TadaYomuDatabase.getDatabase(applicationContext)
         val repository = WorkRepository(database.tadaYomuDao(), applicationContext)
-        
+
         val viewModelFactory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -51,7 +51,7 @@ class MainActivity : ComponentActivity() {
                     arguments = listOf(navArgument("workId") { type = NavType.LongType })
                 ) { backStackEntry ->
                     val workId = backStackEntry.arguments?.getLong("workId") ?: return@composable
-                    val readerViewModel = ViewModelProvider(this, viewModelFactory)[ReaderViewModel::class.java]
+                    val readerViewModel = ViewModelProvider(backStackEntry, viewModelFactory)[ReaderViewModel::class.java]
                     ReaderScreen(viewModel = readerViewModel, workId = workId)
                 }
             }

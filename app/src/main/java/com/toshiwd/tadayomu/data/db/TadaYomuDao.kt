@@ -1,12 +1,13 @@
 package com.toshiwd.tadayomu.data.db
 
-import androidx.room.*
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface TadaYomuDao {
-
-    // --- Work --- //
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertWork(work: Work): Long
@@ -42,9 +43,9 @@ interface TadaYomuDao {
         SELECT
             w.id AS workId,
             w.title,
-            '' AS author, -- MVPでは著者なし
-            w.createdAt AS lastImportedDate, -- 表示用マッピング
-            0 AS chapterCount, -- MVPでは簡易化
+            '' AS author,
+            w.createdAt AS lastImportedDate,
+            0 AS chapterCount,
             0 AS lastReadChapterNumber,
             0.0 AS lastReadProgress
         FROM works AS w
@@ -53,15 +54,12 @@ interface TadaYomuDao {
     fun getWorkInfoList(): Flow<List<WorkInfo>>
 }
 
-/**
- * 本棚画面の表示に必要な情報をまとめたDTO (Data Transfer Object)
- */
 data class WorkInfo(
     val workId: Long,
     val title: String,
     val author: String,
     val lastImportedDate: Long,
     val chapterCount: Int,
-    val lastReadChapterNumber: Int?,
-    val lastReadProgress: Float?
+    val lastReadChapterNumber: Int,
+    val lastReadProgress: Float
 )

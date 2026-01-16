@@ -2,9 +2,16 @@ package com.toshiwd.tadayomu.data.db
 
 import androidx.room.Entity
 import androidx.room.ForeignKey
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "works")
+@Entity(
+    tableName = "works",
+    indices = [
+        Index(value = ["lastOpenedAt"]),
+        Index(value = ["createdAt"])
+    ]
+)
 data class Work(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val title: String,
@@ -17,6 +24,9 @@ data class Work(
     tableName = "chapters",
     foreignKeys = [
         ForeignKey(entity = Work::class, parentColumns = ["id"], childColumns = ["workId"], onDelete = ForeignKey.CASCADE)
+    ],
+    indices = [
+        Index(value = ["workId"])
     ]
 )
 data class Chapter(
