@@ -1,0 +1,30 @@
+# Gradle
+.gradle/
+build/
+
+# Local properties
+local.properties
+
+# IDE files
+.idea/
+.DS_Store
+
+# Keystore files
+*.jks
+*.keystore
+
+# Captures
+captures/
+
+# Misc
+.cxx/
+*.apk
+*.aab
+*.ap_
+*.apks
+*.dex
+*.class
+*.jar
+*.so
+*.swp
+*~
