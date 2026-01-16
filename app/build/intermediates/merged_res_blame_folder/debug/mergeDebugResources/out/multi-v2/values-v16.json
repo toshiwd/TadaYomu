@@ -1,0 +1,19 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.toshiwd.tadayomu.app-mergeDebugResources-56:/values-v16/values-v16.xml",
+            "map": [
+                {
+                    "source": "/home/user/.gradle/caches/transforms-4/d3d46ce0b1e6e281a1d882aa5ba843b0/transformed/core-1.12.0/res/values-v16/values-v16.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "65",
+                        "endOffsets": "116"
+                    }
+                }
+            ]
+        }
+    ]
+}
