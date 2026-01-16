@@ -3,6 +3,7 @@
 
   packages = [
     pkgs.temurin-bin-17
+    pkgs.android-tools
   ];
 
   env = {
