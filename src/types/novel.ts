@@ -83,7 +83,8 @@ export interface Bookmark {
 
 /** Reader display settings */
 export interface ReaderSettings {
-  fontFamily: string;
+  /** Font family: 'serif' (Mincho) or 'sans-serif' (Gothic) */
+  fontFamily: 'serif' | 'sans-serif' | string;
   fontSize: number;
   lineHeight: number;
   /** Writing direction */
@@ -96,6 +97,8 @@ export interface ReaderSettings {
   autoScrollSpeed: number;
   /** Reverse page tap direction (left=next, right=prev) */
   reversePageDirection: boolean;
+  /** Fullscreen mode (hide status bar/clock) */
+  fullscreen: boolean;
 }
 
 /** Default reader settings */
@@ -108,4 +111,5 @@ export const DEFAULT_READER_SETTINGS: ReaderSettings = {
   margin: 16,
   autoScrollSpeed: 0,
   reversePageDirection: false,
+  fullscreen: true,
 };

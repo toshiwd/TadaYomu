@@ -8,6 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 import type { Novel } from '../types/novel';
 import { useSQLiteContext } from 'expo-sqlite';
 import { Dimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '../theme/ThemeContext';
 import { Spacing, Typography } from '../theme/colors';
@@ -24,6 +25,7 @@ export default function ReaderScreen({ navigation, route }: RootStackScreenProps
   const { mode } = useTheme();
   const db = useSQLiteContext();
   const webViewRef = useRef<WebView>(null);
+  const insets = useSafeAreaInsets();
 
   const novelId = route.params.novelId;
   const initialChapter = route.params.chapterIndex ?? 1;
@@ -139,7 +141,7 @@ export default function ReaderScreen({ navigation, route }: RootStackScreenProps
     const hasContent = processedText.trim().length > 0;
 
     // Google Fonts CDN for readable Japanese fonts
-    const fontLink = isVertical
+    const fontLink = settings.fontFamily === 'serif'
       ? '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700&display=swap" rel="stylesheet">'
       : '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">';
 
@@ -171,11 +173,16 @@ ${fontLink}
   #reader {
     width: 100%;
     height: 100%;
-    padding: ${settings.margin}px;
+    width: 100%;
+    height: 100%;
+    padding-top: ${settings.margin + insets.top}px;
+    padding-bottom: ${settings.margin + insets.bottom}px;
+    padding-left: ${settings.margin + insets.left}px;
+    padding-right: ${settings.margin + insets.right}px;
     color: ${readerTheme.fg};
-    font-family: ${isVertical
+    font-family: ${settings.fontFamily === 'serif'
         ? '"Noto Serif JP", "游明朝", "YuMincho", "ヒラギノ明朝 ProN", serif'
-        : '"Noto Sans JP", sans-serif'};
+        : '"Noto Sans JP", "游ゴシック", "YuGothic", "ヒラギノ角ゴ ProN", sans-serif'};
     font-size: ${settings.fontSize}px;
     line-height: ${settings.lineHeight};
     text-align: justify;
@@ -361,7 +368,7 @@ ${fontLink}
 </script>
 </body>
 </html>`;
-  }, [chapterText, settings, readerTheme, loading]);
+  }, [chapterText, settings, readerTheme, loading, insets]);
 
   const handleMessage = useCallback((event: any) => {
     try {
@@ -385,7 +392,7 @@ ${fontLink}
 
   return (
     <View style={styles.container}>
-      <StatusBar hidden />
+      <StatusBar hidden={settings.fullscreen} />
 
       {/* Toolbar */}
       <View style={[styles.toolbar, { backgroundColor: readerTheme.bg }]}>
@@ -443,6 +450,33 @@ ${fontLink}
         pointerEvents={showSettings ? 'auto' : 'none'}
       >
         <View style={styles.settingsHandle} />
+
+        {/* Font Family */}
+        <View style={styles.settingRow}>
+          <Text style={[styles.settingLabel, { color: readerTheme.fg }]}>フォント</Text>
+          <View style={styles.settingControls}>
+            <TouchableOpacity
+              style={[
+                styles.modeBtn,
+                settings.fontFamily === 'serif' && { backgroundColor: readerTheme.fg + '15' },
+                { borderColor: readerTheme.fg + '30' },
+              ]}
+              onPress={() => updateSetting('fontFamily', 'serif')}
+            >
+              <Text style={[styles.settingBtnText, { color: readerTheme.fg }]}>明朝</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.modeBtn,
+                settings.fontFamily === 'sans-serif' && { backgroundColor: readerTheme.fg + '15' },
+                { borderColor: readerTheme.fg + '30' },
+              ]}
+              onPress={() => updateSetting('fontFamily', 'sans-serif')}
+            >
+              <Text style={[styles.settingBtnText, { color: readerTheme.fg }]}>ゴシック</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
 
         {/* Font Size */}
         <View style={styles.settingRow}>
@@ -543,6 +577,22 @@ ${fontLink}
           >
             <Text style={[styles.settingBtnText, { color: readerTheme.fg }]}>
               {settings.reversePageDirection ? 'ON' : 'OFF'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Fullscreen Toggle */}
+        <View style={styles.settingRow}>
+          <Text style={[styles.settingLabel, { color: readerTheme.fg }]}>全画面 (時計非表示)</Text>
+          <TouchableOpacity
+            style={[
+              styles.toggleBtn,
+              { backgroundColor: settings.fullscreen ? readerTheme.fg + '20' : 'transparent', borderColor: readerTheme.fg + '30' },
+            ]}
+            onPress={() => updateSetting('fullscreen', !settings.fullscreen)}
+          >
+            <Text style={[styles.settingBtnText, { color: readerTheme.fg }]}>
+              {settings.fullscreen ? 'ON' : 'OFF'}
             </Text>
           </TouchableOpacity>
         </View>

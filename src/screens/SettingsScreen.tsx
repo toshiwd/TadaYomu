@@ -166,6 +166,27 @@ export default function SettingsScreen(_props: MainTabScreenProps<'Settings'>) {
             {/* Reader settings */}
             {settings && (
                 <Section title="リーダー" colors={colors}>
+                    <SettingRow label="フォント" colors={colors}>
+                        <View style={styles.toggleRow}>
+                            <TouchableOpacity
+                                style={[styles.toggleBtn, settings.fontFamily === 'serif' && { backgroundColor: colors.ui.primary }]}
+                                onPress={() => updateSetting('fontFamily', 'serif')}
+                            >
+                                <Text style={{ color: settings.fontFamily === 'serif' ? '#FFF' : colors.text.primary, fontSize: 12, fontWeight: '600' }}>
+                                    明朝体
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.toggleBtn, settings.fontFamily === 'sans-serif' && { backgroundColor: colors.ui.primary }]}
+                                onPress={() => updateSetting('fontFamily', 'sans-serif')}
+                            >
+                                <Text style={{ color: settings.fontFamily === 'sans-serif' ? '#FFF' : colors.text.primary, fontSize: 12, fontWeight: '600' }}>
+                                    ゴシック体
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    </SettingRow>
+
                     <SettingRow label="方向" colors={colors}>
                         <View style={styles.toggleRow}>
                             <TouchableOpacity
@@ -207,6 +228,27 @@ export default function SettingsScreen(_props: MainTabScreenProps<'Settings'>) {
                             <Text style={[styles.sizeValue, { color: colors.text.primary }]}>{settings.lineHeight.toFixed(1)}</Text>
                             <TouchableOpacity onPress={() => updateSetting('lineHeight', Math.min(2.5, settings.lineHeight + 0.1))}>
                                 <Ionicons name="add-circle-outline" size={24} color={colors.text.primary} />
+                            </TouchableOpacity>
+                        </View>
+                    </SettingRow>
+
+                    <SettingRow label="全画面モード (時計非表示)" colors={colors}>
+                        <View style={styles.toggleRow}>
+                            <TouchableOpacity
+                                style={[styles.toggleBtn, settings.fullscreen && { backgroundColor: colors.ui.primary }]}
+                                onPress={() => updateSetting('fullscreen', true)}
+                            >
+                                <Text style={{ color: settings.fullscreen ? '#FFF' : colors.text.primary, fontSize: 12, fontWeight: '600' }}>
+                                    ON
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.toggleBtn, !settings.fullscreen && { backgroundColor: colors.ui.primary }]}
+                                onPress={() => updateSetting('fullscreen', false)}
+                            >
+                                <Text style={{ color: !settings.fullscreen ? '#FFF' : colors.text.primary, fontSize: 12, fontWeight: '600' }}>
+                                    OFF
+                                </Text>
                             </TouchableOpacity>
                         </View>
                     </SettingRow>
