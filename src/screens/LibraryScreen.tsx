@@ -39,19 +39,7 @@ export default function LibraryScreen({ navigation }: MainTabScreenProps<'Librar
         setRefreshing(false);
     }, [loadNovels]);
 
-    const testFetch = async () => {
-        try {
-            const url = 'https://ncode.syosetu.com/n9669bk/1/';
-            const content = await syosetuAdapter.getChapterContent('n9669bk', url);
 
-            Alert.alert(
-                'Adapter Success',
-                `Title: ${content.title}\nBody Length: ${content.bodyText.length}\n\nPreview:\n${content.bodyText.substring(0, 200)}`
-            );
-        } catch (e) {
-            Alert.alert('Adapter Error', `${e}`);
-        }
-    };
 
     const renderNovel = ({ item }: { item: Novel }) => {
         const progress = getReadingProgress(db, item.id);
@@ -142,12 +130,7 @@ export default function LibraryScreen({ navigation }: MainTabScreenProps<'Librar
                         <Text style={styles.addButtonText}>小説を追加</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity
-                        style={[styles.addButton, { backgroundColor: '#FF5722', marginTop: 20 }]}
-                        onPress={testFetch}
-                    >
-                        <Text style={styles.addButtonText}>Test Fetch n9669bk/1/</Text>
-                    </TouchableOpacity>
+
                 </View>
             ) : (
                 <FlatList

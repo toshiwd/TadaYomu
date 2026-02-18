@@ -17,6 +17,8 @@ import type { RootStackScreenProps } from '../navigation/types';
 const NOVEL_URL_PATTERNS = [
     // なろう: https://ncode.syosetu.com/nXXXXXX/
     /^https?:\/\/ncode\.syosetu\.com\/n\w+\/?$/i,
+    // ノクターン: https://novel18.syosetu.com/nXXXXXX/
+    /^https?:\/\/novel18\.syosetu\.com\/n\w+\/?$/i,
     // カクヨム: https://kakuyomu.jp/works/XXXX
     /^https?:\/\/kakuyomu\.jp\/works\/\d+\/?$/i,
     // ハーメルン: https://syosetu.org/novel/XXXX/
@@ -31,8 +33,9 @@ function isNovelUrl(url: string): boolean {
  * Default ranking / top pages for each site.
  */
 const SITE_HOME_URLS: Record<string, string> = {
-    'syosetu.com': 'https://yomou.syosetu.com/rank/top/',
-    'kakuyomu.jp': 'https://kakuyomu.jp/rankings/overall/daily',
+    'ncode.syosetu.com': 'https://yomou.syosetu.com/rank/top/',
+    'novel18.syosetu.com': 'https://noc.syosetu.com/rank/top/',
+    'kakuyomu.jp': 'https://kakuyomu.jp/rankings/all/weekly?work_variation=long',
     'syosetu.org': 'https://syosetu.org/?mode=rank',
     'mai-net.net': 'https://www.mai-net.net/',
     'akatsuki-novels.com': 'https://www.akatsuki-novels.com/',
