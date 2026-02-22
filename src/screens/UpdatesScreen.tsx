@@ -55,7 +55,6 @@ export default function UpdatesScreen({ navigation }: MainTabScreenProps<'Update
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
             <View style={styles.header}>
-                <Text style={[styles.headerTitle, { color: colors.text.primary }]}>更新</Text>
             </View>
 
             <TouchableOpacity

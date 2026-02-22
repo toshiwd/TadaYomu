@@ -7,6 +7,13 @@
 export function formatNovelText(raw: string): string {
     let text = raw;
 
+    // 0. Extract <img> tags to protect them from formatting
+    const images: string[] = [];
+    text = text.replace(/<img[^>]*>/gi, (match) => {
+        images.push(match);
+        return `__IMG_${images.length - 1}__`;
+    });
+
     // 1. Normalize line endings
     text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
@@ -31,8 +38,20 @@ export function formatNovelText(raw: string): string {
     // 8. Trim trailing whitespace per line
     text = text.split('\n').map((line) => line.trimEnd()).join('\n');
 
-    // 9. Trim leading/trailing blank lines
+    // 9. Tate-chu-yoko (2-digit numbers, !?, !!, etc.)
+    text = applyTateChuYoko(text);
+
+    // 10. Bouten (Emphasis dots)
+    text = applyBouten(text);
+
+    // 11. Trim leading/trailing blank lines
     text = text.trim();
+
+    // 12. Restore <img> tags with wrapper for page isolation
+    text = text.replace(/__IMG_(\d+)__/g, (match, p1) => {
+        const index = parseInt(p1, 10);
+        return images[index] ? `<div class="image-page">${images[index]}</div>` : match;
+    });
 
     return text;
 }
@@ -79,9 +98,30 @@ function ensureIndentation(text: string): string {
         if (/^[＊\*※◆◇■□▲△▼▽●○★☆【】〈〉《》「」『』（）]/.test(line)) return line;
         // Skip ruby markup lines
         if (line.startsWith('<ruby>')) return line;
+        // Skip image placeholders
+        if (line.startsWith('__IMG_')) return line;
         // Add indent
         return '　' + line;
     }).join('\n');
+}
+
+/** Apply vertical-in-horizontal (Tate-chu-yoko) for 2-digit numbers and specific exclamation marks */
+function applyTateChuYoko(text: string): string {
+    // 2-digit half-width or full-width numbers (00-99 or ００-９９)
+    // For numbers, we check if they are exactly 2 digits and not surrounded by other digits
+    text = text.replace(/(?<![0-9０-９])([0-9０-９]{2})(?![0-9０-９])/g, '<span class="tcy">$1</span>');
+
+    // exclamation marks !?, !!, !? etc.
+    // Also include their full-width variants (！, ？)
+    // Match 2 to 3 combinations of !, ?, ！, ？
+    text = text.replace(/([!?！？]{2,3})/g, '<span class="tcy">$1</span>');
+
+    return text;
+}
+
+/** Convert 《《text》》 to <em class="emphasis">text</em> for bouten (emphasis dots) */
+function applyBouten(text: string): string {
+    return text.replace(/《《([^》\n]+)》》/g, '<em class="emphasis">$1</em>');
 }
 
 /** Convert plain text to HTML paragraphs suitable for WebView reader */
@@ -104,9 +144,19 @@ export function textToReaderHtml(text: string): string {
 
 /** Convert text with ruby markup back to html for reader */
 export function rubyTextToHtml(text: string): string {
-    // Pattern: |漢字《かんじ》 or 漢字《かんじ》
-    return text.replace(
-        /[|｜]?([^\s|｜《]+)《([^》]+)》/g,
-        '<ruby>$1<rp>(</rp><rt>$2</rt><rp>)</rp></ruby>'
-    );
+    // 1. Bar-required: |漢字《かんじ》 or ｜漢字《かんじ》
+    const barRegex = /[|｜]([^｜|《\n]+)《([^》\n]+)》/g;
+
+    // 2. Barless: 漢字《かんじ》
+    // Base: Contiguous sequence of ONLY Kanji, ONLY Hiragana, ONLY Katakana, or ONLY Alphanumeric
+    // Ruby: ONLY Hiragana, Katakana, Alphanumeric, spaces, hyphens, interpuncts, cho-on
+    const barlessRegex = /([一-龥]+|[ぁ-ん]+|[ァ-ヶ]+|[a-zA-Z0-9ａ-ｚＡ-Ｚ０-９]+)《([ぁ-んァ-ヶa-zA-Z0-9ａ-ｚＡ-Ｚ０-９\s\-・ー]+)》/g;
+
+    let result = text;
+    result = result.replace(barRegex, '<ruby>$1<rp>(</rp><rt>$2</rt><rp>)</rp></ruby>');
+    result = result.replace(barlessRegex, (match, p1, p2) => {
+        return `<ruby>${p1}<rp>(</rp><rt>${p2}</rt><rp>)</rp></ruby>`;
+    });
+
+    return result;
 }

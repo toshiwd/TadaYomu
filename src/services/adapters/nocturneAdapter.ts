@@ -74,7 +74,7 @@ function cleanHtmlForReader(html: string): string {
         .replace(/<br\s*\/?>/gi, '\n')
         .replace(/<\/p>\s*<p[^>]*>/gi, '\n\n');
 
-    cleaned = cleaned.replace(/<(?!\/?(?:ruby|rb|rt|rp)\b)[^>]+>/gi, '');
+    cleaned = cleaned.replace(/<(?!\/?(?:ruby|rb|rt|rp|img)\b)[^>]+>/gi, '');
 
     cleaned = cleaned
         .replace(/&amp;/g, '&')
@@ -97,7 +97,7 @@ function htmlToNovelFormat(html: string): string {
     text = text.replace(/<ruby>(.*?)<rp>.*?<\/rp><rt>(.*?)<\/rt><rp>.*?<\/rp><\/ruby>/gi, '|$1《$2》');
     text = text.replace(/<ruby>(.*?)<rt>(.*?)<\/rt><\/ruby>/gi, '|$1《$2》');
 
-    text = text.replace(/<[^>]+>/g, '');
+    text = text.replace(/<(?!\/?img\b)[^>]+>/gi, '');
 
     text = text
         .replace(/&amp;/g, '&')

@@ -83,20 +83,26 @@ export interface Bookmark {
 
 /** Reader display settings */
 export interface ReaderSettings {
-  /** Font family: 'serif' (Mincho) or 'sans-serif' (Gothic) */
-  fontFamily: 'serif' | 'sans-serif' | string;
+  /** Font family: 'serif' (Mincho) or 'sans-serif' (Gothic) or system */
+  fontFamily: 'serif' | 'sans-serif' | 'system-serif' | 'system-sans' | string;
   fontSize: number;
   lineHeight: number;
   /** Writing direction */
   writingMode: 'vertical' | 'horizontal';
   /** Color theme */
   theme: 'light' | 'dark' | 'sepia';
-  /** Page margin in px */
+  /** Page margin in px (left/right) */
   margin: number;
+  /** Top margin in px (reading comfort) */
+  marginTop: number;
+  /** Bottom margin in px (Kindle-style, thicker than top) */
+  marginBottom: number;
   /** Auto-scroll speed (0 = off) */
   autoScrollSpeed: number;
   /** Reverse page tap direction (left=next, right=prev) */
   reversePageDirection: boolean;
+  /** Paragraph spacing multiplier (0.0–1.0) */
+  paragraphSpacing: number;
   /** Fullscreen mode (hide status bar/clock) */
   fullscreen: boolean;
 }
@@ -109,7 +115,10 @@ export const DEFAULT_READER_SETTINGS: ReaderSettings = {
   writingMode: 'vertical',
   theme: 'light',
   margin: 16,
+  marginTop: 14,
+  marginBottom: 28,
   autoScrollSpeed: 0,
   reversePageDirection: false,
+  paragraphSpacing: 0.5,
   fullscreen: true,
 };

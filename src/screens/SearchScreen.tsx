@@ -52,7 +52,6 @@ export default function SearchScreen({ navigation }: MainTabScreenProps<'Search'
         >
             <ScrollView contentContainerStyle={styles.content}>
                 <View style={styles.header}>
-                    <Text style={[styles.headerTitle, { color: colors.text.primary }]}>追加</Text>
                 </View>
 
                 {/* URL input */}
@@ -114,13 +113,13 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     content: { paddingBottom: 100 },
     header: {
-        paddingTop: 56,
+        paddingTop: 48,
         paddingHorizontal: Spacing.lg,
-        paddingBottom: Spacing.md,
+        paddingBottom: Spacing.xs,
     },
-    headerTitle: { ...Typography.displaySmall },
-    inputSection: { paddingHorizontal: Spacing.lg, marginBottom: Spacing.xl },
-    sectionTitle: { ...Typography.subtitle, marginBottom: Spacing.sm },
+    headerTitle: { ...Typography.displaySmall, fontSize: 24 },
+    inputSection: { paddingHorizontal: Spacing.lg, marginBottom: Spacing.md },
+    sectionTitle: { ...Typography.subtitle, marginBottom: Spacing.xs },
     inputRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -141,9 +140,10 @@ const styles = StyleSheet.create({
     siteRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: Spacing.md,
+        paddingHorizontal: Spacing.md,
+        paddingVertical: Spacing.sm,
         borderRadius: Radius.md,
-        marginBottom: Spacing.xs,
+        marginBottom: 2,
         gap: Spacing.sm,
     },
     siteInfo: { flex: 1 },

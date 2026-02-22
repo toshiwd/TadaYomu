@@ -11,10 +11,10 @@ import { Spacing, Typography, Radius } from '../theme/colors';
 import type { MainTabScreenProps } from '../navigation/types';
 import type { ReaderSettings } from '../types/novel';
 import { getReaderSettings, saveReaderSettings } from '../database/repository';
-import { checkForUpdates, getCurrentVersion } from '../services/updateChecker';
+import { checkForUpdates, getCurrentVersion, downloadAndInstallUpdate } from '../services/updateChecker';
 import { syncService } from '../services/syncService';
 import auth, { type FirebaseAuthTypes } from '@react-native-firebase/auth';
-import { Alert } from 'react-native';
+import { Alert, ActivityIndicator } from 'react-native';
 
 export default function SettingsScreen(_props: MainTabScreenProps<'Settings'>) {
     const { mode, colors, setMode } = useTheme();
@@ -28,6 +28,9 @@ export default function SettingsScreen(_props: MainTabScreenProps<'Settings'>) {
     const [user, setUser] = useState<FirebaseAuthTypes.User | null>(null);
     const [syncing, setSyncing] = useState(false);
 
+    // Updater state
+    const [isUpdating, setIsUpdating] = useState<boolean>(false);
+
     useEffect(() => {
         const unsubscribe = auth().onAuthStateChanged((u) => {
             setUser(u);
@@ -39,7 +42,21 @@ export default function SettingsScreen(_props: MainTabScreenProps<'Settings'>) {
         try {
             await syncService.signIn();
         } catch (e: any) {
-            Alert.alert('ログイン失敗', e.message);
+            const code = e?.code || 'unknown';
+            const msg = e?.message || '';
+            console.error('[Auth] Sign-in failed:', code, msg);
+            if (msg.includes('blocked') || code === 'auth/unknown') {
+                Alert.alert(
+                    'ログイン失敗',
+                    `Firebaseの設定にこのアプリの署名(SHA-1)が登録されていません。\n\n` +
+                    `1. android/ で ./gradlew signingReport を実行\n` +
+                    `2. SHA1をFirebase Console → プロジェクト設定 → Androidアプリに追加\n` +
+                    `3. google-services.json を再ダウンロードして配置\n\n` +
+                    `エラー: [${code}] ${msg}`
+                );
+            } else {
+                Alert.alert('ログイン失敗', `[${code}] ${msg}`);
+            }
         }
     };
 
@@ -74,6 +91,15 @@ export default function SettingsScreen(_props: MainTabScreenProps<'Settings'>) {
         }
     };
 
+    const handleCheckUpdate = async () => {
+        if (isUpdating) return;
+        await checkForUpdates(false, async (manifest) => {
+            setIsUpdating(true);
+            await downloadAndInstallUpdate(manifest.apkUrl);
+            setIsUpdating(false);
+        });
+    };
+
     useFocusEffect(useCallback(() => { loadSettings(); }, [loadSettings]));
 
     const updateSetting = <K extends keyof ReaderSettings>(key: K, value: ReaderSettings[K]) => {
@@ -92,7 +118,6 @@ export default function SettingsScreen(_props: MainTabScreenProps<'Settings'>) {
     return (
         <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
             <View style={styles.header}>
-                <Text style={[styles.headerTitle, { color: colors.text.primary }]}>設定</Text>
             </View>
 
             {/* Cloud Sync */}
@@ -259,10 +284,18 @@ export default function SettingsScreen(_props: MainTabScreenProps<'Settings'>) {
             <Section title="アプリ" colors={colors}>
                 <TouchableOpacity
                     style={[styles.actionRow, { backgroundColor: colors.surface }]}
-                    onPress={() => checkForUpdates(false)}
+                    onPress={handleCheckUpdate}
+                    disabled={isUpdating}
                 >
                     <Ionicons name="cloud-download-outline" size={20} color={colors.text.primary} />
-                    <Text style={[styles.actionLabel, { color: colors.text.primary }]}>アップデート確認</Text>
+                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Text style={[styles.actionLabel, { color: colors.text.primary }]}>
+                            {isUpdating ? 'ダウンロード中...' : 'アップデート確認'}
+                        </Text>
+                        {isUpdating && (
+                            <ActivityIndicator size="small" color={colors.ui.primary} />
+                        )}
+                    </View>
                 </TouchableOpacity>
                 <View style={[styles.infoRow, { backgroundColor: colors.surface }]}>
                     <Text style={[styles.infoLabel, { color: colors.text.secondary }]}>バージョン</Text>
@@ -270,7 +303,7 @@ export default function SettingsScreen(_props: MainTabScreenProps<'Settings'>) {
                 </View>
             </Section>
 
-            <View style={{ height: 100 }} />
+            <View style={{ height: 40 }} />
         </ScrollView>
     );
 }
@@ -295,10 +328,10 @@ function SettingRow({ label, children, colors }: { label: string; children: Reac
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: { paddingTop: 56, paddingHorizontal: Spacing.lg, paddingBottom: Spacing.md },
-    headerTitle: { ...Typography.displaySmall },
-    section: { paddingHorizontal: Spacing.lg, marginBottom: Spacing.lg },
-    sectionTitle: { ...Typography.caption, fontWeight: '700', textTransform: 'uppercase', marginBottom: Spacing.xs },
+    header: { paddingTop: 48, paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xs },
+    headerTitle: { ...Typography.displaySmall, fontSize: 24 },
+    section: { paddingHorizontal: Spacing.lg, marginBottom: Spacing.sm },
+    sectionTitle: { ...Typography.caption, fontWeight: '700', textTransform: 'uppercase', marginBottom: 2 },
     themeRow: { flexDirection: 'row', gap: Spacing.sm },
     themeButton: {
         flex: 1, paddingVertical: Spacing.sm,
@@ -306,7 +339,7 @@ const styles = StyleSheet.create({
     },
     settingRow: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-        padding: Spacing.md, borderRadius: Radius.md, marginBottom: Spacing.xs,
+        paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: Radius.md, marginBottom: 2,
     },
     settingLabel: { ...Typography.body },
     toggleRow: { flexDirection: 'row', gap: 4 },
@@ -315,12 +348,12 @@ const styles = StyleSheet.create({
     sizeValue: { ...Typography.body, fontWeight: '700', minWidth: 32, textAlign: 'center' },
     actionRow: {
         flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
-        padding: Spacing.md, borderRadius: Radius.md, marginBottom: Spacing.xs,
+        paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: Radius.md, marginBottom: 2,
     },
     actionLabel: { ...Typography.body },
     infoRow: {
         flexDirection: 'row', justifyContent: 'space-between',
-        padding: Spacing.md, borderRadius: Radius.md, marginBottom: Spacing.xs,
+        paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: Radius.md, marginBottom: 2,
     },
     infoLabel: { ...Typography.body },
     infoValue: { ...Typography.body },

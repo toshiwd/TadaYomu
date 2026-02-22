@@ -7,7 +7,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import type { Novel } from '../types/novel';
 import { useSQLiteContext } from 'expo-sqlite';
-import { Dimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '../theme/ThemeContext';
@@ -39,11 +38,28 @@ export default function ReaderScreen({ navigation, route }: RootStackScreenProps
   const [loadError, setLoadError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
+  const [isSettingsVisible, setIsSettingsVisible] = useState(false);
   const [settings, setSettings] = useState<ReaderSettings>(() => getReaderSettings(db));
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [containerLayout, setContainerLayout] = useState({ width: 0, height: 0 });
+  const [toolbarVisible, setToolbarVisible] = useState(true);
+  const [startAtLastPage, setStartAtLastPage] = useState(false);
+
+  // Keep a ref to settings so htmlContent doesn't depend on it
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+
+  const onLayout = useCallback((event: any) => {
+    const { width, height } = event.nativeEvent.layout;
+    setContainerLayout((prev) => {
+      if (Math.abs(prev.width - width) < 2 && Math.abs(prev.height - height) < 2) return prev;
+      return { width, height };
+    });
+  }, []);
 
   const settingsAnim = useRef(new Animated.Value(0)).current;
+  const toolbarAnim = useRef(new Animated.Value(1)).current;
 
   // Load novel info
   useEffect(() => {
@@ -103,52 +119,156 @@ export default function ReaderScreen({ navigation, route }: RootStackScreenProps
   }, [mode]);
 
   const goNextChapter = useCallback(() => {
-    if (chapterIndex < totalChapters) setChapterIndex((i) => i + 1);
+    if (chapterIndex < totalChapters) {
+      setStartAtLastPage(false);
+      setChapterIndex((i) => i + 1);
+    }
   }, [chapterIndex, totalChapters]);
 
-  const goPrevChapter = useCallback(() => {
-    if (chapterIndex > 1) setChapterIndex((i) => i - 1);
+  const goPrevChapter = useCallback((startAtLast = false) => {
+    if (chapterIndex > 1) {
+      setStartAtLastPage(startAtLast === true);
+      setChapterIndex((i) => i - 1);
+    }
   }, [chapterIndex]);
 
   const handleRetry = useCallback(() => {
     setRetryCount((c) => c + 1);
   }, []);
 
+  const toggleToolbar = useCallback(() => {
+    const next = !toolbarVisible;
+    setToolbarVisible(next);
+    Animated.timing(toolbarAnim, {
+      toValue: next ? 1 : 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  }, [toolbarVisible, toolbarAnim]);
+
   const toggleSettings = useCallback(() => {
     const next = !showSettings;
-    setShowSettings(next);
-    Animated.spring(settingsAnim, {
-      toValue: next ? 1 : 0,
-      useNativeDriver: true,
-      tension: 65,
-      friction: 10,
-    }).start();
+    if (next) {
+      setIsSettingsVisible(true);
+      setShowSettings(true);
+      Animated.spring(settingsAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 65,
+        friction: 10,
+      }).start();
+    } else {
+      setShowSettings(false);
+      Animated.spring(settingsAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 65,
+        friction: 10,
+      }).start(() => {
+        setIsSettingsVisible(false);
+      });
+    }
   }, [showSettings, settingsAnim]);
 
   const updateSetting = useCallback((key: keyof ReaderSettings, value: any) => {
     setSettings((prev) => {
       const updated = { ...prev, [key]: value };
       saveReaderSettings(db, updated);
+
+      // Send style update to WebView via postMessage (no reload)
+      webViewRef.current?.postMessage(JSON.stringify({
+        type: 'update-style',
+        settings: {
+          fontSize: updated.fontSize,
+          lineHeight: updated.lineHeight,
+          fontFamily: updated.fontFamily,
+          margin: updated.margin,
+          marginTop: updated.marginTop,
+          marginBottom: updated.marginBottom,
+          paragraphSpacing: updated.paragraphSpacing,
+          writingMode: updated.writingMode,
+          reversePageDirection: updated.reversePageDirection,
+        },
+      }));
+
       return updated;
     });
   }, [db]);
 
+  // ========================================================
+  // HTML content — does NOT depend on `settings` (uses settingsRef)
+  // ========================================================
   const htmlContent = useMemo(() => {
     if (loading) return '<html><body style="display:flex;justify-content:center;align-items:center;height:100vh;"><p>読み込み中...</p></body></html>';
+    if (containerLayout.width === 0 || containerLayout.height === 0) return '';
 
-    const isVertical = settings.writingMode === 'vertical';
+    // Capture settings at generation time (ref) — subsequent changes go via postMessage
+    const s = settingsRef.current;
+    const isVertical = s.writingMode === 'vertical';
     const processedText = rubyTextToHtml(chapterText);
     const hasContent = processedText.trim().length > 0;
 
-    // Google Fonts CDN for readable Japanese fonts
-    const fontLink = settings.fontFamily === 'serif'
-      ? '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700&display=swap" rel="stylesheet">'
-      : '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">';
+    // Google Fonts CDN (skip if using system fonts)
+    const fontLink = s.fontFamily.startsWith('system-')
+      ? ''
+      : s.fontFamily === 'serif'
+        ? '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700&display=swap" rel="stylesheet">'
+        : '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">';
 
-    const contentHtml = hasContent ? processedText.split('\n').map((line) => {
-      if (!line.trim()) return '<p class="blank">&nbsp;</p>';
-      return `<p>${line}</p>`;
-    }).join('\n') : '<div style="display:flex;justify-content:center;align-items:center;height:60vh;opacity:0.5;font-size:16px;"><p>テキストが見つかりませんでした。<br>小説を削除して再ダウンロードしてください。</p></div>';
+    // Paragraph builder
+    const contentHtml = hasContent ? (() => {
+      const lines = processedText.split('\n');
+      const paragraphs: string[] = [];
+      let currentLines: string[] = [];
+      const isDialogue = (str: string) => /^[「『（]/.test(str.trim());
+      const flushCurrent = () => {
+        if (currentLines.length > 0) {
+          paragraphs.push(`<p>${currentLines.join('<br>')}</p>`);
+          currentLines = [];
+        }
+      };
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line.trim()) {
+          flushCurrent();
+          const prevContent = paragraphs.length > 0 ? lines.slice(0, i).filter(l => l.trim()).pop() : undefined;
+          const nextContent = lines.slice(i + 1).find(l => l.trim());
+          if ((prevContent && isDialogue(prevContent)) || (nextContent && isDialogue(nextContent))) {
+            paragraphs.push('<p class="blank">&nbsp;</p>');
+          }
+        } else {
+          currentLines.push(line);
+        }
+      }
+      flushCurrent();
+      return paragraphs.join('\n');
+    })() : '<div style="display:flex;justify-content:center;align-items:center;height:60vh;opacity:0.5;font-size:16px;"><p>テキストが見つかりませんでした。<br>小説を削除して再ダウンロードしてください。</p></div>';
+
+    // ========================================================
+    // Geometry
+    // ========================================================
+    const viewW = containerLayout.width;
+    const viewH = containerLayout.height;
+
+    // CSS custom property initial values from settings
+    const marginLR = s.margin;
+    const marginT = s.marginTop;
+    const marginB = s.marginBottom;
+    const fontSize = s.fontSize;
+    const lineHeight = s.lineHeight;
+    const paragraphSpacing = s.paragraphSpacing;
+
+    // Content dimensions (used for paging calculation) - floor to avoid sub-pixel overflow
+    const availW = Math.floor(viewW - marginLR * 2 - insets.left - insets.right);
+    const contentH = Math.floor(viewH - marginT - marginB);
+
+    let contentW = availW;
+    let extraMarginLeft = 0;
+
+    let fontFamilyCSS = '"Noto Serif JP", "游明朝", "YuMincho", "ヒラギノ明朝 ProN", serif';
+    if (s.fontFamily === 'sans-serif') fontFamilyCSS = '"Noto Sans JP", "游ゴシック", "YuGothic", "ヒラギノ角ゴ ProN", sans-serif';
+    else if (s.fontFamily === 'system-serif') fontFamilyCSS = '"游明朝", "YuMincho", "ヒラギノ明朝 ProN", "Hiragino Mincho ProN", "BIZ UDP明朝", serif';
+    else if (s.fontFamily === 'system-sans') fontFamilyCSS = '"游ゴシック", "YuGothic", "ヒラギノ角ゴ ProN", "Hiragino Kaku Gothic ProN", "BIZ UDPゴシック", sans-serif';
 
     return `<!DOCTYPE html>
 <html lang="ja">
@@ -157,64 +277,155 @@ export default function ReaderScreen({ navigation, route }: RootStackScreenProps
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 ${fontLink}
 <style>
+  :root {
+    --fontSize: ${fontSize}px;
+    --lineHeight: ${lineHeight};
+    --marginLR: ${marginLR}px;
+    --marginT: ${marginT}px;
+    --marginB: ${marginB}px;
+    --paragraphSpacing: ${paragraphSpacing};
+    --insetLeft: ${insets.left}px;
+    --insetRight: ${insets.right}px;
+    --viewW: ${viewW}px;
+    --viewH: ${viewH}px;
+    --fontFamily: ${fontFamilyCSS};
+    --fg: ${readerTheme.fg};
+    --bg: ${readerTheme.bg};
+    --selection: ${readerTheme.selection};
+  }
+
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body {
-    width: 100%; height: 100%;
+
+  html {
+    width: var(--viewW);
+    height: var(--viewH);
     overflow: hidden;
-    background: ${readerTheme.bg};
+    background: var(--bg);
+  }
+
+  body {
+    width: var(--viewW);
+    height: var(--viewH);
+    overflow: hidden;
+    background: var(--bg);
     -webkit-tap-highlight-color: transparent;
     -webkit-text-size-adjust: 100%;
     touch-action: none;
     -webkit-user-select: none;
     user-select: none;
   }
-  ::selection { background: ${readerTheme.selection}; }
 
+  ::selection { background: var(--selection); }
+
+  ${isVertical ? `
+  /* Vertical mode: viewport + content wrapper pattern */
   #reader {
-    width: 100%;
-    height: 100%;
-    width: 100%;
-    height: 100%;
-    padding-top: ${settings.margin + insets.top}px;
-    padding-bottom: ${settings.margin + insets.bottom}px;
-    padding-left: ${settings.margin + insets.left}px;
-    padding-right: ${settings.margin + insets.right}px;
-    color: ${readerTheme.fg};
-    font-family: ${settings.fontFamily === 'serif'
-        ? '"Noto Serif JP", "游明朝", "YuMincho", "ヒラギノ明朝 ProN", serif'
-        : '"Noto Sans JP", "游ゴシック", "YuGothic", "ヒラギノ角ゴ ProN", sans-serif'};
-    font-size: ${settings.fontSize}px;
-    line-height: ${settings.lineHeight};
-    text-align: justify;
-    word-break: break-all;
-    -webkit-font-smoothing: antialiased;
-
-    /* Hidden scrollbar but scrollable programmatically */
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-
-    ${isVertical ? `
-      writing-mode: vertical-rl;
-      -webkit-writing-mode: vertical-rl;
-      text-orientation: mixed;
-      overflow-x: scroll;
-      overflow-y: hidden;
-    ` : `
-      writing-mode: horizontal-tb;
-      overflow-x: hidden;
-      overflow-y: scroll;
-    `}
+    position: absolute;
+    top: var(--marginT);
+    left: calc(var(--marginLR) + var(--insetLeft) + ${extraMarginLeft}px);
+    width: ${contentW}px;
+    height: ${contentH}px;
+    overflow: hidden;
+    background: var(--bg);
   }
+  #content {
+    writing-mode: vertical-rl;
+    direction: ltr;
+    text-orientation: mixed;
+    text-align: start;
+    height: ${contentH}px;
+    width: max-content;
+    float: right; /* Right-align so page 0 shows the start (rightmost) text */
+    color: var(--fg);
+    font-family: var(--fontFamily);
+    font-size: var(--fontSize);
+    line-height: var(--lineHeight);
+    word-break: keep-all;
+    overflow-wrap: break-word;
+    line-break: strict;
+    -webkit-font-smoothing: antialiased;
+    padding: 0;
+    will-change: transform;
+    transition: transform 0.0s linear;
+  }
+  ` : `
+  /* Horizontal mode: CSS multi-column layout */
+  #reader {
+    position: absolute;
+    top: var(--marginT);
+    left: calc(var(--marginLR) + var(--insetLeft) + ${extraMarginLeft}px);
+    height: ${contentH}px;
+    color: var(--fg);
+    font-family: var(--fontFamily);
+    font-size: var(--fontSize);
+    line-height: var(--lineHeight);
+    word-break: keep-all;
+    overflow-wrap: break-word;
+    line-break: strict;
+    -webkit-font-smoothing: antialiased;
+    padding: 0;
+    box-sizing: content-box;
+    -ms-overflow-style: none;
+    writing-mode: horizontal-tb;
+    column-width: calc(var(--viewW) - var(--marginLR) * 2 - var(--insetLeft) - var(--insetRight));
+    column-gap: calc(var(--marginLR) * 2 + var(--insetLeft) + var(--insetRight));
+    column-fill: auto;
+    overflow-x: scroll;
+    overflow-y: hidden;
+  }
+  `}
   #reader::-webkit-scrollbar { display: none; }
 
-  #reader p { text-indent: 1em; margin: 0; ${isVertical ? 'margin-left: 0.3em;' : 'margin-bottom: 0.5em;'} }
-  p.blank { text-indent: 0; min-height: 0.5em; }
-  ruby { ruby-align: center; }
-  rt { font-size: 0.5em; color: ${readerTheme.fg}; opacity: 0.7; }
-  .emphasis { text-emphasis: filled sesame; -webkit-text-emphasis: filled sesame; }
-  .tcy { text-combine-upright: all; -webkit-text-combine: horizontal; }
+  ${isVertical ? '#content' : '#reader'} p {
+    text-indent: 1em;
+    margin: 0;
+    ${isVertical
+        ? `margin-left: calc(0.6em * var(--paragraphSpacing));`
+        : `margin-bottom: calc(1.0em * var(--paragraphSpacing));`}
+  }
+  ${isVertical ? '#content' : '#reader'} p:first-child {
+    ${isVertical ? 'margin-right: 0;' : 'margin-top: 0;'}
+  }
+  p.blank {
+    ${isVertical
+        ? `min-width: 1em;`
+        : `min-height: calc(0.3em * var(--paragraphSpacing));
+           margin-bottom: calc(0.5em * var(--paragraphSpacing));`}
+  }
+  
+  /* Ruby spacing to prevent overlap */
+  ruby { ruby-align: center; ruby-position: over; }
+  rt { font-size: 0.5em; color: var(--fg); opacity: 0.7; padding-right: 0.1em; padding-left: 0.1em; }
+  
+  /* Tate-chu-yoko and Bouten */
+  .emphasis { 
+    text-emphasis: filled sesame; 
+    -webkit-text-emphasis: filled sesame; 
+    font-style: normal;
+  }
+  .tcy { 
+    text-combine-upright: all; 
+    -webkit-text-combine: horizontal;
+    /* ensure digits are legible */
+    font-family: "Helvetica Neue", Arial, sans-serif;
+  }
 
-  /* Tap zones overlay */
+  /* Single Page Image Display */
+  .image-page {
+    width: var(--viewW);
+    height: ${contentH}px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    ${isVertical ? `margin-top: 0; margin-bottom: 0; margin-left: var(--marginLR); margin-right: var(--marginLR);` : `margin: 0;`}
+  }
+  .image-page img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+
   #tap-zone {
     position: fixed;
     top: 0; left: 0;
@@ -225,42 +436,122 @@ ${fontLink}
 </head>
 <body>
 <div id="reader">
-  ${contentHtml}
+  ${isVertical ? `<div id="content">${contentHtml}</div>` : contentHtml}
 </div>
 <div id="tap-zone"></div>
 <script>
+(function() {
   var reader = document.getElementById('reader');
+  var content = document.getElementById('content'); // only exists in vertical mode
   var tapZone = document.getElementById('tap-zone');
   var isVertical = ${isVertical};
-  var reverseDirection = ${settings.reversePageDirection ? 'true' : 'false'};
-
+  var reverseDirection = ${s.reversePageDirection ? 'true' : 'false'};
+  var pageStepPx = 0;
+  var containerW = 0;
+  var startAtLast = ${startAtLastPage};
   var currentPage = 0;
   var totalPages = 1;
-  var pageSize = 0;
+
+  function log(msg) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'log', message: msg }));
+  }
+
+  // For vertical mode: precomputed array of page offsets (from right edge of content)
+  var pageBoundaries = [0]; // page 0 starts at offset 0
+
+  function recalcGeometry() {
+    if (isVertical && content) {
+      var viewportW = reader.clientWidth;
+      pageStepPx = viewportW;
+      
+      var paragraphs = content.querySelectorAll('p');
+      var totalW = content.scrollWidth;
+      if (paragraphs.length === 0 || totalW <= viewportW) {
+        pageBoundaries = [0];
+        totalPages = 1;
+        log('[Geometry] vertical: single page, totalW=' + totalW + ' viewportW=' + viewportW);
+        return;
+      }
+      
+      var contentRect = content.getBoundingClientRect();
+      
+      // Collect paragraph start positions (right edges in vertical-rl)
+      // measured as distance from content's right edge
+      var paraStarts = [];
+      for (var i = 0; i < paragraphs.length; i++) {
+        var rect = paragraphs[i].getBoundingClientRect();
+        var startFromRight = contentRect.right - rect.right;
+        paraStarts.push(startFromRight);
+      }
+      // Add end marker
+      paraStarts.push(totalW);
+      // Sort ascending
+      paraStarts.sort(function(a, b) { return a - b; });
+      // Deduplicate
+      var unique = [paraStarts[0]];
+      for (var i = 1; i < paraStarts.length; i++) {
+        if (Math.abs(paraStarts[i] - unique[unique.length - 1]) > 1) {
+          unique.push(paraStarts[i]);
+        }
+      }
+      paraStarts = unique;
+      
+      // Build page boundaries
+      pageBoundaries = [0];
+      var cursor = 0;
+      while (cursor + viewportW < totalW) {
+        var target = cursor + viewportW;
+        // Find the largest paraStart that is <= target
+        var bestIdx = 0;
+        for (var j = 0; j < paraStarts.length; j++) {
+          if (paraStarts[j] <= target + 0.5) bestIdx = j;
+        }
+        var nextStart = paraStarts[bestIdx];
+        // If nextStart hasn't advanced past cursor, force advance by viewportW
+        if (nextStart <= cursor + 0.5) {
+          nextStart = cursor + viewportW;
+        }
+        if (nextStart >= totalW) break;
+        pageBoundaries.push(nextStart);
+        cursor = nextStart;
+      }
+      
+      totalPages = pageBoundaries.length;
+      log('[Geometry] vertical: viewportW=' + viewportW + ' totalW=' + totalW + ' totalPages=' + totalPages + ' paraStarts=' + paraStarts.length);
+    } else {
+      var cs = getComputedStyle(reader);
+      var padL = parseFloat(cs.paddingLeft) || 0;
+      var padR = parseFloat(cs.paddingRight) || 0;
+      var colGapVal = parseFloat(cs.columnGap) || 0;
+      pageStepPx = (reader.clientWidth - padL - padR) + colGapVal;
+    }
+    containerW = parseFloat(document.documentElement.style.getPropertyValue('--viewW')) || ${viewW};
+    log('[Geometry] recalcGeometry: pageStepPx=' + pageStepPx + ' isVertical=' + isVertical);
+  }
 
   function calcPages() {
-    if (isVertical) {
-      pageSize = reader.clientWidth;
-      var total = reader.scrollWidth;
-      totalPages = pageSize > 0 ? Math.max(1, Math.round(total / pageSize)) : 1;
+    if (isVertical && content) {
+      log('[Paging] vertical totalPages=' + totalPages);
     } else {
-      pageSize = reader.clientHeight;
-      var total = reader.scrollHeight;
-      totalPages = pageSize > 0 ? Math.max(1, Math.round(total / pageSize)) : 1;
+      var sw = reader.scrollWidth;
+      if (pageStepPx <= 0) { totalPages = 1; return; }
+      var maxOff = Math.max(0, sw - pageStepPx);
+      totalPages = Math.ceil(maxOff / pageStepPx) + 1;
+      if (totalPages < 1) totalPages = 1;
+      log('[Paging] scrollWidth=' + sw + ' pageStep=' + pageStepPx + ' totalPages=' + totalPages);
     }
   }
 
   function goToPage(page) {
+    page = Math.max(0, Math.min(page, totalPages - 1));
     currentPage = page;
-    if (isVertical) {
-      // vertical-rl: scrollLeft starts at 0 (right edge). Going forward = scrolling left = negative scrollLeft.
-      // But Chrome uses negative scrollLeft for RTL content.
-      // We scroll by page * pageSize from the start.
-      var target = page * pageSize;
-      reader.scrollTo({ left: -target, behavior: 'smooth' });
+    if (isVertical && content) {
+      var offset = pageBoundaries[page] || 0;
+      content.style.transform = 'translateX(' + offset + 'px)';
     } else {
-      var target = page * pageSize;
-      reader.scrollTo({ top: target, behavior: 'smooth' });
+      var maxOff = Math.max(0, reader.scrollWidth - pageStepPx);
+      var offset = Math.min(page * pageStepPx, maxOff);
+      reader.scrollLeft = offset;
     }
     sendPageInfo();
   }
@@ -291,29 +582,93 @@ ${fontLink}
     }
   }
 
+  // --- Handle settings updates from RN (no reload) ---
+  document.addEventListener('message', handleSettingsMessage);
+  window.addEventListener('message', handleSettingsMessage);
+
+  function handleSettingsMessage(e) {
+    try {
+      var data = JSON.parse(e.data);
+      if (data.type !== 'update-style') return;
+      var s = data.settings;
+      var root = document.documentElement;
+
+      if (s.fontSize !== undefined) root.style.setProperty('--fontSize', s.fontSize + 'px');
+      if (s.lineHeight !== undefined) root.style.setProperty('--lineHeight', String(s.lineHeight));
+      if (s.margin !== undefined) root.style.setProperty('--marginLR', s.margin + 'px');
+      if (s.marginTop !== undefined) root.style.setProperty('--marginT', s.marginTop + 'px');
+      if (s.marginBottom !== undefined) root.style.setProperty('--marginB', s.marginBottom + 'px');
+      if (s.paragraphSpacing !== undefined) root.style.setProperty('--paragraphSpacing', String(s.paragraphSpacing));
+      if (s.reversePageDirection !== undefined) reverseDirection = s.reversePageDirection;
+
+      if (s.fontFamily !== undefined) {
+        var ff = '"Noto Serif JP", "游明朝", "YuMincho", "ヒラギノ明朝 ProN", serif';
+        if (s.fontFamily === 'sans-serif') ff = '"Noto Sans JP", "游ゴシック", "YuGothic", "ヒラギノ角ゴ ProN", sans-serif';
+        else if (s.fontFamily === 'system-serif') ff = '"游明朝", "YuMincho", "ヒラギノ明朝 ProN", "Hiragino Mincho ProN", "BIZ UDP明朝", serif';
+        else if (s.fontFamily === 'system-sans') ff = '"游ゴシック", "YuGothic", "ヒラギノ角ゴ ProN", "Hiragino Kaku Gothic ProN", "BIZ UDPゴシック", sans-serif';
+        root.style.setProperty('--fontFamily', ff);
+      }
+
+      // Recalculate geometry and pages after a short reflow delay
+      setTimeout(function() {
+        recalcGeometry();
+        calcPages();
+        goToPage(Math.min(currentPage, totalPages - 1));
+      }, 50);
+    } catch(ex) { /* ignore non-JSON messages */ }
+  }
+
   // --- Tap & swipe handling ---
   var touchStartX = 0;
   var touchStartY = 0;
   var touchStartTime = 0;
   var touchMoved = false;
+  var baseOffset = 0; // For animating drag
+  var isDragging = false;
+  var animationFrameId = null;
 
   tapZone.addEventListener('touchstart', function(e) {
-    e.preventDefault();
+    if (e.touches.length > 1) return; // ignore multi-touch
+    // e.preventDefault(); // Don't prevent default on start to allow some native interactions if needed, though we block scaling. Actually for full control, preventDefault is better.
+    // e.preventDefault() causes warnings in some listeners unless passive:false. We added passive:false.
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
     touchStartTime = Date.now();
     touchMoved = false;
+    isDragging = true;
+    
+    if (isVertical && content) {
+      // Remove transition for instant finger tracking
+      content.style.transition = 'none';
+      baseOffset = pageBoundaries[currentPage] || 0;
+    }
   }, { passive: false });
 
   tapZone.addEventListener('touchmove', function(e) {
-    e.preventDefault();
-    var dx = Math.abs(e.touches[0].clientX - touchStartX);
-    var dy = Math.abs(e.touches[0].clientY - touchStartY);
-    if (dx > 10 || dy > 10) touchMoved = true;
+    if (!isDragging) return;
+    // e.preventDefault();
+    var currentX = e.touches[0].clientX;
+    var currentY = e.touches[0].clientY;
+    var dx = currentX - touchStartX;
+    var dy = currentY - touchStartY;
+    
+    if (Math.abs(dx) > 10 || Math.abs(dy) > 10) touchMoved = true;
+
+    // Finger tracking animation (Vertical mode only for now as horizontal relies on scrollLeft which doesn't perform well with direct touch manipulation unless using native scrolling)
+    if (isVertical && content && touchMoved && Math.abs(dx) > Math.abs(dy) * 0.5) {
+        e.preventDefault(); // Prevent native scroll
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        animationFrameId = requestAnimationFrame(function() {
+            var visualOffset = dx; 
+            content.style.transform = 'translateX(' + (baseOffset + visualOffset) + 'px)';
+        });
+    }
   }, { passive: false });
 
   tapZone.addEventListener('touchend', function(e) {
-    e.preventDefault();
+    if (!isDragging) return;
+    isDragging = false;
+    // e.preventDefault();
     var endX = e.changedTouches[0].clientX;
     var endY = e.changedTouches[0].clientY;
     var dx = endX - touchStartX;
@@ -322,53 +677,62 @@ ${fontLink}
     var absDx = Math.abs(dx);
     var absDy = Math.abs(dy);
 
+    if (isVertical && content) {
+      // Restore transition for smooth snapping
+      content.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+    }
+
     // Swipe detection
-    if (absDx > 50 && absDx > absDy && elapsed < 500) {
-      if (reverseDirection) {
-        if (dx < 0) goPrevPage(); else goNextPage();
+    if (absDx > 30 && absDx > absDy && elapsed < 800 && touchMoved) {
+      // Swipe distance threshold based on viewport
+      if (Math.abs(dx) > viewportW * 0.1 || (elapsed < 300 && absDx > 30)) {
+          if (reverseDirection) {
+            if (dx < 0) goPrevPage(); else goNextPage();
+          } else {
+            if (dx < 0) goNextPage(); else goPrevPage();
+          }
       } else {
-        if (dx < 0) goNextPage(); else goPrevPage();
+          // Snap back if threshold not met
+          goToPage(currentPage); 
       }
       return;
     }
 
-    // Tap detection
+    // Tap detection — left/right tap turns pages
     if (!touchMoved && elapsed < 300) {
-      var screenW = window.innerWidth;
-      if (reverseDirection) {
-        if (endX > screenW * 0.5) goPrevPage(); else goNextPage();
+      var centerZoneLeft = containerW * 0.3;
+      var centerZoneRight = containerW * 0.7;
+
+      if (endX > centerZoneLeft && endX < centerZoneRight) {
+        // Center tap — toggle toolbar via RN
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'toggle-toolbar' }));
+      } else if (reverseDirection) {
+        if (endX > containerW * 0.5) goPrevPage(); else goNextPage();
       } else {
-        if (endX > screenW * 0.5) goNextPage(); else goPrevPage();
+        if (endX > containerW * 0.5) goNextPage(); else goPrevPage();
       }
+    } else if (touchMoved) {
+        // Snap back if moved but not swiped far enough
+        goToPage(currentPage);
     }
   }, { passive: false });
 
   // --- Initialize ---
   function init() {
+    log('[Geometry] init() — viewW=' + containerW + ' isVertical=' + isVertical);
+    recalcGeometry();
     calcPages();
-    currentPage = 0;
-    goToPage(0);
+    goToPage(startAtLast ? totalPages - 1 : 0);
   }
 
-  if (document.fonts && document.fonts.ready) {
-    document.fonts.ready.then(function() {
-      requestAnimationFrame(function() { requestAnimationFrame(init); });
-    });
-  } else {
-    window.addEventListener('load', function() {
-      requestAnimationFrame(function() { requestAnimationFrame(init); });
-    });
-  }
-
-  window.addEventListener('resize', function() {
-    calcPages();
-    if (currentPage >= totalPages) currentPage = totalPages - 1;
-    goToPage(currentPage);
+  window.addEventListener('load', function() {
+    setTimeout(init, 100);
   });
+})();
 </script>
 </body>
 </html>`;
-  }, [chapterText, settings, readerTheme, loading, insets]);
+  }, [chapterText, readerTheme, loading, insets, containerLayout]);
 
   const handleMessage = useCallback((event: any) => {
     try {
@@ -380,10 +744,15 @@ ${fontLink}
       } else if (data.type === 'next') {
         goNextChapter();
       } else if (data.type === 'prev') {
-        goPrevChapter();
+        goPrevChapter(true);
+      } else if (data.type === 'toggle-toolbar') {
+        toggleToolbar();
+      } else if (data.type === 'log') {
+        console.log('[WebView]', data.message);
       }
     } catch { }
-  }, [db, novelId, chapterIndex, goNextChapter, goPrevChapter]);
+  }, [db, novelId, chapterIndex, goNextChapter, goPrevChapter, toggleToolbar]);
+
 
   const settingsTranslateY = settingsAnim.interpolate({
     inputRange: [0, 1],
@@ -394,13 +763,21 @@ ${fontLink}
     <View style={styles.container}>
       <StatusBar hidden={settings.fullscreen} />
 
-      {/* Toolbar */}
-      <View style={[styles.toolbar, { backgroundColor: readerTheme.bg }]}>
+      {/* Toolbar — in normal flow above WebView */}
+      <View
+        style={[
+          styles.toolbar,
+          {
+            backgroundColor: readerTheme.bg,
+            paddingTop: insets.top + 4,
+          },
+        ]}
+      >
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.toolbarBtn}>
-          <Ionicons name="arrow-back" size={22} color={readerTheme.fg} />
+          <Ionicons name="arrow-back" size={20} color={readerTheme.fg} />
         </TouchableOpacity>
-        <TouchableOpacity onPress={goPrevChapter} style={styles.toolbarBtn} disabled={chapterIndex <= 1}>
-          <Ionicons name="chevron-back" size={20} color={chapterIndex > 1 ? readerTheme.fg : readerTheme.fg + '44'} />
+        <TouchableOpacity onPress={() => goPrevChapter(false)} style={styles.toolbarBtn} disabled={chapterIndex <= 1}>
+          <Ionicons name="chevron-back" size={18} color={chapterIndex > 1 ? readerTheme.fg : readerTheme.fg + '44'} />
         </TouchableOpacity>
         <Text style={[styles.chapterLabel, { color: readerTheme.fg }]} numberOfLines={1}>
           {chapterIndex}/{totalChapters} {chapterTitle}
@@ -410,209 +787,296 @@ ${fontLink}
         </Text>
         {loadError && (
           <TouchableOpacity onPress={handleRetry} style={styles.toolbarBtn}>
-            <Ionicons name="refresh" size={20} color={readerTheme.fg} />
+            <Ionicons name="refresh" size={18} color={readerTheme.fg} />
           </TouchableOpacity>
         )}
         <TouchableOpacity onPress={toggleSettings} style={styles.toolbarBtn}>
-          <Ionicons name="settings-outline" size={20} color={readerTheme.fg} />
+          <Ionicons name="settings-outline" size={18} color={readerTheme.fg} />
         </TouchableOpacity>
         <TouchableOpacity onPress={goNextChapter} style={styles.toolbarBtn} disabled={chapterIndex >= totalChapters}>
-          <Ionicons name="chevron-forward" size={20} color={chapterIndex < totalChapters ? readerTheme.fg : readerTheme.fg + '44'} />
+          <Ionicons name="chevron-forward" size={18} color={chapterIndex < totalChapters ? readerTheme.fg : readerTheme.fg + '44'} />
         </TouchableOpacity>
       </View>
 
-      <WebView
-        ref={webViewRef}
-        originWhitelist={['*']}
-        source={{ html: htmlContent }}
-        style={[styles.webview, { backgroundColor: readerTheme.bg }]}
-        onMessage={handleMessage}
-        scrollEnabled={false}
-        showsVerticalScrollIndicator={false}
-        showsHorizontalScrollIndicator={false}
-        textZoom={100}
-        javaScriptEnabled
-      />
+      {/* WebView fills remaining space — onLayout measures final size */}
+      <View style={styles.webviewFull} onLayout={onLayout}>
+        <WebView
+          ref={webViewRef}
+          originWhitelist={['*']}
+          source={{ html: htmlContent }}
+          style={{ flex: 1, backgroundColor: readerTheme.bg }}
+          onMessage={handleMessage}
+          scrollEnabled={false}
+          showsVerticalScrollIndicator={false}
+          showsHorizontalScrollIndicator={false}
+          textZoom={100}
+          javaScriptEnabled
+        />
+      </View>
 
       {/* Settings Panel */}
-      {showSettings && (
+      {isSettingsVisible && (
         <TouchableOpacity
           style={styles.settingsOverlay}
           activeOpacity={1}
           onPress={toggleSettings}
         />
       )}
-      <Animated.View
-        style={[
-          styles.settingsPanel,
-          { backgroundColor: readerTheme.bg, transform: [{ translateY: settingsTranslateY }] },
-        ]}
-        pointerEvents={showSettings ? 'auto' : 'none'}
-      >
-        <View style={styles.settingsHandle} />
+      {isSettingsVisible && (
+        <Animated.View
+          style={[
+            styles.settingsPanel,
+            { backgroundColor: readerTheme.bg, transform: [{ translateY: settingsTranslateY }] },
+          ]}
+        >
+          <View style={styles.settingsHandle} />
 
-        {/* Font Family */}
-        <View style={styles.settingRow}>
-          <Text style={[styles.settingLabel, { color: readerTheme.fg }]}>フォント</Text>
-          <View style={styles.settingControls}>
+          {/* Font Family */}
+          <View style={styles.settingRow}>
+            <Text style={[styles.settingLabel, { color: readerTheme.fg }]}>フォント</Text>
+            <View style={styles.settingControls}>
+              <TouchableOpacity
+                style={[
+                  styles.modeBtn,
+                  settings.fontFamily === 'serif' && { backgroundColor: readerTheme.fg + '15' },
+                  { borderColor: readerTheme.fg + '30' },
+                ]}
+                onPress={() => updateSetting('fontFamily', 'serif')}
+              >
+                <Text style={[styles.settingBtnText, { color: readerTheme.fg }]}>明朝</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modeBtn,
+                  settings.fontFamily === 'sans-serif' && { backgroundColor: readerTheme.fg + '15' },
+                  { borderColor: readerTheme.fg + '30' },
+                ]}
+                onPress={() => updateSetting('fontFamily', 'sans-serif')}
+              >
+                <Text style={[styles.settingBtnText, { color: readerTheme.fg }]}>ゴシック</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          <View style={styles.settingRow}>
+            <View style={styles.settingControls}>
+              <TouchableOpacity
+                style={[
+                  styles.modeBtn,
+                  settings.fontFamily === 'system-serif' && { backgroundColor: readerTheme.fg + '15' },
+                  { borderColor: readerTheme.fg + '30' },
+                ]}
+                onPress={() => updateSetting('fontFamily', 'system-serif')}
+              >
+                <Text style={[styles.settingBtnText, { color: readerTheme.fg }]}>端末明朝</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modeBtn,
+                  settings.fontFamily === 'system-sans' && { backgroundColor: readerTheme.fg + '15' },
+                  { borderColor: readerTheme.fg + '30' },
+                ]}
+                onPress={() => updateSetting('fontFamily', 'system-sans')}
+              >
+                <Text style={[styles.settingBtnText, { color: readerTheme.fg }]}>端末ゴシック</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Font Size */}
+          <View style={styles.settingRow}>
+            <Text style={[styles.settingLabel, { color: readerTheme.fg }]}>文字サイズ</Text>
+            <View style={styles.settingControls}>
+              <TouchableOpacity
+                style={[styles.settingBtn, { borderColor: readerTheme.fg + '30' }]}
+                onPress={() => updateSetting('fontSize', Math.max(12, settings.fontSize - 1))}
+              >
+                <Text style={[styles.settingBtnText, { color: readerTheme.fg }]}>A-</Text>
+              </TouchableOpacity>
+              <Text style={[styles.settingValue, { color: readerTheme.fg }]}>{settings.fontSize}px</Text>
+              <TouchableOpacity
+                style={[styles.settingBtn, { borderColor: readerTheme.fg + '30' }]}
+                onPress={() => updateSetting('fontSize', Math.min(32, settings.fontSize + 1))}
+              >
+                <Text style={[styles.settingBtnText, { color: readerTheme.fg }]}>A+</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Side Margins (left/right) */}
+          <View style={styles.settingRow}>
+            <Text style={[styles.settingLabel, { color: readerTheme.fg }]}>左右余白</Text>
+            <View style={styles.settingControls}>
+              <TouchableOpacity
+                style={[styles.settingBtn, { borderColor: readerTheme.fg + '30' }]}
+                onPress={() => updateSetting('margin', Math.max(4, settings.margin - 4))}
+              >
+                <Ionicons name="remove" size={16} color={readerTheme.fg} />
+              </TouchableOpacity>
+              <Text style={[styles.settingValue, { color: readerTheme.fg }]}>{settings.margin}px</Text>
+              <TouchableOpacity
+                style={[styles.settingBtn, { borderColor: readerTheme.fg + '30' }]}
+                onPress={() => updateSetting('margin', Math.min(48, settings.margin + 4))}
+              >
+                <Ionicons name="add" size={16} color={readerTheme.fg} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Top Margin */}
+          <View style={styles.settingRow}>
+            <Text style={[styles.settingLabel, { color: readerTheme.fg }]}>上余白</Text>
+            <View style={styles.settingControls}>
+              <TouchableOpacity
+                style={[styles.settingBtn, { borderColor: readerTheme.fg + '30' }]}
+                onPress={() => updateSetting('marginTop', Math.max(0, settings.marginTop - 4))}
+              >
+                <Ionicons name="remove" size={16} color={readerTheme.fg} />
+              </TouchableOpacity>
+              <Text style={[styles.settingValue, { color: readerTheme.fg }]}>{settings.marginTop}px</Text>
+              <TouchableOpacity
+                style={[styles.settingBtn, { borderColor: readerTheme.fg + '30' }]}
+                onPress={() => updateSetting('marginTop', Math.min(60, settings.marginTop + 4))}
+              >
+                <Ionicons name="add" size={16} color={readerTheme.fg} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Bottom Margin */}
+          <View style={styles.settingRow}>
+            <Text style={[styles.settingLabel, { color: readerTheme.fg }]}>下余白</Text>
+            <View style={styles.settingControls}>
+              <TouchableOpacity
+                style={[styles.settingBtn, { borderColor: readerTheme.fg + '30' }]}
+                onPress={() => updateSetting('marginBottom', Math.max(0, settings.marginBottom - 4))}
+              >
+                <Ionicons name="remove" size={16} color={readerTheme.fg} />
+              </TouchableOpacity>
+              <Text style={[styles.settingValue, { color: readerTheme.fg }]}>{settings.marginBottom}px</Text>
+              <TouchableOpacity
+                style={[styles.settingBtn, { borderColor: readerTheme.fg + '30' }]}
+                onPress={() => updateSetting('marginBottom', Math.min(80, settings.marginBottom + 4))}
+              >
+                <Ionicons name="add" size={16} color={readerTheme.fg} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Line Height */}
+          <View style={styles.settingRow}>
+            <Text style={[styles.settingLabel, { color: readerTheme.fg }]}>行間</Text>
+            <View style={styles.settingControls}>
+              <TouchableOpacity
+                style={[styles.settingBtn, { borderColor: readerTheme.fg + '30' }]}
+                onPress={() => updateSetting('lineHeight', Math.max(1.0, Math.round((settings.lineHeight - 0.1) * 10) / 10))}
+              >
+                <Ionicons name="remove" size={16} color={readerTheme.fg} />
+              </TouchableOpacity>
+              <Text style={[styles.settingValue, { color: readerTheme.fg }]}>{settings.lineHeight.toFixed(1)}</Text>
+              <TouchableOpacity
+                style={[styles.settingBtn, { borderColor: readerTheme.fg + '30' }]}
+                onPress={() => updateSetting('lineHeight', Math.min(2.5, Math.round((settings.lineHeight + 0.1) * 10) / 10))}
+              >
+                <Ionicons name="add" size={16} color={readerTheme.fg} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Paragraph Spacing */}
+          <View style={styles.settingRow}>
+            <Text style={[styles.settingLabel, { color: readerTheme.fg }]}>段落間隔</Text>
+            <View style={styles.settingControls}>
+              {[{ label: '詰める', value: 0.3 }, { label: '標準', value: 0.5 }, { label: '広め', value: 1.0 }].map(opt => (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[
+                    styles.modeBtn,
+                    settings.paragraphSpacing === opt.value && { backgroundColor: readerTheme.fg + '15' },
+                    { borderColor: readerTheme.fg + '30' },
+                  ]}
+                  onPress={() => updateSetting('paragraphSpacing', opt.value)}
+                >
+                  <Text style={[styles.settingBtnText, { color: readerTheme.fg }]}>{opt.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* Writing Mode Toggle */}
+          <View style={styles.settingRow}>
+            <Text style={[styles.settingLabel, { color: readerTheme.fg }]}>組方向</Text>
+            <View style={styles.settingControls}>
+              <TouchableOpacity
+                style={[
+                  styles.modeBtn,
+                  settings.writingMode === 'vertical' && { backgroundColor: readerTheme.fg + '15' },
+                  { borderColor: readerTheme.fg + '30' },
+                ]}
+                onPress={() => updateSetting('writingMode', 'vertical')}
+              >
+                <Text style={[styles.settingBtnText, { color: readerTheme.fg }]}>縦書き</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modeBtn,
+                  settings.writingMode === 'horizontal' && { backgroundColor: readerTheme.fg + '15' },
+                  { borderColor: readerTheme.fg + '30' },
+                ]}
+                onPress={() => updateSetting('writingMode', 'horizontal')}
+              >
+                <Text style={[styles.settingBtnText, { color: readerTheme.fg }]}>横書き</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Reverse Page Direction Toggle */}
+          <View style={styles.settingRow}>
+            <Text style={[styles.settingLabel, { color: readerTheme.fg }]}>ページ送り 左右反転</Text>
             <TouchableOpacity
               style={[
-                styles.modeBtn,
-                settings.fontFamily === 'serif' && { backgroundColor: readerTheme.fg + '15' },
-                { borderColor: readerTheme.fg + '30' },
+                styles.toggleBtn,
+                { backgroundColor: settings.reversePageDirection ? readerTheme.fg + '20' : 'transparent', borderColor: readerTheme.fg + '30' },
               ]}
-              onPress={() => updateSetting('fontFamily', 'serif')}
+              onPress={() => updateSetting('reversePageDirection', !settings.reversePageDirection)}
             >
-              <Text style={[styles.settingBtnText, { color: readerTheme.fg }]}>明朝</Text>
+              <Text style={[styles.settingBtnText, { color: readerTheme.fg }]}>
+                {settings.reversePageDirection ? 'ON' : 'OFF'}
+              </Text>
             </TouchableOpacity>
+          </View>
+
+          {/* Fullscreen Toggle */}
+          <View style={styles.settingRow}>
+            <Text style={[styles.settingLabel, { color: readerTheme.fg }]}>全画面 (時計非表示)</Text>
             <TouchableOpacity
               style={[
-                styles.modeBtn,
-                settings.fontFamily === 'sans-serif' && { backgroundColor: readerTheme.fg + '15' },
-                { borderColor: readerTheme.fg + '30' },
+                styles.toggleBtn,
+                { backgroundColor: settings.fullscreen ? readerTheme.fg + '20' : 'transparent', borderColor: readerTheme.fg + '30' },
               ]}
-              onPress={() => updateSetting('fontFamily', 'sans-serif')}
+              onPress={() => updateSetting('fullscreen', !settings.fullscreen)}
             >
-              <Text style={[styles.settingBtnText, { color: readerTheme.fg }]}>ゴシック</Text>
+              <Text style={[styles.settingBtnText, { color: readerTheme.fg }]}>
+                {settings.fullscreen ? 'ON' : 'OFF'}
+              </Text>
             </TouchableOpacity>
           </View>
-        </View>
-
-        {/* Font Size */}
-        <View style={styles.settingRow}>
-          <Text style={[styles.settingLabel, { color: readerTheme.fg }]}>文字サイズ</Text>
-          <View style={styles.settingControls}>
-            <TouchableOpacity
-              style={[styles.settingBtn, { borderColor: readerTheme.fg + '30' }]}
-              onPress={() => updateSetting('fontSize', Math.max(12, settings.fontSize - 1))}
-            >
-              <Text style={[styles.settingBtnText, { color: readerTheme.fg }]}>A-</Text>
-            </TouchableOpacity>
-            <Text style={[styles.settingValue, { color: readerTheme.fg }]}>{settings.fontSize}px</Text>
-            <TouchableOpacity
-              style={[styles.settingBtn, { borderColor: readerTheme.fg + '30' }]}
-              onPress={() => updateSetting('fontSize', Math.min(32, settings.fontSize + 1))}
-            >
-              <Text style={[styles.settingBtnText, { color: readerTheme.fg }]}>A+</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Margin */}
-        <View style={styles.settingRow}>
-          <Text style={[styles.settingLabel, { color: readerTheme.fg }]}>余白</Text>
-          <View style={styles.settingControls}>
-            <TouchableOpacity
-              style={[styles.settingBtn, { borderColor: readerTheme.fg + '30' }]}
-              onPress={() => updateSetting('margin', Math.max(8, settings.margin - 4))}
-            >
-              <Ionicons name="remove" size={16} color={readerTheme.fg} />
-            </TouchableOpacity>
-            <Text style={[styles.settingValue, { color: readerTheme.fg }]}>{settings.margin}px</Text>
-            <TouchableOpacity
-              style={[styles.settingBtn, { borderColor: readerTheme.fg + '30' }]}
-              onPress={() => updateSetting('margin', Math.min(48, settings.margin + 4))}
-            >
-              <Ionicons name="add" size={16} color={readerTheme.fg} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Line Height */}
-        <View style={styles.settingRow}>
-          <Text style={[styles.settingLabel, { color: readerTheme.fg }]}>行間</Text>
-          <View style={styles.settingControls}>
-            <TouchableOpacity
-              style={[styles.settingBtn, { borderColor: readerTheme.fg + '30' }]}
-              onPress={() => updateSetting('lineHeight', Math.max(1.0, Math.round((settings.lineHeight - 0.1) * 10) / 10))}
-            >
-              <Ionicons name="remove" size={16} color={readerTheme.fg} />
-            </TouchableOpacity>
-            <Text style={[styles.settingValue, { color: readerTheme.fg }]}>{settings.lineHeight.toFixed(1)}</Text>
-            <TouchableOpacity
-              style={[styles.settingBtn, { borderColor: readerTheme.fg + '30' }]}
-              onPress={() => updateSetting('lineHeight', Math.min(2.5, Math.round((settings.lineHeight + 0.1) * 10) / 10))}
-            >
-              <Ionicons name="add" size={16} color={readerTheme.fg} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Writing Mode Toggle */}
-        <View style={styles.settingRow}>
-          <Text style={[styles.settingLabel, { color: readerTheme.fg }]}>組方向</Text>
-          <View style={styles.settingControls}>
-            <TouchableOpacity
-              style={[
-                styles.modeBtn,
-                settings.writingMode === 'vertical' && { backgroundColor: readerTheme.fg + '15' },
-                { borderColor: readerTheme.fg + '30' },
-              ]}
-              onPress={() => updateSetting('writingMode', 'vertical')}
-            >
-              <Text style={[styles.settingBtnText, { color: readerTheme.fg }]}>縦書き</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.modeBtn,
-                settings.writingMode === 'horizontal' && { backgroundColor: readerTheme.fg + '15' },
-                { borderColor: readerTheme.fg + '30' },
-              ]}
-              onPress={() => updateSetting('writingMode', 'horizontal')}
-            >
-              <Text style={[styles.settingBtnText, { color: readerTheme.fg }]}>横書き</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Reverse Page Direction Toggle */}
-        <View style={styles.settingRow}>
-          <Text style={[styles.settingLabel, { color: readerTheme.fg }]}>ページ送り 左右反転</Text>
-          <TouchableOpacity
-            style={[
-              styles.toggleBtn,
-              { backgroundColor: settings.reversePageDirection ? readerTheme.fg + '20' : 'transparent', borderColor: readerTheme.fg + '30' },
-            ]}
-            onPress={() => updateSetting('reversePageDirection', !settings.reversePageDirection)}
-          >
-            <Text style={[styles.settingBtnText, { color: readerTheme.fg }]}>
-              {settings.reversePageDirection ? 'ON' : 'OFF'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Fullscreen Toggle */}
-        <View style={styles.settingRow}>
-          <Text style={[styles.settingLabel, { color: readerTheme.fg }]}>全画面 (時計非表示)</Text>
-          <TouchableOpacity
-            style={[
-              styles.toggleBtn,
-              { backgroundColor: settings.fullscreen ? readerTheme.fg + '20' : 'transparent', borderColor: readerTheme.fg + '30' },
-            ]}
-            onPress={() => updateSetting('fullscreen', !settings.fullscreen)}
-          >
-            <Text style={[styles.settingBtnText, { color: readerTheme.fg }]}>
-              {settings.fullscreen ? 'ON' : 'OFF'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </Animated.View>
+        </Animated.View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  webviewFull: { flex: 1 },
   toolbar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 44,
-    paddingBottom: 8,
+    paddingBottom: 6,
     paddingHorizontal: Spacing.xs,
-    elevation: 2,
   },
   toolbarBtn: {
-    width: 40, height: 40,
+    width: 36, height: 36,
     justifyContent: 'center', alignItems: 'center',
   },
   chapterLabel: {
@@ -624,9 +1088,8 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     fontWeight: '500',
     opacity: 0.6,
-    minWidth: 50,
+    minWidth: 44,
   },
-  webview: { flex: 1 },
 
   // Settings overlay
   settingsOverlay: {
@@ -662,43 +1125,43 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 10,
   },
   settingLabel: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
   },
   settingControls: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   settingBtn: {
-    width: 36, height: 36,
-    borderRadius: 18,
+    width: 34, height: 34,
+    borderRadius: 17,
     borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
   settingBtnText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
   },
   settingValue: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
-    minWidth: 44,
+    minWidth: 40,
     textAlign: 'center',
   },
   modeBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: 18,
     borderWidth: 1,
   },
   toggleBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: 18,
     borderWidth: 1,
   },

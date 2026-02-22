@@ -72,26 +72,6 @@ export default function AddNovelScreen({ route, navigation }: RootStackScreenPro
                     {progress.message}
                 </Text>
 
-                {/* Progress bar */}
-                {isDownloading && progress.total > 0 && (
-                    <View style={styles.progressSection}>
-                        <View style={[styles.progressBar, { backgroundColor: colors.surfaceAlt }]}>
-                            <View
-                                style={[
-                                    styles.progressFill,
-                                    {
-                                        backgroundColor: colors.ui.primary,
-                                        width: `${(progress.current / progress.total) * 100}%`,
-                                    },
-                                ]}
-                            />
-                        </View>
-                        <Text style={[styles.progressText, { color: colors.text.secondary }]}>
-                            {progress.current} / {progress.total}
-                        </Text>
-                    </View>
-                )}
-
                 {/* Actions */}
                 {done && (
                     <TouchableOpacity

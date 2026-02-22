@@ -54,13 +54,13 @@ export default function LibraryScreen({ navigation }: MainTabScreenProps<'Librar
                 activeOpacity={0.7}
             >
                 <View style={styles.cardContent}>
-                    <Text style={[styles.cardTitle, { color: colors.text.primary }]} numberOfLines={2}>
+                    <Text style={[styles.cardTitle, { color: colors.text.primary }]} numberOfLines={1}>
                         {item.title}
                     </Text>
-                    <Text style={[styles.cardAuthor, { color: colors.text.secondary }]} numberOfLines={1}>
-                        {item.author}
-                    </Text>
                     <View style={styles.cardMeta}>
+                        <Text style={[styles.cardAuthor, { color: colors.text.secondary }]} numberOfLines={1}>
+                            {item.author}
+                        </Text>
                         <Text style={[styles.cardEpisodes, { color: colors.text.disabled }]}>
                             {progressText}
                         </Text>
@@ -84,7 +84,7 @@ export default function LibraryScreen({ navigation }: MainTabScreenProps<'Librar
                         </View>
                     )}
                 </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.text.disabled} />
+                <Ionicons name="chevron-forward" size={16} color={colors.text.disabled} />
             </TouchableOpacity>
         );
     };
@@ -153,42 +153,43 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingTop: 56,
-        paddingHorizontal: Spacing.lg,
-        paddingBottom: Spacing.md,
+        paddingTop: 48,
+        paddingHorizontal: Spacing.md,
+        paddingBottom: Spacing.sm,
     },
     headerLeft: {
         flexDirection: 'row',
         alignItems: 'baseline',
     },
-    headerTitle: { ...Typography.displaySmall },
-    headerCount: { ...Typography.caption, marginLeft: Spacing.sm },
+    headerTitle: { fontSize: 20, fontFamily: 'NotoSansJP_700Bold', letterSpacing: 0.3 },
+    headerCount: { ...Typography.caption, marginLeft: Spacing.xs },
     sortBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
-        paddingHorizontal: 10,
-        paddingVertical: 5,
+        gap: 3,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
         borderRadius: Radius.full,
     },
-    sortBtnText: { fontSize: 12, fontWeight: '600' },
-    list: { paddingHorizontal: Spacing.md, paddingBottom: 100 },
+    sortBtnText: { fontSize: 11, fontWeight: '600' },
+    list: { paddingHorizontal: Spacing.sm, paddingBottom: 100 },
     card: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: Spacing.md,
+        paddingVertical: 6,
+        paddingHorizontal: Spacing.sm,
         borderRadius: Radius.md,
-        marginBottom: Spacing.sm,
+        marginBottom: 2,
     },
-    cardContent: { flex: 1, marginRight: Spacing.sm },
-    cardTitle: { ...Typography.subtitle, marginBottom: 2 },
-    cardAuthor: { ...Typography.caption, marginBottom: Spacing.xs },
+    cardContent: { flex: 1, marginRight: Spacing.xs },
+    cardTitle: { fontSize: 14, fontFamily: 'NotoSansJP_600SemiBold', marginBottom: 1 },
+    cardAuthor: { fontSize: 11, fontFamily: 'NotoSansJP_400Regular', flexShrink: 1 },
     cardMeta: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
-    cardEpisodes: { ...Typography.caption },
-    badge: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 },
-    badgeText: { fontSize: 10, fontWeight: '700' },
-    progressBar: { height: 3, borderRadius: 2, marginTop: 6, overflow: 'hidden' },
-    progressFill: { height: '100%', borderRadius: 2 },
+    cardEpisodes: { fontSize: 11, fontFamily: 'NotoSansJP_400Regular' },
+    badge: { paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3 },
+    badgeText: { fontSize: 9, fontWeight: '700' },
+    progressBar: { height: 2, borderRadius: 1, marginTop: 4, overflow: 'hidden' },
+    progressFill: { height: '100%', borderRadius: 1 },
     emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing.xl },
     emptyTitle: { ...Typography.title, marginTop: Spacing.md },
     emptySubtitle: { ...Typography.body, textAlign: 'center', marginTop: Spacing.xs },

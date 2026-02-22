@@ -80,8 +80,8 @@ function cleanHtmlForReader(html: string): string {
         .replace(/<br\s*\/?>/gi, '\n')
         .replace(/<\/p>\s*<p[^>]*>/gi, '\n\n');
 
-    // Remove all tags except ruby-related
-    cleaned = cleaned.replace(/<(?!\/?(?:ruby|rb|rt|rp)\b)[^>]+>/gi, '');
+    // Remove all tags except ruby-related and img
+    cleaned = cleaned.replace(/<(?!\/?(?:ruby|rb|rt|rp|img)\b)[^>]+>/gi, '');
 
     // Decode entities
     cleaned = cleaned
@@ -284,8 +284,8 @@ function htmlToNovelFormat(html: string): string {
     // Fallback for without rp
     text = text.replace(/<ruby>(.*?)<rt>(.*?)<\/rt><\/ruby>/gi, '|$1《$2》');
 
-    // 3. Strip all other tags
-    text = text.replace(/<[^>]+>/g, '');
+    // 3. Strip all other tags except img
+    text = text.replace(/<(?!\/?img\b)[^>]+>/gi, '');
 
     // 4. Decode entities
     text = text

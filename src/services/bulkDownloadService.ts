@@ -5,7 +5,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import type { Novel, Chapter } from '../types/novel';
 import {
-    getChaptersByNovelId, countDownloadedChapters, updateNovel,
+    getChaptersByNovelId, countDownloadedChapters, updateNovel, getReadingProgress
 } from '../database/repository';
 import { downloadSingleChapter } from './downloadManager';
 
@@ -28,7 +28,7 @@ const BASE_DELAY_MS = 1000;
 const activeJobs = new Map<number, { cancelled: boolean }>();
 
 /**
- * Start bulk downloading all un-downloaded chapters for a novel.
+ * Start bulk downloading all un-downloaded chapters for a novel within R+1 ~ R+50.
  * Returns a promise that resolves when all downloads complete or are cancelled.
  */
 export async function startBulkDownload(
@@ -43,7 +43,15 @@ export async function startBulkDownload(
     activeJobs.set(novel.id, job);
 
     const chapters = getChaptersByNovelId(db, novel.id);
-    const pending = chapters.filter((ch) => !ch.isDownloaded && ch.url);
+    const progress = getReadingProgress(db, novel.id);
+    const r = progress ? progress.currentChapter : 0;
+    const end = Math.min(chapters.length, r + 50);
+    const start = r + 1;
+
+    // Filter to chapter within the range that need downloading
+    const pending = chapters.filter(
+        (ch) => ch.index >= start && ch.index <= end && !ch.isDownloaded && ch.url
+    );
     const total = chapters.length;
     let downloaded = countDownloadedChapters(db, novel.id);
 

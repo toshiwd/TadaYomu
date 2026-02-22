@@ -4,6 +4,7 @@ import {
     ToastAndroid, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Network from 'expo-network';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useFocusEffect } from '@react-navigation/native';
 
@@ -17,9 +18,10 @@ import {
 } from '../database/repository';
 import { deleteNovelData, downloadSingleChapter } from '../services/downloadManager';
 import {
-    startBulkDownload, cancelBulkDownload, isBulkDownloading,
+    useBulkDownloadProgress, startDownload as startGlobalDownload,
+    cancelDownload as cancelGlobalDownload,
     type BulkDownloadState, type BulkDownloadProgress,
-} from '../services/bulkDownloadService';
+} from '../services/bulkDownloadStore';
 
 export default function NovelDetailScreen({ route, navigation }: RootStackScreenProps<'NovelDetail'>) {
     const { colors } = useTheme();
@@ -30,8 +32,13 @@ export default function NovelDetailScreen({ route, navigation }: RootStackScreen
     const [chapters, setChapters] = useState<Chapter[]>([]);
     const [currentChapter, setCurrentChapter] = useState(1);
     const [downloadingIndex, setDownloadingIndex] = useState<number | null>(null);
-    const [bulkState, setBulkState] = useState<BulkDownloadState>('idle');
-    const [bulkProgress, setBulkProgress] = useState({ downloaded: 0, total: 0 });
+
+    // Subscribe to global bulk download store
+    const storeProgress = useBulkDownloadProgress(novelId);
+    const bulkState: BulkDownloadState = storeProgress?.state ?? 'idle';
+    const bulkProgress = storeProgress
+        ? { downloaded: storeProgress.downloaded, total: storeProgress.total }
+        : { downloaded: 0, total: 0 };
 
     const loadData = useCallback(() => {
         const n = getNovelById(db, novelId);
@@ -55,22 +62,40 @@ export default function NovelDetailScreen({ route, navigation }: RootStackScreen
 
     const handleBulkDownload = async () => {
         if (!novel || bulkState === 'running') return;
-        setBulkState('running');
-        await startBulkDownload(db, novel, (progress: BulkDownloadProgress) => {
-            setBulkState(progress.state);
-            setBulkProgress({ downloaded: progress.downloaded, total: progress.total });
-            if (progress.state === 'error' && progress.errorMessage) {
-                showToast(progress.errorMessage);
+        try {
+            const networkState = await Network.getNetworkStateAsync();
+            const r = currentChapter;
+            const end = Math.min(chapters.length, r + 50);
+            const start = r + 1;
+            const pending = chapters.filter(
+                (ch) => ch.index >= start && ch.index <= end && !ch.isDownloaded && ch.url
+            );
+
+            if (networkState.type !== Network.NetworkStateType.WIFI && pending.length > 20) {
+                Alert.alert(
+                    'モバイル通信での一括ダウンロード',
+                    `対象: ${pending.length}話 (見込み約200MB以上)\n挿絵画像が含まれる場合、大量のデータ通信が発生します。\n\n続行しますか？`,
+                    [
+                        { text: 'Wi-Fiを待つ', style: 'cancel' },
+                        {
+                            text: '続行',
+                            style: 'destructive',
+                            onPress: () => startGlobalDownload(db, novel)
+                        }
+                    ]
+                );
+                return;
             }
-            // Refresh data
-            loadData();
-        });
+            startGlobalDownload(db, novel);
+        } catch (err) {
+            console.error(err);
+            startGlobalDownload(db, novel);
+        }
     };
 
     const handleCancelBulk = () => {
         if (novel) {
-            cancelBulkDownload(novel.id);
-            setBulkState('paused');
+            cancelGlobalDownload(novel.id);
             showToast('ダウンロードを中断しました');
         }
     };
@@ -83,7 +108,7 @@ export default function NovelDetailScreen({ route, navigation }: RootStackScreen
                 style: 'destructive',
                 onPress: () => {
                     if (novel) {
-                        cancelBulkDownload(novel.id);
+                        cancelGlobalDownload(novel.id);
                         deleteNovelData(novel.siteNovelId);
                         deleteNovel(db, novel.id);
                     }
@@ -125,19 +150,20 @@ export default function NovelDetailScreen({ route, navigation }: RootStackScreen
         <View style={[styles.container, { backgroundColor: colors.background }]}>
             {/* Header */}
             <View style={[styles.header, { backgroundColor: colors.surface }]}>
-                <Text style={[styles.title, { color: colors.text.primary }]}>{novel.title}</Text>
-                <Text style={[styles.author, { color: colors.text.secondary }]}>{novel.author}</Text>
-                <Text style={[styles.meta, { color: colors.text.disabled }]}>
-                    {novel.downloadedEpisodes}/{novel.totalEpisodes}話 ダウンロード済
-                    {novel.isComplete ? ' · 完結' : ' · 連載中'}
-                </Text>
+                <Text style={[styles.title, { color: colors.text.primary }]} numberOfLines={2}>{novel.title}</Text>
+                <View style={styles.authorRow}>
+                    <Text style={[styles.author, { color: colors.text.secondary }]} numberOfLines={1}>{novel.author}</Text>
+                    <Text style={[styles.meta, { color: colors.text.disabled }]}>
+                        {novel.downloadedEpisodes}/{novel.totalEpisodes}話 DL済{novel.isComplete ? ' · 完結' : ' · 連載中'}
+                    </Text>
+                </View>
 
                 <View style={styles.actions}>
                     <TouchableOpacity
                         style={[styles.continueButton, { backgroundColor: colors.ui.primary }]}
                         onPress={handleContinueReading}
                     >
-                        <Ionicons name="book" size={16} color="#FFF" />
+                        <Ionicons name="book" size={14} color="#FFF" />
                         <Text style={styles.continueText}>
                             {currentChapter > 1 ? `第${currentChapter}話から` : '読む'}
                         </Text>
@@ -146,7 +172,7 @@ export default function NovelDetailScreen({ route, navigation }: RootStackScreen
                         style={[styles.deleteButton, { borderColor: colors.ui.error }]}
                         onPress={handleDelete}
                     >
-                        <Ionicons name="trash-outline" size={16} color={colors.ui.error} />
+                        <Ionicons name="trash-outline" size={14} color={colors.ui.error} />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -155,7 +181,7 @@ export default function NovelDetailScreen({ route, navigation }: RootStackScreen
             {novel.synopsis ? (
                 <View style={styles.synopsisSection}>
                     <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>あらすじ</Text>
-                    <Text style={[styles.synopsis, { color: colors.text.secondary }]} numberOfLines={5}>
+                    <Text style={[styles.synopsis, { color: colors.text.secondary }]} numberOfLines={3}>
                         {novel.synopsis}
                     </Text>
                 </View>
@@ -246,61 +272,62 @@ export default function NovelDetailScreen({ route, navigation }: RootStackScreen
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: { paddingTop: 56, paddingHorizontal: Spacing.lg, paddingBottom: Spacing.md },
-    title: { ...Typography.title, marginBottom: 4 },
-    author: { ...Typography.body, marginBottom: 4 },
-    meta: { ...Typography.caption, marginBottom: Spacing.md },
+    header: { paddingTop: 48, paddingHorizontal: Spacing.md, paddingBottom: Spacing.sm },
+    title: { fontSize: 18, fontFamily: 'NotoSansJP_700Bold', letterSpacing: 0.3, marginBottom: 2 },
+    authorRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.sm },
+    author: { ...Typography.caption, flexShrink: 1 },
+    meta: { ...Typography.caption },
     actions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
     continueButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: Spacing.lg,
-        paddingVertical: Spacing.sm,
+        paddingHorizontal: Spacing.md,
+        paddingVertical: 6,
         borderRadius: Radius.full,
-        gap: 6,
+        gap: 4,
         flex: 1,
         justifyContent: 'center',
     },
-    continueText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
+    continueText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
     deleteButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+        width: 34,
+        height: 34,
+        borderRadius: 17,
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 1,
     },
-    synopsisSection: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md },
-    sectionTitle: { ...Typography.subtitle },
+    synopsisSection: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, paddingBottom: Spacing.xs },
+    sectionTitle: { fontSize: 14, fontFamily: 'NotoSansJP_600SemiBold', letterSpacing: 0.2 },
     chapterHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingHorizontal: Spacing.lg,
-        marginBottom: Spacing.xs,
+        paddingHorizontal: Spacing.md,
+        marginBottom: 2,
     },
     bulkActions: { flexDirection: 'row', gap: 6 },
     bulkBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 10,
-        paddingVertical: 5,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
         borderRadius: Radius.full,
         gap: 4,
     },
     bulkBtnRunning: {},
-    bulkBtnText: { fontSize: 12, fontWeight: '700' },
-    synopsis: { ...Typography.body, lineHeight: 22 },
-    chapterList: { paddingHorizontal: Spacing.md, paddingBottom: 100 },
+    bulkBtnText: { fontSize: 11, fontWeight: '700' },
+    synopsis: { ...Typography.caption, lineHeight: 18 },
+    chapterList: { paddingHorizontal: Spacing.sm, paddingBottom: 100 },
     chapterRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 10,
+        paddingVertical: 6,
         paddingHorizontal: Spacing.sm,
         borderRadius: Radius.sm,
-        gap: Spacing.sm,
+        gap: Spacing.xs,
     },
-    chapterIndex: { width: 32, textAlign: 'right', ...Typography.caption, fontWeight: '600' },
-    chapterTitle: { flex: 1, ...Typography.body },
+    chapterIndex: { width: 28, textAlign: 'right', fontSize: 11, fontFamily: 'NotoSansJP_400Regular', fontWeight: '600' },
+    chapterTitle: { flex: 1, fontSize: 13, fontFamily: 'NotoSansJP_400Regular' },
     errorText: { ...Typography.body, textAlign: 'center', marginTop: 100 },
 });

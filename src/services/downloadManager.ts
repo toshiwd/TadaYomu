@@ -3,6 +3,7 @@
  * Uses expo-file-system v19 class-based API (File, Directory, Paths).
  */
 import { File, Directory, Paths } from 'expo-file-system';
+import { downloadAsync } from 'expo-file-system/legacy';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import type { Novel, Chapter } from '../types/novel';
 import {
@@ -106,69 +107,8 @@ export async function addNovelByUrl(
             });
         }
 
-        // Phase 3: Download all chapters
-        const novelDir = new Directory(Paths.document, 'novels', novelId);
-        ensureDirectory(getNovelsDir());
-        ensureDirectory(novelDir);
-
-        const total = chapterList.length;
-
-        for (let i = 0; i < total; i++) {
-            const ch = chapterList[i];
-            onProgress?.({
-                phase: 'downloading',
-                current: i + 1,
-                total,
-                message: `ダウンロード中: ${i + 1}/${total} - ${ch.title}`,
-            });
-
-            try {
-                const content = await adapter.getChapterContent(novelId, ch.url);
-                const formattedText = formatNovelText(content.bodyText);
-
-                // Validate: skip saving empty content
-                if (!formattedText || formattedText.trim().length === 0) {
-                    console.warn(`[Download] Chapter ${ch.index}: extracted text is empty, skipping save.`);
-                    continue;
-                }
-
-                const file = getChapterFile(novelId, ch.index);
-
-                // Write text to file
-                file.create({ intermediates: true, overwrite: true });
-                file.write(formattedText);
-
-                // Verify write succeeded by reading back
-                const verifyText = await file.text();
-                if (!verifyText || verifyText.length === 0) {
-                    console.warn(`[Download] Chapter ${ch.index}: file write verification failed (empty read-back).`);
-                    continue;
-                }
-                console.log(`[Download] Chapter ${ch.index}: saved ${verifyText.length} chars to ${file.uri}`);
-
-                upsertChapter(db, {
-                    novelId: dbId,
-                    index: ch.index,
-                    title: content.title || ch.title,
-                    localPath: file.uri,
-                    isDownloaded: true,
-                    url: ch.url,
-                    publishedAt: ch.publishedAt,
-                    revisedAt: ch.revisedAt,
-                });
-            } catch (err) {
-                console.warn(`Failed to download chapter ${ch.index}:`, err);
-            }
-        }
-
-        // Update download count
-        const downloaded = countDownloadedChapters(db, dbId);
-        updateNovel(db, dbId, {
-            downloadedEpisodes: downloaded,
-            lastCheckedAt: new Date().toISOString(),
-        });
-
-        onProgress?.({ phase: 'done', current: total, total, message: 'ダウンロード完了' });
+        // Done — chapters will be downloaded on-demand when opened
+        onProgress?.({ phase: 'done', current: 0, total: chapterList.length, message: '追加完了' });
         return getNovelBySiteId(db, novelId, adapter.siteType);
     } catch (err: any) {
         onProgress?.({
@@ -202,49 +142,26 @@ export async function checkNovelUpdates(
             return 0;
         }
 
-        const novelDir = new Directory(Paths.document, 'novels', novel.siteNovelId);
-        ensureDirectory(novelDir);
-
-        for (let i = 0; i < newChapters.length; i++) {
-            const ch = newChapters[i];
-            onProgress?.({
-                phase: 'downloading',
-                current: i + 1,
-                total: newChapters.length,
-                message: `新着ダウンロード: ${i + 1}/${newChapters.length}`,
+        // Insert new chapters as metadata only (content fetched on-demand)
+        for (const ch of newChapters) {
+            upsertChapter(db, {
+                novelId: novel.id,
+                index: ch.index,
+                title: ch.title,
+                localPath: null,
+                isDownloaded: false,
+                url: ch.url,
+                publishedAt: ch.publishedAt,
+                revisedAt: ch.revisedAt,
             });
-
-            try {
-                const content = await adapter.getChapterContent(novel.siteNovelId, ch.url);
-                const formattedText = formatNovelText(content.bodyText);
-                const file = getChapterFile(novel.siteNovelId, ch.index);
-
-                file.create({ intermediates: true, overwrite: true });
-                file.write(formattedText);
-
-                upsertChapter(db, {
-                    novelId: novel.id,
-                    index: ch.index,
-                    title: content.title || ch.title,
-                    localPath: file.uri,
-                    isDownloaded: true,
-                    url: ch.url,
-                    publishedAt: ch.publishedAt,
-                    revisedAt: ch.revisedAt,
-                });
-            } catch (err) {
-                console.warn(`Failed to download chapter ${ch.index}:`, err);
-            }
         }
 
-        const downloaded = countDownloadedChapters(db, novel.id);
         updateNovel(db, novel.id, {
             totalEpisodes: chapterList.length,
-            downloadedEpisodes: downloaded,
             lastCheckedAt: new Date().toISOString(),
         });
 
-        onProgress?.({ phase: 'done', current: newChapters.length, total: newChapters.length, message: '完了' });
+        onProgress?.({ phase: 'done', current: newChapters.length, total: newChapters.length, message: `${newChapters.length}話の新着あり` });
         return newChapters.length;
     } catch {
         return 0;
@@ -262,10 +179,47 @@ export async function downloadSingleChapter(
 
     console.log(`[Reader] Re-downloading chapter ${chapter.index} from ${chapter.url}`);
     const content = await adapter.getChapterContent(siteNovelId, chapter.url);
-    const formattedText = formatNovelText(content.bodyText);
+    let formattedText = formatNovelText(content.bodyText);
 
     if (!formattedText || formattedText.trim().length === 0) {
         throw new Error(`Re-download produced empty text (raw: ${content.bodyText?.length ?? 0})`);
+    }
+
+    // Extract and download images
+    const imgRegex = /<img[^>]+src=["']([^"']+)["']/gi;
+    const originalSrcs: string[] = [];
+    let match;
+    while ((match = imgRegex.exec(formattedText)) !== null) {
+        originalSrcs.push(match[1]);
+    }
+
+    if (originalSrcs.length > 0) {
+        const imageDir = new Directory(Paths.document, 'novels', siteNovelId, 'images');
+        ensureDirectory(getNovelsDir());
+        ensureDirectory(new Directory(Paths.document, 'novels', siteNovelId));
+        ensureDirectory(imageDir);
+
+        for (const src of originalSrcs) {
+            let url = src;
+            if (url.startsWith('//')) url = 'https:' + url;
+
+            try {
+                // Generate safe filename from URL
+                let filename = url.split('/').pop()?.split('?')[0];
+                if (!filename || !filename.includes('.')) filename = `${Date.now()}.jpg`;
+
+                const imageFile = new File(imageDir, filename);
+                if (!imageFile.exists) {
+                    console.log(`[Reader] Downloading image: ${url}`);
+                    await downloadAsync(url, imageFile.uri);
+                }
+
+                // Replace URL with local file URI
+                formattedText = formattedText.split(src).join(imageFile.uri);
+            } catch (err) {
+                console.warn(`[Reader] Failed to download image ${url}:`, err);
+            }
+        }
     }
 
     const novelDir = new Directory(Paths.document, 'novels', siteNovelId);
