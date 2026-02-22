@@ -8,12 +8,12 @@ const DB_NAME = 'tadayomu.db';
 
 /** Open (or create) the database */
 export function getDatabase(): SQLiteDatabase {
-    return openDatabaseSync(DB_NAME);
+  return openDatabaseSync(DB_NAME);
 }
 
 /** Initialize all tables */
 export function initDatabase(db: SQLiteDatabase): void {
-    db.execSync(`
+  db.execSync(`
     CREATE TABLE IF NOT EXISTS novels (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       site_novel_id TEXT NOT NULL,
@@ -27,6 +27,7 @@ export function initDatabase(db: SQLiteDatabase): void {
       cover_path TEXT,
       tags TEXT NOT NULL DEFAULT '[]',
       is_complete INTEGER NOT NULL DEFAULT 0,
+      is_archived INTEGER NOT NULL DEFAULT 0,
       site_updated_at TEXT,
       last_checked_at TEXT,
       added_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -73,4 +74,12 @@ export function initDatabase(db: SQLiteDatabase): void {
     CREATE INDEX IF NOT EXISTS idx_chapters_novel ON chapters(novel_id);
     CREATE INDEX IF NOT EXISTS idx_bookmarks_novel ON bookmarks(novel_id);
   `);
+
+  // --- DB Migrations ---
+  // Add is_archived column if it doesn't exist (for existing users)
+  const novelColumns = db.getAllSync(`PRAGMA table_info(novels)`) as { name: string }[];
+  const hasIsArchived = novelColumns.some(col => col.name === 'is_archived');
+  if (!hasIsArchived) {
+    db.execSync(`ALTER TABLE novels ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0;`);
+  }
 }

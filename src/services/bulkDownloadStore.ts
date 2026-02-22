@@ -34,6 +34,11 @@ export function subscribe(listener: () => void): () => void {
 }
 
 export function startDownload(db: SQLiteDatabase, novel: Novel): void {
+    // Set initial state immediately BEFORE starting the download
+    // This prevents race conditions if the download logic finishes synchronously
+    progressMap.set(novel.id, { state: 'running', downloaded: 0, total: novel.totalEpisodes });
+    notify();
+
     // Start the download — fire-and-forget (the promise resolves when done)
     _startBulkDownload(db, novel, (progress: BulkDownloadProgress) => {
         progressMap.set(novel.id, progress);
@@ -50,10 +55,6 @@ export function startDownload(db: SQLiteDatabase, novel: Novel): void {
             }, 5000);
         }
     });
-
-    // Set initial state immediately
-    progressMap.set(novel.id, { state: 'running', downloaded: 0, total: novel.totalEpisodes });
-    notify();
 }
 
 export function cancelDownload(novelId: number): void {

@@ -2,35 +2,94 @@
  * CRUD operations for novels and chapters using expo-sqlite v16.
  */
 import type { SQLiteDatabase } from 'expo-sqlite';
-import type { Novel, Chapter, ReadingProgress, Bookmark, ReaderSettings } from '../types/novel';
+import type { Novel, Chapter, ReadingProgress, Bookmark, ReaderSettings, SiteType } from '../types/novel';
 import { DEFAULT_READER_SETTINGS } from '../types/novel';
+
+// ── Database Row Types ──
+interface NovelRow {
+    id: number;
+    site_novel_id: string;
+    site_type: string;
+    title: string;
+    author: string;
+    synopsis: string;
+    total_episodes: number;
+    downloaded_episodes: number;
+    url: string;
+    cover_path: string | null;
+    tags: string;
+    is_complete: number;
+    is_archived: number;
+    site_updated_at: string | null;
+    last_checked_at: string | null;
+    added_at: string;
+    current_chapter?: number;
+    scroll_percentage?: number;
+}
+
+interface ChapterRow {
+    id: number;
+    novel_id: number;
+    chapter_index: number;
+    title: string;
+    local_path: string | null;
+    is_downloaded: number;
+    url: string;
+    published_at: string | null;
+    revised_at: string | null;
+}
+
+interface ReadingProgressRow {
+    novel_id: number;
+    current_chapter: number;
+    scroll_percentage: number;
+    last_read_at: string;
+}
+
+interface BookmarkRow {
+    id: number;
+    novel_id: number;
+    chapter_index: number;
+    scroll_percentage: number;
+    label: string;
+    created_at: string;
+}
 
 // ── Novel CRUD ──
 
 export type LibrarySortBy = 'updatedAt' | 'lastRead';
 
-export function getAllNovels(db: SQLiteDatabase, sortBy?: LibrarySortBy): Novel[] {
+export function getAllNovels(db: SQLiteDatabase, sortBy?: LibrarySortBy, isArchived: boolean = false): Novel[] {
     let query: string;
+    const archivedFlag = isArchived ? 1 : 0;
+    const params = [archivedFlag];
+
     switch (sortBy) {
         case 'updatedAt':
-            query = `SELECT n.* FROM novels n
+            query = `SELECT n.*, rp.current_chapter, rp.scroll_percentage FROM novels n
+                     LEFT JOIN reading_progress rp ON rp.novel_id = n.id
+                     WHERE n.is_archived = ?
                      ORDER BY COALESCE(n.site_updated_at, n.last_checked_at, n.added_at) DESC, n.title ASC`;
             break;
         case 'lastRead':
-            query = `SELECT n.* FROM novels n
+            query = `SELECT n.*, rp.current_chapter, rp.scroll_percentage FROM novels n
                      LEFT JOIN reading_progress rp ON rp.novel_id = n.id
+                     WHERE n.is_archived = ?
                      ORDER BY COALESCE(rp.last_read_at, n.added_at) DESC, n.title ASC`;
             break;
         default:
-            query = 'SELECT * FROM novels ORDER BY last_checked_at DESC, added_at DESC';
+            query = `SELECT n.*, rp.current_chapter, rp.scroll_percentage FROM novels n 
+                     LEFT JOIN reading_progress rp ON rp.novel_id = n.id
+                     WHERE n.is_archived = ?
+                     ORDER BY n.last_checked_at DESC, n.added_at DESC`;
             break;
     }
-    const rows = db.getAllSync(query) as any[];
+    const rows = db.getAllSync(query, params) as NovelRow[];
     return rows.map(mapRowToNovel);
 }
 
 export function getNovelById(db: SQLiteDatabase, id: number): Novel | null {
-    const row = db.getFirstSync('SELECT * FROM novels WHERE id = ?', [id]) as any;
+    const row = db.getFirstSync('SELECT * FROM novels WHERE id = ?', [id]) as NovelRow | null;
     return row ? mapRowToNovel(row) : null;
 }
 
@@ -40,19 +99,19 @@ export function getNovelBySiteId(
     const row = db.getFirstSync(
         'SELECT * FROM novels WHERE site_novel_id = ? AND site_type = ?',
         [siteNovelId, siteType]
-    ) as any;
+    ) as NovelRow | null;
     return row ? mapRowToNovel(row) : null;
 }
 
 export function insertNovel(db: SQLiteDatabase, novel: Omit<Novel, 'id'>): number {
     const result = db.runSync(
         `INSERT INTO novels (site_novel_id, site_type, title, author, synopsis, total_episodes,
-      downloaded_episodes, url, cover_path, tags, is_complete, site_updated_at, last_checked_at, added_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      downloaded_episodes, url, cover_path, tags, is_complete, is_archived, site_updated_at, last_checked_at, added_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             novel.siteNovelId, novel.siteType, novel.title, novel.author, novel.synopsis,
             novel.totalEpisodes, novel.downloadedEpisodes, novel.url, novel.coverPath,
-            JSON.stringify(novel.tags), novel.isComplete ? 1 : 0, novel.siteUpdatedAt,
+            JSON.stringify(novel.tags), novel.isComplete ? 1 : 0, novel.isArchived ? 1 : 0, novel.siteUpdatedAt,
             novel.lastCheckedAt, novel.addedAt,
         ]
     );
@@ -61,6 +120,7 @@ export function insertNovel(db: SQLiteDatabase, novel: Omit<Novel, 'id'>): numbe
 
 export function updateNovel(db: SQLiteDatabase, id: number, updates: Partial<Novel>): void {
     const fields: string[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const values: any[] = [];
 
     if (updates.title !== undefined) { fields.push('title = ?'); values.push(updates.title); }
@@ -69,6 +129,7 @@ export function updateNovel(db: SQLiteDatabase, id: number, updates: Partial<Nov
     if (updates.totalEpisodes !== undefined) { fields.push('total_episodes = ?'); values.push(updates.totalEpisodes); }
     if (updates.downloadedEpisodes !== undefined) { fields.push('downloaded_episodes = ?'); values.push(updates.downloadedEpisodes); }
     if (updates.isComplete !== undefined) { fields.push('is_complete = ?'); values.push(updates.isComplete ? 1 : 0); }
+    if (updates.isArchived !== undefined) { fields.push('is_archived = ?'); values.push(updates.isArchived ? 1 : 0); }
     if (updates.siteUpdatedAt !== undefined) { fields.push('site_updated_at = ?'); values.push(updates.siteUpdatedAt); }
     if (updates.lastCheckedAt !== undefined) { fields.push('last_checked_at = ?'); values.push(updates.lastCheckedAt); }
 
@@ -88,7 +149,7 @@ export function getChaptersByNovelId(db: SQLiteDatabase, novelId: number): Chapt
     const rows = db.getAllSync(
         'SELECT * FROM chapters WHERE novel_id = ? ORDER BY chapter_index ASC',
         [novelId]
-    ) as any[];
+    ) as ChapterRow[];
     return rows.map(mapRowToChapter);
 }
 
@@ -96,7 +157,7 @@ export function getChapter(db: SQLiteDatabase, novelId: number, index: number): 
     const row = db.getFirstSync(
         'SELECT * FROM chapters WHERE novel_id = ? AND chapter_index = ?',
         [novelId, index]
-    ) as any;
+    ) as ChapterRow | null;
     return row ? mapRowToChapter(row) : null;
 }
 
@@ -122,7 +183,7 @@ export function countDownloadedChapters(db: SQLiteDatabase, novelId: number): nu
     const row = db.getFirstSync(
         'SELECT COUNT(*) as cnt FROM chapters WHERE novel_id = ? AND is_downloaded = 1',
         [novelId]
-    ) as any;
+    ) as { cnt: number } | null;
     return row?.cnt ?? 0;
 }
 
@@ -132,7 +193,7 @@ export function getReadingProgress(db: SQLiteDatabase, novelId: number): Reading
     const row = db.getFirstSync(
         'SELECT * FROM reading_progress WHERE novel_id = ?',
         [novelId]
-    ) as any;
+    ) as ReadingProgressRow | null;
     if (!row) return null;
     const novel = getNovelById(db, novelId);
     return {
@@ -165,7 +226,7 @@ export function getBookmarksByNovel(db: SQLiteDatabase, novelId: number): Bookma
     const rows = db.getAllSync(
         'SELECT * FROM bookmarks WHERE novel_id = ? ORDER BY created_at DESC',
         [novelId]
-    ) as any[];
+    ) as BookmarkRow[];
     return rows.map((r) => ({
         id: r.id,
         novelId: r.novel_id,
@@ -192,7 +253,7 @@ export function deleteBookmark(db: SQLiteDatabase, id: number): void {
 // ── Settings ──
 
 export function getSetting(db: SQLiteDatabase, key: string): string | null {
-    const row = db.getFirstSync('SELECT value FROM settings WHERE key = ?', [key]) as any;
+    const row = db.getFirstSync('SELECT value FROM settings WHERE key = ?', [key]) as { value: string } | null;
     return row?.value ?? null;
 }
 
@@ -217,11 +278,11 @@ export function saveReaderSettings(db: SQLiteDatabase, settings: ReaderSettings)
 
 // ── Row mappers ──
 
-function mapRowToNovel(row: any): Novel {
-    return {
+function mapRowToNovel(row: NovelRow): Novel {
+    const novel: Novel = {
         id: row.id,
         siteNovelId: row.site_novel_id,
-        siteType: row.site_type,
+        siteType: row.site_type as SiteType,
         title: row.title,
         author: row.author,
         synopsis: row.synopsis,
@@ -231,13 +292,19 @@ function mapRowToNovel(row: any): Novel {
         coverPath: row.cover_path,
         tags: safeParseJson(row.tags, []),
         isComplete: !!row.is_complete,
+        isArchived: !!row.is_archived,
         siteUpdatedAt: row.site_updated_at,
         lastCheckedAt: row.last_checked_at,
         addedAt: row.added_at,
     };
+    if (row.current_chapter !== undefined && row.current_chapter !== null) {
+        novel.currentChapter = row.current_chapter;
+        novel.scrollPercentage = row.scroll_percentage;
+    }
+    return novel;
 }
 
-function mapRowToChapter(row: any): Chapter {
+function mapRowToChapter(row: ChapterRow): Chapter {
     return {
         id: row.id,
         novelId: row.novel_id,

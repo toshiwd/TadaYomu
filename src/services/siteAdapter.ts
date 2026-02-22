@@ -56,9 +56,18 @@ export interface SiteAdapter {
 /** Registry of adapters by site type */
 const adapterRegistry = new Map<SiteType, SiteAdapter>();
 
+import { syosetuAdapter } from './adapters/syosetuAdapter';
+import { nocturneAdapter } from './adapters/nocturneAdapter';
+import { kakuyomuAdapter } from './adapters/kakuyomuAdapter';
+
 export function registerAdapter(adapter: SiteAdapter): void {
     adapterRegistry.set(adapter.siteType, adapter);
 }
+
+// Auto-register known adapters (or call this from app init)
+registerAdapter(syosetuAdapter);
+registerAdapter(nocturneAdapter);
+registerAdapter(kakuyomuAdapter);
 
 export function getAdapter(siteType: SiteType): SiteAdapter | undefined {
     return adapterRegistry.get(siteType);

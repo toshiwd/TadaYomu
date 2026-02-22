@@ -40,6 +40,12 @@ export interface Novel {
   lastCheckedAt: string | null;
   /** When the novel was added to library */
   addedAt: string;
+  /** Current chapter derived from reading progress (optional, used in library view to avoid N+1) */
+  currentChapter?: number;
+  /** Scroll percentage derived from reading progress (optional, used in library view to avoid N+1) */
+  scrollPercentage?: number;
+  /** Whether the novel is hidden in the archive */
+  isArchived: boolean;
 }
 
 /** A single chapter/episode of a novel */
@@ -83,8 +89,8 @@ export interface Bookmark {
 
 /** Reader display settings */
 export interface ReaderSettings {
-  /** Font family: 'serif' (Mincho) or 'sans-serif' (Gothic) or google fonts */
-  fontFamily: 'serif' | 'sans-serif' | 'shippori-mincho' | 'zen-kaku-gothic' | 'klee-one' | string;
+  /** Font family: 'serif' (Mincho) or 'sans-serif' (Gothic) */
+  fontFamily: 'serif' | 'sans-serif' | string;
   fontSize: number;
   lineHeight: number;
   /** Writing direction */

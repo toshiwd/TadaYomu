@@ -17,7 +17,6 @@ export type RootStackParamList = {
 /** Bottom tab params */
 export type MainTabParamList = {
     Library: undefined;
-    Updates: undefined;
     Search: undefined;
     Settings: undefined;
 };

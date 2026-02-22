@@ -45,13 +45,11 @@ export async function startBulkDownload(
     const chapters = getChaptersByNovelId(db, novel.id);
     const progress = getReadingProgress(db, novel.id);
     const r = progress ? progress.currentChapter : 0;
-    const end = Math.min(chapters.length, r + 50);
-    const start = r + 1;
 
-    // Filter to chapter within the range that need downloading
-    const pending = chapters.filter(
-        (ch) => ch.index >= start && ch.index <= end && !ch.isDownloaded && ch.url
-    );
+    // Filter to chapter after the current read position that need downloading, limit to 50
+    const pending = chapters
+        .filter((ch) => ch.index > r && !ch.isDownloaded && ch.url)
+        .slice(0, 50);
     const total = chapters.length;
     let downloaded = countDownloadedChapters(db, novel.id);
 
