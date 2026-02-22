@@ -58,10 +58,16 @@ export function formatNovelText(raw: string): string {
 
 /** Convert half-width alphanumeric to full-width for vertical consistency */
 function normalizeWidths(text: string): string {
-    // Half-width ASCII letters & digits → full-width
-    return text.replace(/[A-Za-z0-9]/g, (ch) => {
-        return String.fromCharCode(ch.charCodeAt(0) + 0xFEE0);
-    });
+    // Half-width ASCII letters & digits → full-width, EXCEPT for __IMG_X__ tokens
+    const parts = text.split(/(__IMG_\d+__)/);
+    for (let i = 0; i < parts.length; i++) {
+        if (i % 2 === 0) { // Text parts (even indices)
+            parts[i] = parts[i].replace(/[A-Za-z0-9]/g, (ch) => {
+                return String.fromCharCode(ch.charCodeAt(0) + 0xFEE0);
+            });
+        }
+    }
+    return parts.join('');
 }
 
 /** Normalize various dash characters to paired em-dashes ── */

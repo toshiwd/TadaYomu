@@ -83,8 +83,8 @@ export interface Bookmark {
 
 /** Reader display settings */
 export interface ReaderSettings {
-  /** Font family: 'serif' (Mincho) or 'sans-serif' (Gothic) or system */
-  fontFamily: 'serif' | 'sans-serif' | 'system-serif' | 'system-sans' | string;
+  /** Font family: 'serif' (Mincho) or 'sans-serif' (Gothic) or google fonts */
+  fontFamily: 'serif' | 'sans-serif' | 'shippori-mincho' | 'zen-kaku-gothic' | 'klee-one' | string;
   fontSize: number;
   lineHeight: number;
   /** Writing direction */

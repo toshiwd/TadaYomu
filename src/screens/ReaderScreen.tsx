@@ -208,12 +208,15 @@ export default function ReaderScreen({ navigation, route }: RootStackScreenProps
     const processedText = rubyTextToHtml(chapterText);
     const hasContent = processedText.trim().length > 0;
 
-    // Google Fonts CDN (skip if using system fonts)
-    const fontLink = s.fontFamily.startsWith('system-')
-      ? ''
-      : s.fontFamily === 'serif'
-        ? '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700&display=swap" rel="stylesheet">'
-        : '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">';
+    // Google Fonts CDN
+    const fontLink = (() => {
+      const f = s.fontFamily;
+      if (f === 'shippori-mincho') return '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;700&display=swap" rel="stylesheet">';
+      if (f === 'zen-kaku-gothic') return '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;700&display=swap" rel="stylesheet">';
+      if (f === 'klee-one') return '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Klee+One:wght@400;600&display=swap" rel="stylesheet">';
+      if (f === 'serif') return '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700&display=swap" rel="stylesheet">';
+      return '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">';
+    })();
 
     // Paragraph builder
     const contentHtml = hasContent ? (() => {
@@ -236,6 +239,9 @@ export default function ReaderScreen({ navigation, route }: RootStackScreenProps
           if ((prevContent && isDialogue(prevContent)) || (nextContent && isDialogue(nextContent))) {
             paragraphs.push('<p class="blank">&nbsp;</p>');
           }
+        } else if (line.indexOf('<div class="image-page">') !== -1) {
+          flushCurrent();
+          paragraphs.push(line);
         } else {
           currentLines.push(line);
         }
@@ -267,8 +273,9 @@ export default function ReaderScreen({ navigation, route }: RootStackScreenProps
 
     let fontFamilyCSS = '"Noto Serif JP", "游明朝", "YuMincho", "ヒラギノ明朝 ProN", serif';
     if (s.fontFamily === 'sans-serif') fontFamilyCSS = '"Noto Sans JP", "游ゴシック", "YuGothic", "ヒラギノ角ゴ ProN", sans-serif';
-    else if (s.fontFamily === 'system-serif') fontFamilyCSS = '"游明朝", "YuMincho", "ヒラギノ明朝 ProN", "Hiragino Mincho ProN", "BIZ UDP明朝", serif';
-    else if (s.fontFamily === 'system-sans') fontFamilyCSS = '"游ゴシック", "YuGothic", "ヒラギノ角ゴ ProN", "Hiragino Kaku Gothic ProN", "BIZ UDPゴシック", sans-serif';
+    else if (s.fontFamily === 'shippori-mincho') fontFamilyCSS = '"Shippori Mincho", "游明朝", "YuMincho", serif';
+    else if (s.fontFamily === 'zen-kaku-gothic') fontFamilyCSS = '"Zen Kaku Gothic New", "游ゴシック", "YuGothic", sans-serif';
+    else if (s.fontFamily === 'klee-one') fontFamilyCSS = '"Klee One", "游明朝", "YuMincho", serif';
 
     return `<!DOCTYPE html>
 <html lang="ja">
@@ -609,9 +616,28 @@ ${fontLink}
       if (s.fontFamily !== undefined) {
         var ff = '"Noto Serif JP", "游明朝", "YuMincho", "ヒラギノ明朝 ProN", serif';
         if (s.fontFamily === 'sans-serif') ff = '"Noto Sans JP", "游ゴシック", "YuGothic", "ヒラギノ角ゴ ProN", sans-serif';
-        else if (s.fontFamily === 'system-serif') ff = '"游明朝", "YuMincho", "ヒラギノ明朝 ProN", "Hiragino Mincho ProN", "BIZ UDP明朝", serif';
-        else if (s.fontFamily === 'system-sans') ff = '"游ゴシック", "YuGothic", "ヒラギノ角ゴ ProN", "Hiragino Kaku Gothic ProN", "BIZ UDPゴシック", sans-serif';
+        else if (s.fontFamily === 'shippori-mincho') ff = '"Shippori Mincho", "游明朝", "YuMincho", serif';
+        else if (s.fontFamily === 'zen-kaku-gothic') ff = '"Zen Kaku Gothic New", "游ゴシック", "YuGothic", sans-serif';
+        else if (s.fontFamily === 'klee-one') ff = '"Klee One", "游明朝", "YuMincho", serif';
         root.style.setProperty('--fontFamily', ff);
+
+        var linkId = 'font-' + s.fontFamily;
+        if (!document.getElementById(linkId)) {
+           var href = '';
+           if (s.fontFamily === 'shippori-mincho') href = 'https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;700&display=swap';
+           else if (s.fontFamily === 'zen-kaku-gothic') href = 'https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;700&display=swap';
+           else if (s.fontFamily === 'klee-one') href = 'https://fonts.googleapis.com/css2?family=Klee+One:wght@400;600&display=swap';
+           else if (s.fontFamily === 'serif') href = 'https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700&display=swap';
+           else if (s.fontFamily === 'sans-serif') href = 'https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap';
+           
+           if (href) {
+               var link = document.createElement('link');
+               link.id = linkId;
+               link.rel = 'stylesheet';
+               link.href = href;
+               document.head.appendChild(link);
+           }
+        }
       }
 
       // Recalculate geometry and pages after a short reflow delay
@@ -880,26 +906,39 @@ ${fontLink}
             </View>
           </View>
           <View style={styles.settingRow}>
-            <View style={styles.settingControls}>
+            <View style={[styles.settingControls, { flexWrap: 'wrap', gap: 8 }]}>
               <TouchableOpacity
                 style={[
                   styles.modeBtn,
-                  settings.fontFamily === 'system-serif' && { backgroundColor: readerTheme.fg + '15' },
+                  { paddingHorizontal: 12 },
+                  settings.fontFamily === 'shippori-mincho' && { backgroundColor: readerTheme.fg + '15' },
                   { borderColor: readerTheme.fg + '30' },
                 ]}
-                onPress={() => updateSetting('fontFamily', 'system-serif')}
+                onPress={() => updateSetting('fontFamily', 'shippori-mincho')}
               >
-                <Text style={[styles.settingBtnText, { color: readerTheme.fg }]}>端末明朝</Text>
+                <Text style={[styles.settingBtnText, { color: readerTheme.fg, fontSize: 11 }]}>しっぽり明朝</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
                   styles.modeBtn,
-                  settings.fontFamily === 'system-sans' && { backgroundColor: readerTheme.fg + '15' },
+                  { paddingHorizontal: 12 },
+                  settings.fontFamily === 'zen-kaku-gothic' && { backgroundColor: readerTheme.fg + '15' },
                   { borderColor: readerTheme.fg + '30' },
                 ]}
-                onPress={() => updateSetting('fontFamily', 'system-sans')}
+                onPress={() => updateSetting('fontFamily', 'zen-kaku-gothic')}
               >
-                <Text style={[styles.settingBtnText, { color: readerTheme.fg }]}>端末ゴシック</Text>
+                <Text style={[styles.settingBtnText, { color: readerTheme.fg, fontSize: 11 }]}>Zen角ゴシック</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modeBtn,
+                  { paddingHorizontal: 12 },
+                  settings.fontFamily === 'klee-one' && { backgroundColor: readerTheme.fg + '15' },
+                  { borderColor: readerTheme.fg + '30' },
+                ]}
+                onPress={() => updateSetting('fontFamily', 'klee-one')}
+              >
+                <Text style={[styles.settingBtnText, { color: readerTheme.fg, fontSize: 11 }]}>クレーOne</Text>
               </TouchableOpacity>
             </View>
           </View>

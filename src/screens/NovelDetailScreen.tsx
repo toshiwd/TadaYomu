@@ -288,9 +288,9 @@ export default function NovelDetailScreen({ route, navigation }: RootStackScreen
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: { paddingTop: 48, paddingHorizontal: Spacing.md, paddingBottom: Spacing.sm },
+    header: { paddingTop: 48, paddingHorizontal: Spacing.md, paddingBottom: 8 },
     title: { fontSize: 18, fontFamily: 'NotoSansJP_700Bold', letterSpacing: 0.3, marginBottom: 2 },
-    authorRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.sm },
+    authorRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: 8 },
     author: { ...Typography.caption, flexShrink: 1 },
     meta: { ...Typography.caption },
     actions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
@@ -313,7 +313,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         borderWidth: 1,
     },
-    synopsisSection: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, paddingBottom: Spacing.xs },
+    synopsisSection: { paddingHorizontal: Spacing.md, paddingTop: 4, paddingBottom: Spacing.xs },
     sectionTitle: { fontSize: 14, fontFamily: 'NotoSansJP_600SemiBold', letterSpacing: 0.2 },
     chapterHeader: {
         flexDirection: 'row',
