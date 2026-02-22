@@ -448,9 +448,11 @@ ${fontLink}
   var reverseDirection = ${s.reversePageDirection ? 'true' : 'false'};
   var pageStepPx = 0;
   var containerW = 0;
+  var containerH = 0;
   var startAtLast = ${startAtLastPage};
   var currentPage = 0;
   var totalPages = 1;
+  var currentVisualOffset = 0;
 
   function log(msg) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'log', message: msg }));
@@ -526,6 +528,7 @@ ${fontLink}
       pageStepPx = (reader.clientWidth - padL - padR) + colGapVal;
     }
     containerW = parseFloat(document.documentElement.style.getPropertyValue('--viewW')) || ${viewW};
+    containerH = parseFloat(document.documentElement.style.getPropertyValue('--viewH')) || ${viewH};
     log('[Geometry] recalcGeometry: pageStepPx=' + pageStepPx + ' isVertical=' + isVertical);
   }
 
@@ -547,6 +550,8 @@ ${fontLink}
     currentPage = page;
     if (isVertical && content) {
       var offset = pageBoundaries[page] || 0;
+      currentVisualOffset = offset;
+      content.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
       content.style.transform = 'translateX(' + offset + 'px)';
     } else {
       var maxOff = Math.max(0, reader.scrollWidth - pageStepPx);
@@ -640,7 +645,7 @@ ${fontLink}
     if (isVertical && content) {
       // Remove transition for instant finger tracking
       content.style.transition = 'none';
-      baseOffset = pageBoundaries[currentPage] || 0;
+      baseOffset = currentVisualOffset; // We'll maintain a global visual offset
     }
   }, { passive: false });
 
@@ -654,13 +659,16 @@ ${fontLink}
     
     if (Math.abs(dx) > 10 || Math.abs(dy) > 10) touchMoved = true;
 
-    // Finger tracking animation (Vertical mode only for now as horizontal relies on scrollLeft which doesn't perform well with direct touch manipulation unless using native scrolling)
+    // Finger tracking animation
     if (isVertical && content && touchMoved && Math.abs(dx) > Math.abs(dy) * 0.5) {
         e.preventDefault(); // Prevent native scroll
         if (animationFrameId) cancelAnimationFrame(animationFrameId);
         animationFrameId = requestAnimationFrame(function() {
-            var visualOffset = dx; 
-            content.style.transform = 'translateX(' + (baseOffset + visualOffset) + 'px)';
+            var target = baseOffset + dx;
+            // Clamp roughly
+            var maxOffset = content.scrollWidth - viewportW;
+            currentVisualOffset = Math.max(-100, Math.min(maxOffset + 100, target));
+            content.style.transform = 'translateX(' + currentVisualOffset + 'px)';
         });
     }
   }, { passive: false });
@@ -668,7 +676,6 @@ ${fontLink}
   tapZone.addEventListener('touchend', function(e) {
     if (!isDragging) return;
     isDragging = false;
-    // e.preventDefault();
     var endX = e.changedTouches[0].clientX;
     var endY = e.changedTouches[0].clientY;
     var dx = endX - touchStartX;
@@ -678,32 +685,48 @@ ${fontLink}
     var absDy = Math.abs(dy);
 
     if (isVertical && content) {
-      // Restore transition for smooth snapping
-      content.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
-    }
-
-    // Swipe detection
-    if (absDx > 30 && absDx > absDy && elapsed < 800 && touchMoved) {
-      // Swipe distance threshold based on viewport
-      if (Math.abs(dx) > viewportW * 0.1 || (elapsed < 300 && absDx > 30)) {
-          if (reverseDirection) {
-            if (dx < 0) goPrevPage(); else goNextPage();
-          } else {
-            if (dx < 0) goNextPage(); else goPrevPage();
-          }
-      } else {
-          // Snap back if threshold not met
-          goToPage(currentPage); 
+      if (touchMoved) {
+        // Continuous sliding with simple momentum instead of page snapping
+        var velocity = dx / Math.max(1, elapsed); // px per ms
+        var amplitude = velocity * 150; // glide distance
+        var targetOffset = currentVisualOffset + amplitude;
+        var maxOffset = content.scrollWidth - reader.clientWidth;
+        
+        targetOffset = Math.max(0, Math.min(maxOffset, targetOffset));
+        
+        content.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+        content.style.transform = 'translateX(' + targetOffset + 'px)';
+        currentVisualOffset = targetOffset;
+        
+        // Update current page roughly based on offset
+        var approxPage = Math.round(targetOffset / reader.clientWidth);
+        currentPage = Math.max(0, Math.min(approxPage, totalPages - 1));
+        sendPageInfo();
+        return;
       }
-      return;
+    } else {
+      // Horizontal mode native scrolling fallback
+      if (absDx > 30 && absDx > absDy && elapsed < 800 && touchMoved) {
+        if (Math.abs(dx) > containerW * 0.1 || (elapsed < 300 && absDx > 30)) {
+            if (reverseDirection) {
+              if (dx < 0) goPrevPage(); else goNextPage();
+            } else {
+              if (dx < 0) goNextPage(); else goPrevPage();
+            }
+        } else {
+            goToPage(currentPage); 
+        }
+        return;
+      }
     }
 
-    // Tap detection — left/right tap turns pages
+    // Tap detection — exactly left or right half
     if (!touchMoved && elapsed < 300) {
-      var centerZoneLeft = containerW * 0.3;
-      var centerZoneRight = containerW * 0.7;
+      // Menu toggle: Central 33% vertically and horizontally
+      var isCenterHorizontal = endX > containerW * 0.33 && endX < containerW * 0.66;
+      var isCenterVertical = endY > containerH * 0.33 && endY < containerH * 0.66;
 
-      if (endX > centerZoneLeft && endX < centerZoneRight) {
+      if (isCenterHorizontal && isCenterVertical) {
         // Center tap — toggle toolbar via RN
         window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'toggle-toolbar' }));
       } else if (reverseDirection) {
@@ -711,8 +734,7 @@ ${fontLink}
       } else {
         if (endX > containerW * 0.5) goNextPage(); else goPrevPage();
       }
-    } else if (touchMoved) {
-        // Snap back if moved but not swiped far enough
+    } else if (touchMoved && !isVertical) {
         goToPage(currentPage);
     }
   }, { passive: false });

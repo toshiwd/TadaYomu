@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useRef } from 'react';
+import React, { useCallback, useState, useRef, useMemo } from 'react';
 import {
     View, Text, FlatList, StyleSheet, TouchableOpacity, Alert, ActivityIndicator,
     ToastAndroid, Platform,
@@ -32,6 +32,7 @@ export default function NovelDetailScreen({ route, navigation }: RootStackScreen
     const [chapters, setChapters] = useState<Chapter[]>([]);
     const [currentChapter, setCurrentChapter] = useState(1);
     const [downloadingIndex, setDownloadingIndex] = useState<number | null>(null);
+    const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
     // Subscribe to global bulk download store
     const storeProgress = useBulkDownloadProgress(novelId);
@@ -138,6 +139,10 @@ export default function NovelDetailScreen({ route, navigation }: RootStackScreen
         }
     };
 
+    const displayChapters = useMemo(() => {
+        return sortOrder === 'desc' ? [...chapters].reverse() : chapters;
+    }, [chapters, sortOrder]);
+
     if (!novel) {
         return (
             <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -189,9 +194,20 @@ export default function NovelDetailScreen({ route, navigation }: RootStackScreen
 
             {/* Chapter list header with bulk DL */}
             <View style={styles.chapterHeader}>
-                <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
-                    目次 ({chapters.length}話)
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+                        目次 ({chapters.length}話)
+                    </Text>
+                    <TouchableOpacity
+                        style={[styles.sortBtn, { backgroundColor: colors.surfaceAlt }]}
+                        onPress={() => setSortOrder(o => o === 'asc' ? 'desc' : 'asc')}
+                    >
+                        <Ionicons name="swap-vertical" size={12} color={colors.text.secondary} />
+                        <Text style={[styles.sortBtnText, { color: colors.text.secondary }]}>
+                            {sortOrder === 'desc' ? '降順' : '昇順'}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
                 <View style={styles.bulkActions}>
                     {bulkState === 'running' ? (
                         <>
@@ -225,7 +241,7 @@ export default function NovelDetailScreen({ route, navigation }: RootStackScreen
                 </View>
             </View>
             <FlatList
-                data={chapters}
+                data={displayChapters}
                 keyExtractor={(item) => String(item.id ?? item.index)}
                 contentContainerStyle={styles.chapterList}
                 renderItem={({ item }) => (
@@ -322,7 +338,7 @@ const styles = StyleSheet.create({
     chapterRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 6,
+        paddingVertical: 2,
         paddingHorizontal: Spacing.sm,
         borderRadius: Radius.sm,
         gap: Spacing.xs,
@@ -330,4 +346,13 @@ const styles = StyleSheet.create({
     chapterIndex: { width: 28, textAlign: 'right', fontSize: 11, fontFamily: 'NotoSansJP_400Regular', fontWeight: '600' },
     chapterTitle: { flex: 1, fontSize: 13, fontFamily: 'NotoSansJP_400Regular' },
     errorText: { ...Typography.body, textAlign: 'center', marginTop: 100 },
+    sortBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: Radius.full,
+    },
+    sortBtnText: { fontSize: 10, fontWeight: '700' },
 });
