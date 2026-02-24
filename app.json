@@ -2,7 +2,7 @@
   "expo": {
     "name": "Tadayomu",
     "slug": "Tadayomu",
-    "version": "1.3.13",
+    "version": "1.3.16",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
