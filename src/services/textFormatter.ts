@@ -4,16 +4,24 @@
  */
 
 /** Apply all formatting rules to raw text */
-export function formatNovelText(raw: string): string {
+export function formatNovelText(raw: string, options?: { showImages?: boolean }): string {
+  const showImages = options?.showImages ?? false;
   let text = raw;
 
-  // 0. Extract <img> tags to protect them from formatting
+  // 0. Extract <img> and `<span class="image-link">` tags to protect them from formatting
   const images: { html: string; src: string }[] = [];
+
+  // Match existing <img> tags
   text = text.replace(/<img[^>]*>/gi, (match) => {
-    // Extract src from the img tag
     const srcMatch = match.match(/src=["'](.*?)["']/i);
     const src = srcMatch ? srcMatch[1] : "";
     images.push({ html: match, src });
+    return `__IMG_${String(images.length - 1).padStart(4, "0")}__`;
+  });
+
+  // Match existing `<span class="image-link">` placeholders safely
+  text = text.replace(/<span\s+class=["']image-link["']\s+data-src=["']([^"']+)["'][^>]*>[^<]*<\/span>/gi, (match, src) => {
+    images.push({ html: match, src: src || "" });
     return `__IMG_${String(images.length - 1).padStart(4, "0")}__`;
   });
 
@@ -53,11 +61,14 @@ export function formatNovelText(raw: string): string {
   // 11. Trim leading/trailing blank lines
   text = text.trim();
 
-  // 12. Restore <img> tags as inline links
+  // 12. Restore <img> tags as inline images or link placeholders
   text = text.replace(/__IMG_(\d+)__/g, (match, p1) => {
     const index = parseInt(p1, 10);
     const imgData = images[index];
     if (imgData && imgData.src) {
+      if (showImages) {
+        return `\n<div class="image-page"><img src="${imgData.src}" /></div>\n`;
+      }
       // Return a clickable link placeholder instead of the actual image
       return `<span class="image-link" data-src="${imgData.src}">[画像あり: タップして表示]</span>`;
     }
