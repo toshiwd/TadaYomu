@@ -121,7 +121,9 @@ export const syosetuAdapter: SiteAdapter = {
 
         const n = novels[0];
         let lastUpdatedAt = null;
-        if (n.novelupdated_at) {
+        if (n.general_lastup) {
+            lastUpdatedAt = new Date(n.general_lastup.replace(/-/g, '/') + ' +0900').toISOString();
+        } else if (n.novelupdated_at) {
             lastUpdatedAt = new Date(n.novelupdated_at.replace(/-/g, '/') + ' +0900').toISOString();
         } else if (n.general_firstup) {
             lastUpdatedAt = new Date(n.general_firstup.replace(/-/g, '/') + ' +0900').toISOString();
@@ -145,14 +147,16 @@ export const syosetuAdapter: SiteAdapter = {
         // Max 500 ncodes per request supported by Narou API
         const chunk = novelIds.slice(0, 500);
         const ncodes = chunk.join('-');
-        const apiUrl = `${NAROU_API}?out=json&ncode=${ncodes}&of=t-w-s-ga-e-gf-n-nu`;
+        const apiUrl = `${NAROU_API}?out=json&ncode=${ncodes}&of=t-w-s-ga-e-gf-n-nu-gl`;
 
         const json = await rateLimitedFetch(apiUrl);
         const novels = parseNarouApiResponse(json);
 
         return novels.map((n: any) => {
             let lastUpdatedAt = null;
-            if (n.novelupdated_at) {
+            if (n.general_lastup) {
+                lastUpdatedAt = new Date(n.general_lastup.replace(/-/g, '/') + ' +0900').toISOString();
+            } else if (n.novelupdated_at) {
                 lastUpdatedAt = new Date(n.novelupdated_at.replace(/-/g, '/') + ' +0900').toISOString();
             } else if (n.general_firstup) {
                 lastUpdatedAt = new Date(n.general_firstup.replace(/-/g, '/') + ' +0900').toISOString();
