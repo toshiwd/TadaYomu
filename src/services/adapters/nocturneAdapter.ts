@@ -133,7 +133,8 @@ export const nocturneAdapter: SiteAdapter = {
     },
 
     async getNovelInfo(novelId: string): Promise<NovelInfo> {
-        const apiUrl = `${NAROU_API}?out=json&ncode=${novelId}&of=t-w-s-ga-e-gf-n-nu-gl`;
+        const lowerId = novelId.toLowerCase();
+        const apiUrl = `${NAROU_API}?out=json&ncode=${lowerId}&of=t-w-s-ga-e-gf-n-nu-gl`;
         const json = await rateLimitedFetch(apiUrl);
         const novels = parseNarouApiResponse(json);
 
@@ -147,14 +148,14 @@ export const nocturneAdapter: SiteAdapter = {
             parseNarouDate(n.general_firstup);
 
         return {
-            siteNovelId: novelId,
+            siteNovelId: lowerId,
             siteType: 'nocturne',
-            title: n.title || novelId,
+            title: n.title || lowerId,
             author: n.writer || '',
             synopsis: n.story || '',
             totalEpisodes: n.general_all_no || 0,
             isComplete: n.end === 0,
-            url: `${NOCTURNE_BASE}/${novelId}/`,
+            url: `${NOCTURNE_BASE}/${lowerId}/`,
             lastUpdatedAt,
         };
     },
@@ -193,53 +194,99 @@ export const nocturneAdapter: SiteAdapter = {
         const chapters: ChapterInfo[] = [];
         let page = 1;
         let hasMore = true;
+        const lowerId = novelId.toLowerCase();
 
         while (hasMore) {
-            const base = `${NOCTURNE_BASE}/${novelId}`;
+            const base = `${NOCTURNE_BASE}/${lowerId}`;
             const cleanBase = base.endsWith('/') ? base.slice(0, -1) : base;
             const indexUrl = `${cleanBase}/?p=${page}`;
             const html = await rateLimitedFetch(indexUrl);
 
-            const rowRegex = /<dt\s+class="novel_sublist2">\s*([\d/:\s]+)(?:<span\s+title="([^"]+)"[^>]*>)?[\s\S]*?<\/dt>\s*<dd\s+class="subtitle">\s*<a\s+href="\/[a-z0-9]+\/(\d+)\/"[^>]*>([\s\S]*?)<\/a>\s*<\/dd>/gi;
-
-            let match: RegExpExecArray | null;
             let foundInPage = 0;
 
-            while ((match = rowRegex.exec(html)) !== null) {
-                const rawDate = match[1].trim();
-                const rawRevise = match[2] ? match[2].trim() : null; // "2020/05/20 10:00 改稿"
+            if (html.includes('class="p-eplist"')) {
+                // --- NEW DESIGN (p-eplist) ---
+                const parts = html.split('<div class="p-eplist__sublist">');
+                parts.shift(); // First part doesn't contain a chapter
 
-                const index = parseInt(match[3], 10);
-                const title = match[4].trim();
+                for (const item of parts) {
+                    if (!item) continue;
 
-                let publishedAt: string | null = null;
-                let revisedAt: string | null = null;
+                    const linkMatch = item.match(/href="\/[a-z0-9]+\/(\d+)\/"[^>]*>([\s\S]*?)<\/a>/i);
+                    const dateMatch = item.match(/<div class="p-eplist__update">\s*([\d/:\s]+)(?:<span\s+title="([^"]+)"[^>]*>)?/i);
 
-                try {
-                    const parsedDate = new Date(rawDate.replace(/-/g, '/') + ' +0900');
-                    if (!Number.isNaN(parsedDate.getTime())) {
-                        publishedAt = parsedDate.toISOString();
-                    }
-                    if (rawRevise) {
-                        const rDateStr = rawRevise.replace('改稿', '').trim();
-                        const rParsed = new Date(rDateStr.replace(/-/g, '/') + ' +0900');
-                        if (!Number.isNaN(rParsed.getTime())) {
-                            revisedAt = rParsed.toISOString();
+                    if (linkMatch) {
+                        const index = parseInt(linkMatch[1], 10);
+                        const title = stripHtml(linkMatch[2]).trim();
+
+                        let pbDate = null;
+                        let rvDate = null;
+
+                        if (dateMatch && dateMatch[1]) {
+                            pbDate = new Date(dateMatch[1].trim().replace(/\//g, '-') + ':00+09:00').toISOString();
+                            rvDate = pbDate;
+
+                            if (dateMatch[2]) {
+                                const rvMatch = dateMatch[2].match(/([\d/:\s]+)/);
+                                if (rvMatch) {
+                                    rvDate = new Date(rvMatch[1].trim().replace(/\//g, '-') + ':00+09:00').toISOString();
+                                }
+                            }
+                        }
+
+                        if (index > 0 && title) {
+                            chapters.push({
+                                index,
+                                title,
+                                url: `${NOCTURNE_BASE}/${lowerId}/${index}/`,
+                                publishedAt: pbDate,
+                                revisedAt: rvDate,
+                            });
+                            foundInPage++;
                         }
                     }
-                } catch {
-                    // Ignore date parse errors
                 }
+            } else {
+                // --- OLD DESIGN (novel_sublist2) ---
+                const rowRegex = /<dt\s+class="novel_sublist2">\s*([\d/:\s]+)(?:<span\s+title="([^"]+)"[^>]*>)?[\s\S]*?<\/dt>\s*<dd\s+class="subtitle">\s*<a\s+href="\/[a-z0-9]+\/(\d+)\/"[^>]*>([\s\S]*?)<\/a>\s*<\/dd>/gi;
+                let match: RegExpExecArray | null;
 
-                if (index > 0 && title) {
-                    chapters.push({
-                        index,
-                        title,
-                        url: `${NOCTURNE_BASE}/${novelId}/${index}/`,
-                        publishedAt,
-                        revisedAt,
-                    });
-                    foundInPage++;
+                while ((match = rowRegex.exec(html)) !== null) {
+                    const rawDate = match[1].trim();
+                    const rawRevise = match[2] ? match[2].trim() : null; // "2020/05/20 10:00 改稿"
+
+                    const index = parseInt(match[3], 10);
+                    const title = stripHtml(match[4]).trim();
+
+                    let publishedAt: string | null = null;
+                    let revisedAt: string | null = null;
+
+                    try {
+                        const parsedDate = new Date(rawDate.replace(/-/g, '/') + ' +0900');
+                        if (!Number.isNaN(parsedDate.getTime())) {
+                            publishedAt = parsedDate.toISOString();
+                        }
+                        if (rawRevise) {
+                            const rDateStr = rawRevise.replace('改稿', '').trim();
+                            const rParsed = new Date(rDateStr.replace(/-/g, '/') + ' +0900');
+                            if (!Number.isNaN(rParsed.getTime())) {
+                                revisedAt = rParsed.toISOString();
+                            }
+                        }
+                    } catch {
+                        // Ignore date parse errors
+                    }
+
+                    if (index > 0 && title) {
+                        chapters.push({
+                            index,
+                            title,
+                            url: `${NOCTURNE_BASE}/${lowerId}/${index}/`,
+                            publishedAt,
+                            revisedAt,
+                        });
+                        foundInPage++;
+                    }
                 }
             }
 
@@ -257,7 +304,7 @@ export const nocturneAdapter: SiteAdapter = {
             chapters.push({
                 index: 1,
                 title: '本文',
-                url: `${NOCTURNE_BASE}/${novelId}/`,
+                url: `${NOCTURNE_BASE}/${lowerId}/`,
                 publishedAt: null,
                 revisedAt: null,
             });
@@ -267,6 +314,7 @@ export const nocturneAdapter: SiteAdapter = {
     },
 
     async getChapterContent(novelId: string, chapterUrl: string): Promise<ChapterContent> {
+        const lowerId = novelId.toLowerCase();
         const html = await rateLimitedFetch(chapterUrl);
 
         let title = '';

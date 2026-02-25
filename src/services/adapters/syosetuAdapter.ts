@@ -122,7 +122,8 @@ export const syosetuAdapter: SiteAdapter = {
     },
 
     async getNovelInfo(novelId: string): Promise<NovelInfo> {
-        const apiUrl = `${NAROU_API}?out=json&ncode=${novelId}&of=t-w-s-ga-e-gf-n-nu`;
+        const lowerId = novelId.toLowerCase();
+        const apiUrl = `${NAROU_API}?out=json&ncode=${lowerId}&of=t-w-s-ga-e-gf-n-nu-gl`;
         const json = await rateLimitedFetch(apiUrl);
         const novels = parseNarouApiResponse(json);
 
@@ -136,14 +137,14 @@ export const syosetuAdapter: SiteAdapter = {
             parseNarouDate(n.general_firstup);
 
         return {
-            siteNovelId: novelId,
+            siteNovelId: lowerId,
             siteType: 'syosetu',
-            title: n.title || novelId,
+            title: n.title || lowerId,
             author: n.writer || '',
             synopsis: n.story || '',
             totalEpisodes: n.general_all_no || 0,
             isComplete: n.end === 0,
-            url: `${NAROU_BASE}/${novelId}/`,
+            url: `${NAROU_BASE}/${lowerId}/`,
             lastUpdatedAt,
         };
     },
@@ -184,51 +185,96 @@ export const syosetuAdapter: SiteAdapter = {
         let page = 1;
         let hasMore = true;
 
+        // Use lowercase to avoid redirect screens on Syosetu
+        const lowerId = novelId.toLowerCase();
+
         while (hasMore) {
             // Syosetu uses ?p= for pagination. Avoid double slash if base ends with /
-            const base = `${NAROU_BASE}/${novelId}`;
+            const base = `${NAROU_BASE}/${lowerId}`;
             const cleanBase = base.endsWith('/') ? base.slice(0, -1) : base;
             const indexUrl = `${cleanBase}/?p=${page}`;
             // eslint-disable-next-line no-await-in-loop
             const html = await rateLimitedFetch(indexUrl);
 
-            // Narou chapters are usually wrapped in <dl class="novel_sublist2">
-            // The date is in <dt class="novel_sublist2">2020/05/18 12:00<span title="2020/05/20 10:00 改稿">...</span></dt>
-            // The link is in <dd class="subtitle"><a href="/ncode/1/">...</a></dd>
-            const rowRegex = /<dt\s+class="novel_sublist2">\s*([\d/:\s]+)(?:<span\s+title="([^"]+)"[^>]*>)?[\s\S]*?<\/dt>\s*<dd\s+class="subtitle">\s*<a\s+href="\/[a-z0-9]+\/(\d+)\/"[^>]*>([\s\S]*?)<\/a>\s*<\/dd>/gi;
-
-            let match: RegExpExecArray | null;
             let foundInPage = 0;
 
-            while ((match = rowRegex.exec(html)) !== null) {
-                const rawDate = match[1].trim();
-                const rawRevise = match[2] ? match[2].trim() : null; // "2020/05/20 10:00 改稿"
-                const index = parseInt(match[3], 10);
-                const title = stripHtml(match[4]).trim();
+            if (html.includes('class="p-eplist"')) {
+                // --- NEW DESIGN (p-eplist) ---
+                const parts = html.split('<div class="p-eplist__sublist">');
+                parts.shift(); // First part doesn't contain a chapter
 
-                let pbDate = null;
-                let rvDate = null;
+                for (const item of parts) {
+                    if (!item) continue;
 
-                if (rawDate) {
-                    pbDate = new Date(rawDate.replace(/\//g, '-') + ':00+09:00').toISOString();
-                    rvDate = pbDate;
-                }
-                if (rawRevise) {
-                    const rvMatch = rawRevise.match(/([\d/:\s]+)/);
-                    if (rvMatch) {
-                        rvDate = new Date(rvMatch[1].trim().replace(/\//g, '-') + ':00+09:00').toISOString();
+                    const linkMatch = item.match(/href="\/[a-z0-9]+\/(\d+)\/"[^>]*>([\s\S]*?)<\/a>/i);
+                    const dateMatch = item.match(/<div class="p-eplist__update">\s*([\d/:\s]+)(?:<span\s+title="([^"]+)"[^>]*>)?/i);
+
+                    if (linkMatch) {
+                        const index = parseInt(linkMatch[1], 10);
+                        const title = stripHtml(linkMatch[2]).trim();
+
+                        let pbDate = null;
+                        let rvDate = null;
+
+                        if (dateMatch && dateMatch[1]) {
+                            pbDate = new Date(dateMatch[1].trim().replace(/\//g, '-') + ':00+09:00').toISOString();
+                            rvDate = pbDate;
+
+                            if (dateMatch[2]) {
+                                const rvMatch = dateMatch[2].match(/([\d/:\s]+)/);
+                                if (rvMatch) {
+                                    rvDate = new Date(rvMatch[1].trim().replace(/\//g, '-') + ':00+09:00').toISOString();
+                                }
+                            }
+                        }
+
+                        if (index > 0 && title) {
+                            chapters.push({
+                                index,
+                                title,
+                                url: `${NAROU_BASE}/${lowerId}/${index}/`,
+                                publishedAt: pbDate,
+                                revisedAt: rvDate,
+                            });
+                            foundInPage++;
+                        }
                     }
                 }
+            } else {
+                // --- OLD DESIGN (novel_sublist2) ---
+                const rowRegex = /<dt\s+class="novel_sublist2">\s*([\d/:\s]+)(?:<span\s+title="([^"]+)"[^>]*>)?[\s\S]*?<\/dt>\s*<dd\s+class="subtitle">\s*<a\s+href="\/[a-z0-9]+\/(\d+)\/"[^>]*>([\s\S]*?)<\/a>\s*<\/dd>/gi;
+                let match: RegExpExecArray | null;
 
-                if (index > 0 && title) {
-                    chapters.push({
-                        index,
-                        title,
-                        url: `${NAROU_BASE}/${novelId}/${index}/`,
-                        publishedAt: pbDate,
-                        revisedAt: rvDate,
-                    });
-                    foundInPage++;
+                while ((match = rowRegex.exec(html)) !== null) {
+                    const rawDate = match[1].trim();
+                    const rawRevise = match[2] ? match[2].trim() : null; // "2020/05/20 10:00 改稿"
+                    const index = parseInt(match[3], 10);
+                    const title = stripHtml(match[4]).trim();
+
+                    let pbDate = null;
+                    let rvDate = null;
+
+                    if (rawDate) {
+                        pbDate = new Date(rawDate.replace(/\//g, '-') + ':00+09:00').toISOString();
+                        rvDate = pbDate;
+                    }
+                    if (rawRevise) {
+                        const rvMatch = rawRevise.match(/([\d/:\s]+)/);
+                        if (rvMatch) {
+                            rvDate = new Date(rvMatch[1].trim().replace(/\//g, '-') + ':00+09:00').toISOString();
+                        }
+                    }
+
+                    if (index > 0 && title) {
+                        chapters.push({
+                            index,
+                            title,
+                            url: `${NAROU_BASE}/${lowerId}/${index}/`,
+                            publishedAt: pbDate,
+                            revisedAt: rvDate,
+                        });
+                        foundInPage++;
+                    }
                 }
             }
 
