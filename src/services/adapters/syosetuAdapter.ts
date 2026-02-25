@@ -16,6 +16,17 @@ const RATE_LIMIT_MS = 2000;
 
 let lastRequestTime = 0;
 
+function parseNarouDate(dateStr: string | null | undefined): string | null {
+    if (!dateStr || dateStr.startsWith('0000') || dateStr.trim() === '') return null;
+    try {
+        const d = new Date(dateStr.replace(/-/g, '/') + ' +0900');
+        if (Number.isNaN(d.getTime())) return null;
+        return d.toISOString();
+    } catch {
+        return null;
+    }
+}
+
 async function rateLimitedFetch(url: string): Promise<string> {
     const now = Date.now();
     const elapsed = now - lastRequestTime;
@@ -120,14 +131,9 @@ export const syosetuAdapter: SiteAdapter = {
         }
 
         const n = novels[0];
-        let lastUpdatedAt = null;
-        if (n.general_lastup) {
-            lastUpdatedAt = new Date(n.general_lastup.replace(/-/g, '/') + ' +0900').toISOString();
-        } else if (n.novelupdated_at) {
-            lastUpdatedAt = new Date(n.novelupdated_at.replace(/-/g, '/') + ' +0900').toISOString();
-        } else if (n.general_firstup) {
-            lastUpdatedAt = new Date(n.general_firstup.replace(/-/g, '/') + ' +0900').toISOString();
-        }
+        let lastUpdatedAt = parseNarouDate(n.general_lastup) ||
+            parseNarouDate(n.novelupdated_at) ||
+            parseNarouDate(n.general_firstup);
 
         return {
             siteNovelId: novelId,
@@ -153,14 +159,9 @@ export const syosetuAdapter: SiteAdapter = {
         const novels = parseNarouApiResponse(json);
 
         return novels.map((n: any) => {
-            let lastUpdatedAt = null;
-            if (n.general_lastup) {
-                lastUpdatedAt = new Date(n.general_lastup.replace(/-/g, '/') + ' +0900').toISOString();
-            } else if (n.novelupdated_at) {
-                lastUpdatedAt = new Date(n.novelupdated_at.replace(/-/g, '/') + ' +0900').toISOString();
-            } else if (n.general_firstup) {
-                lastUpdatedAt = new Date(n.general_firstup.replace(/-/g, '/') + ' +0900').toISOString();
-            }
+            let lastUpdatedAt = parseNarouDate(n.general_lastup) ||
+                parseNarouDate(n.novelupdated_at) ||
+                parseNarouDate(n.general_firstup);
 
             const siteNovelId = n.ncode ? n.ncode.toLowerCase() : '';
 
