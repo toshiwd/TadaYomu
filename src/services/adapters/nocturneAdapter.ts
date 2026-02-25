@@ -33,7 +33,6 @@ async function rateLimitedFetch(url: string): Promise<string> {
             'Accept-Language': 'ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7',
             'Cookie': 'over18=yes',
         },
-        credentials: 'include',
     });
     console.log(`[NocturneAdapter] Status: ${res.status}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${url}`);
