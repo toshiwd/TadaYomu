@@ -51,6 +51,8 @@ export interface SiteAdapter {
     getChapterList(novelId: string): Promise<ChapterInfo[]>;
     /** Download a single chapter's content */
     getChapterContent(novelId: string, chapterUrl: string): Promise<ChapterContent>;
+    /** OPTIONAL: Fetch novel metadata in bulk (used for fast library updates) */
+    getNovelInfoBulk?(novelIds: string[]): Promise<NovelInfo[]>;
 }
 
 /** Registry of adapters by site type */

@@ -140,6 +140,40 @@ export const syosetuAdapter: SiteAdapter = {
         };
     },
 
+    async getNovelInfoBulk(novelIds: string[]): Promise<NovelInfo[]> {
+        if (novelIds.length === 0) return [];
+        // Max 500 ncodes per request supported by Narou API
+        const chunk = novelIds.slice(0, 500);
+        const ncodes = chunk.join('-');
+        const apiUrl = `${NAROU_API}?out=json&ncode=${ncodes}&of=t-w-s-ga-e-gf-n-nu`;
+
+        const json = await rateLimitedFetch(apiUrl);
+        const novels = parseNarouApiResponse(json);
+
+        return novels.map((n: any) => {
+            let lastUpdatedAt = null;
+            if (n.novelupdated_at) {
+                lastUpdatedAt = new Date(n.novelupdated_at.replace(/-/g, '/') + ' +0900').toISOString();
+            } else if (n.general_firstup) {
+                lastUpdatedAt = new Date(n.general_firstup.replace(/-/g, '/') + ' +0900').toISOString();
+            }
+
+            const siteNovelId = n.ncode ? n.ncode.toLowerCase() : '';
+
+            return {
+                siteNovelId,
+                siteType: 'syosetu',
+                title: n.title || siteNovelId,
+                author: n.writer || '',
+                synopsis: n.story || '',
+                totalEpisodes: n.general_all_no || 0,
+                isComplete: n.end === 0,
+                url: `${NAROU_BASE}/${siteNovelId}/`,
+                lastUpdatedAt,
+            };
+        });
+    },
+
     async getChapterList(novelId: string): Promise<ChapterInfo[]> {
         const chapters: ChapterInfo[] = [];
         let page = 1;

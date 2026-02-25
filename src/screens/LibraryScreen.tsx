@@ -214,43 +214,109 @@ export default function LibraryScreen({
         const localNovels = getAllNovels(db, sortBy, showArchived);
         let updatedCount = 0;
 
+        // Group novels by siteType
+        const novelsBySite: Record<string, typeof localNovels> = {};
         for (const novel of localNovels) {
-          const adapter = getAdapter(novel.siteType);
+          if (!novelsBySite[novel.siteType]) novelsBySite[novel.siteType] = [];
+          novelsBySite[novel.siteType].push(novel);
+        }
+
+        // Process each site
+        for (const siteType of Object.keys(novelsBySite)) {
+          const adapter = getAdapter(siteType as any);
           if (!adapter) continue;
 
-          try {
-            const info = await adapter.getNovelInfo(novel.siteNovelId);
-            let needsUpdate = false;
+          const siteNovels = novelsBySite[siteType];
 
-            const infoTime = info.lastUpdatedAt ? new Date(info.lastUpdatedAt).getTime() : 0;
-            const localTime = novel.siteUpdatedAt ? new Date(novel.siteUpdatedAt).getTime() : 0;
+          if (adapter.getNovelInfoBulk) {
+            // Bulk update path for Syosetu/Nocturne (Process in chunks of 100)
+            for (let i = 0; i < siteNovels.length; i += 100) {
+              const chunk = siteNovels.slice(i, i + 100);
+              const ids = chunk.map(n => n.siteNovelId);
 
-            if (info.totalEpisodes > novel.totalEpisodes) {
-              needsUpdate = true;
-            }
-            if (infoTime > localTime) {
-              needsUpdate = true;
-            }
-            if (info.isComplete !== novel.isComplete) {
-              needsUpdate = true;
-            }
+              try {
+                const bulkInfoList = await adapter.getNovelInfoBulk(ids);
+                const infoMap = new Map();
+                for (const info of bulkInfoList) {
+                  infoMap.set(info.siteNovelId, info);
+                }
 
-            if (needsUpdate) {
-              updateNovel(db, novel.id, {
-                totalEpisodes: info.totalEpisodes,
-                siteUpdatedAt: info.lastUpdatedAt || novel.siteUpdatedAt,
-                isComplete: info.isComplete,
-                lastCheckedAt: new Date().toISOString(),
-              });
-              updatedCount++;
+                let localUpdated = false;
+                for (const novel of chunk) {
+                  const info = infoMap.get(novel.siteNovelId);
+                  if (!info) {
+                    updateNovel(db, novel.id, { lastCheckedAt: new Date().toISOString() });
+                    continue;
+                  }
+
+                  let needsUpdate = false;
+                  const infoTime = info.lastUpdatedAt ? new Date(info.lastUpdatedAt).getTime() : 0;
+                  const localTime = novel.siteUpdatedAt ? new Date(novel.siteUpdatedAt).getTime() : 0;
+
+                  if (info.totalEpisodes > novel.totalEpisodes) needsUpdate = true;
+                  if (infoTime > localTime) needsUpdate = true;
+                  if (info.isComplete !== novel.isComplete) needsUpdate = true;
+
+                  if (needsUpdate) {
+                    updateNovel(db, novel.id, {
+                      totalEpisodes: info.totalEpisodes,
+                      siteUpdatedAt: info.lastUpdatedAt || novel.siteUpdatedAt,
+                      isComplete: info.isComplete,
+                      lastCheckedAt: new Date().toISOString(),
+                    });
+                    updatedCount++;
+                    localUpdated = true;
+                  } else {
+                    updateNovel(db, novel.id, { lastCheckedAt: new Date().toISOString() });
+                  }
+                }
+
+                if (localUpdated) loadNovels();
+              } catch (err) {
+                console.warn(`[Library Refresh] Bulk update failed for ${siteType}:`, err);
+              }
             }
-          } catch (err) {
-            console.warn(`[Library Refresh] Failed to fetch info for novel ${novel.id}:`, err);
+          } else {
+            // Sequential/Parallel fallback for Kakuyomu/Hameln
+            // Process in parallel chunks of 3 to avoid overwhelming connections
+            for (let i = 0; i < siteNovels.length; i += 3) {
+              const chunk = siteNovels.slice(i, i + 3);
+              let localUpdated = false;
+
+              await Promise.all(chunk.map(async (novel) => {
+                try {
+                  const info = await adapter.getNovelInfo(novel.siteNovelId);
+                  let needsUpdate = false;
+                  const infoTime = info.lastUpdatedAt ? new Date(info.lastUpdatedAt).getTime() : 0;
+                  const localTime = novel.siteUpdatedAt ? new Date(novel.siteUpdatedAt).getTime() : 0;
+
+                  if (info.totalEpisodes > novel.totalEpisodes) needsUpdate = true;
+                  if (infoTime > localTime) needsUpdate = true;
+                  if (info.isComplete !== novel.isComplete) needsUpdate = true;
+
+                  if (needsUpdate) {
+                    updateNovel(db, novel.id, {
+                      totalEpisodes: info.totalEpisodes,
+                      siteUpdatedAt: info.lastUpdatedAt || novel.siteUpdatedAt,
+                      isComplete: info.isComplete,
+                      lastCheckedAt: new Date().toISOString(),
+                    });
+                    updatedCount++;
+                    localUpdated = true;
+                  } else {
+                    updateNovel(db, novel.id, { lastCheckedAt: new Date().toISOString() });
+                  }
+                } catch (err) {
+                  console.warn(`[Library Refresh] Failed for ${novel.id}:`, err);
+                }
+              }));
+
+              if (localUpdated) loadNovels();
+            }
           }
         }
 
         if (updatedCount > 0) {
-          loadNovels(); // Refresh the list
           ToastAndroid.show(`${updatedCount}件の小説に更新がありました`, ToastAndroid.LONG);
         } else if (!hasSyncUpdates) {
           ToastAndroid.show("すべての小説は最新です", ToastAndroid.SHORT);
