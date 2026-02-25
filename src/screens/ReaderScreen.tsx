@@ -32,12 +32,15 @@ import {
   getReaderSettings,
   upsertReadingProgress,
   saveReaderSettings,
+  upsertChapter,
+  updateNovel,
+  getReadingProgress,
 } from "../database/repository";
 import { readChapterText } from "../services/downloadManager";
+import { getAdapter } from "../services/siteAdapter";
 import { rubyTextToHtml } from "../services/textFormatter";
 import { syncService } from "../services/syncService";
 import { generateReaderHtml } from "../services/readerHtmlGenerator";
-
 export default function ReaderScreen({
   navigation,
   route,
@@ -60,6 +63,7 @@ export default function ReaderScreen({
   const [retryCount, setRetryCount] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const [isSettingsVisible, setIsSettingsVisible] = useState(false);
+  const [initialProgress, setInitialProgress] = useState(0);
   const [settings, setSettings] = useState<ReaderSettings>(() =>
     getReaderSettings(db),
   );
@@ -91,6 +95,7 @@ export default function ReaderScreen({
 
   const settingsAnim = useRef(new Animated.Value(0)).current;
   const toolbarAnim = useRef(new Animated.Value(1)).current;
+  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load novel info
   useEffect(() => {
@@ -109,17 +114,49 @@ export default function ReaderScreen({
     setLoadError(false);
 
     (async () => {
-      const ch = getChapter(db, novelId, chapterIndex);
+      let ch = getChapter(db, novelId, chapterIndex);
+
+      // チャプターがDBに存在しない場合（同期済みだが未取得）
+      if (!ch && novel) {
+        const adapter = getAdapter(novel.siteType);
+        if (adapter) {
+          try {
+            console.log(`[Reader] No chapter in DB, fetching chapter list from site...`);
+            const chapterList = await adapter.getChapterList(novel.siteNovelId);
+            for (const c of chapterList) {
+              upsertChapter(db, {
+                novelId: novel.id,
+                index: c.index,
+                title: c.title,
+                localPath: null,
+                isDownloaded: false,
+                url: c.url,
+                publishedAt: c.publishedAt,
+                revisedAt: c.revisedAt,
+              });
+            }
+            updateNovel(db, novel.id, {
+              totalEpisodes: chapterList.length,
+              lastCheckedAt: new Date().toISOString(),
+            });
+            setTotalChapters(chapterList.length);
+            ch = getChapter(db, novelId, chapterIndex);
+          } catch (err) {
+            console.error(`[Reader] Failed to fetch chapter list:`, err);
+          }
+        }
+      }
+
       if (ch && ch.url) {
         try {
-          const text = await readChapterText(
+          const rawText = await readChapterText(
             ch,
             novel.siteNovelId,
             db,
             novel.siteType,
           );
           if (!cancelled) {
-            setChapterText(text);
+            setChapterText(rawText);
             setChapterTitle(ch.title || `第${chapterIndex}話`);
           }
         } catch (err: any) {
@@ -135,34 +172,23 @@ export default function ReaderScreen({
         if (!cancelled)
           setChapterText("この話はまだダウンロードされていません");
       }
-      if (!cancelled) setLoading(false);
+
+      if (!cancelled) {
+        // Load initial progress for this chapter if available
+        const progress = getReadingProgress(db, novelId);
+        if (progress && progress.currentChapter === chapterIndex) {
+          setInitialProgress(progress.scrollPercentage);
+        } else {
+          setInitialProgress(0);
+        }
+        setLoading(false);
+      }
     })();
 
     return () => {
       cancelled = true;
     };
   }, [db, novelId, chapterIndex, novel, retryCount]);
-
-  // Save progress
-  useEffect(() => {
-    if (!loading && novel) {
-      upsertReadingProgress(db, novelId, chapterIndex, 0);
-
-      // Upload to cloud if signed in
-      if (syncService.isSignedIn()) {
-        syncService
-          .uploadProgress({
-            novelId: novel.id,
-            siteNovelId: novel.siteNovelId,
-            siteType: novel.siteType,
-            currentChapter: chapterIndex,
-            scrollPercentage: 0,
-            lastReadAt: new Date().toISOString(),
-          })
-          .catch(console.error);
-      }
-    }
-  }, [db, novelId, chapterIndex, loading, novel]);
 
   const readerTheme = useMemo(() => {
     const themes = {
@@ -252,6 +278,7 @@ export default function ReaderScreen({
               paragraphSpacing: updated.paragraphSpacing,
               writingMode: updated.writingMode,
               reversePageDirection: updated.reversePageDirection,
+              showImages: updated.showImages,
             },
           }),
         );
@@ -271,12 +298,13 @@ export default function ReaderScreen({
     if (containerLayout.width === 0 || containerLayout.height === 0) return "";
 
     return generateReaderHtml({
-      chapterText,
+      chapterText: chapterText,
       settings: settingsRef.current,
       containerLayout,
       insets,
       readerTheme,
       startAtLastPage,
+      initialProgress,
       rubyTextToHtml,
     });
   }, [
@@ -286,6 +314,7 @@ export default function ReaderScreen({
     insets,
     containerLayout,
     startAtLastPage,
+    initialProgress,
   ]);
 
   const handleMessage = useCallback(
@@ -296,6 +325,24 @@ export default function ReaderScreen({
           setCurrentPage(data.currentPage);
           setTotalPages(data.totalPages);
           upsertReadingProgress(db, novelId, chapterIndex, data.progress);
+
+          if (syncService.isSignedIn() && novel) {
+            if (syncTimeoutRef.current) {
+              clearTimeout(syncTimeoutRef.current);
+            }
+            syncTimeoutRef.current = setTimeout(() => {
+              syncService
+                .uploadProgress({
+                  novelId: novel.id,
+                  siteNovelId: novel.siteNovelId,
+                  siteType: novel.siteType,
+                  currentChapter: chapterIndex,
+                  scrollPercentage: data.progress,
+                  lastReadAt: new Date().toISOString(),
+                })
+                .catch(console.error);
+            }, 5000);
+          }
         } else if (data.type === "next") {
           goNextChapter();
         } else if (data.type === "prev") {
@@ -309,7 +356,7 @@ export default function ReaderScreen({
         }
       } catch { }
     },
-    [db, novelId, chapterIndex, goNextChapter, goPrevChapter, toggleToolbar],
+    [db, novelId, chapterIndex, goNextChapter, goPrevChapter, toggleToolbar, novel],
   );
 
   const settingsTranslateY = settingsAnim.interpolate({
@@ -764,6 +811,29 @@ export default function ReaderScreen({
             >
               <Text style={[styles.settingBtnText, { color: readerTheme.fg }]}>
                 {settings.reversePageDirection ? "ON" : "OFF"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Show Images Toggle */}
+          <View style={styles.settingRow}>
+            <Text style={[styles.settingLabel, { color: readerTheme.fg }]}>
+              挿絵表示
+            </Text>
+            <TouchableOpacity
+              style={[
+                styles.toggleBtn,
+                {
+                  backgroundColor: settings.showImages
+                    ? readerTheme.fg + "20"
+                    : "transparent",
+                  borderColor: readerTheme.fg + "30",
+                },
+              ]}
+              onPress={() => updateSetting("showImages", !settings.showImages)}
+            >
+              <Text style={[styles.settingBtnText, { color: readerTheme.fg }]}>
+                {settings.showImages ? "ON" : "OFF"}
               </Text>
             </TouchableOpacity>
           </View>

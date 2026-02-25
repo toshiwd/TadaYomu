@@ -14,8 +14,6 @@ const SITE_PATTERNS: { label: string; domain: string; icon: string }[] = [
     { label: 'ノクターンノベルズ', domain: 'novel18.syosetu.com', icon: 'moon' },
     { label: 'カクヨム', domain: 'kakuyomu.jp', icon: 'reader' },
     { label: 'ハーメルン', domain: 'syosetu.org', icon: 'library' },
-    { label: 'アルカディア', domain: 'mai-net.net', icon: 'globe' },
-    { label: '暁', domain: 'akatsuki-novels.com', icon: 'sunny' },
 ];
 
 export default function SearchScreen({ navigation }: MainTabScreenProps<'Search'>) {

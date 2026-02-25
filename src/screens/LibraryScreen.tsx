@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   RefreshControl,
   Alert,
+  ToastAndroid,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSQLiteContext } from "expo-sqlite";
@@ -25,9 +26,11 @@ import {
   type LibrarySortBy,
   getNovelBySiteId,
   insertNovel,
+  updateNovel,
 } from "../database/repository";
 import { syosetuAdapter } from "../services/adapters/syosetuAdapter";
 import { syncService } from "../services/syncService";
+import { getAdapter } from "../services/siteAdapter";
 
 // --- Extracted Memoized Novel Item Component ---
 const NovelItem = memo(
@@ -36,14 +39,24 @@ const NovelItem = memo(
     progressText,
     progressPercentage,
     colors,
+    sortBy,
     onPress,
   }: {
     item: Novel;
     progressText: string | null;
     progressPercentage: number | null;
     colors: any;
+    sortBy: string;
     onPress: (id: number) => void;
   }) => {
+    const dateText = React.useMemo(() => {
+      const d = sortBy === "updatedAt"
+        ? (item.siteUpdatedAt || item.lastCheckedAt || item.addedAt)
+        : (item as any)?.last_read_at || item.addedAt;
+      if (!d) return "";
+      return new Date(d).toLocaleDateString('ja-JP');
+    }, [item, sortBy]);
+
     return (
       <TouchableOpacity
         style={[styles.card, { backgroundColor: colors.surface }]}
@@ -69,6 +82,14 @@ const NovelItem = memo(
             >
               {progressText ?? `${item.totalEpisodes}話`}
             </Text>
+            {dateText ? (
+              <Text
+                style={[styles.cardDate, { color: colors.text.disabled }]}
+                numberOfLines={1}
+              >
+                ・{dateText}
+              </Text>
+            ) : null}
             {item.isComplete && (
               <View
                 style={[
@@ -139,11 +160,13 @@ export default function LibraryScreen({
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
+
+    // 1. Existing Sync logic
+    let hasSyncUpdates = false;
     if (syncService.isSignedIn()) {
       try {
         const remoteNovels = await syncService.downloadLibrary();
         if (remoteNovels && remoteNovels.length > 0) {
-          let hasNew = false;
           for (const remote of remoteNovels) {
             if (!remote.siteNovelId || !remote.siteType) continue;
             const local = getNovelBySiteId(
@@ -173,19 +196,10 @@ export default function LibraryScreen({
                   ? String(remote.addedAt)
                   : new Date().toISOString(),
               });
-              hasNew = true;
+              hasSyncUpdates = true;
             }
           }
-          if (hasNew) {
-            const mergedNovels = getAllNovels(db, sortBy, showArchived);
-            setNovels(mergedNovels);
-            await syncService.uploadLibrary(mergedNovels);
-            setRefreshing(false);
-            return;
-          }
         }
-
-        // Upload current local to ensure remote has anything added here
         const currentLocal = getAllNovels(db, sortBy);
         await syncService.uploadLibrary(currentLocal);
       } catch (error) {
@@ -193,9 +207,65 @@ export default function LibraryScreen({
       }
     }
 
-    loadNovels();
+    // 2. Refresh local novels using Site Adapters in the background
+    (async () => {
+      ToastAndroid.show("更新確認をバックグラウンドで開始しました", ToastAndroid.SHORT);
+      try {
+        const localNovels = getAllNovels(db, sortBy, showArchived);
+        let updatedCount = 0;
+
+        for (const novel of localNovels) {
+          const adapter = getAdapter(novel.siteType);
+          if (!adapter) continue;
+
+          try {
+            const info = await adapter.getNovelInfo(novel.siteNovelId);
+            let needsUpdate = false;
+
+            const infoTime = info.lastUpdatedAt ? new Date(info.lastUpdatedAt).getTime() : 0;
+            const localTime = novel.siteUpdatedAt ? new Date(novel.siteUpdatedAt).getTime() : 0;
+
+            if (info.totalEpisodes > novel.totalEpisodes) {
+              needsUpdate = true;
+            }
+            if (infoTime > localTime) {
+              needsUpdate = true;
+            }
+            if (info.isComplete !== novel.isComplete) {
+              needsUpdate = true;
+            }
+
+            if (needsUpdate) {
+              updateNovel(db, novel.id, {
+                totalEpisodes: info.totalEpisodes,
+                siteUpdatedAt: info.lastUpdatedAt || novel.siteUpdatedAt,
+                isComplete: info.isComplete,
+                lastCheckedAt: new Date().toISOString(),
+              });
+              updatedCount++;
+            }
+          } catch (err) {
+            console.warn(`[Library Refresh] Failed to fetch info for novel ${novel.id}:`, err);
+          }
+        }
+
+        if (updatedCount > 0) {
+          loadNovels(); // Refresh the list
+          ToastAndroid.show(`${updatedCount}件の小説に更新がありました`, ToastAndroid.LONG);
+        } else if (!hasSyncUpdates) {
+          ToastAndroid.show("すべての小説は最新です", ToastAndroid.SHORT);
+        }
+      } catch (error) {
+        console.error("Library novel check failed", error);
+      }
+    })();
+
+    // Stop the spinner explicitly since processing is running async now
+    if (hasSyncUpdates) {
+      loadNovels();
+    }
     setRefreshing(false);
-  }, [db, loadNovels, sortBy]);
+  }, [db, loadNovels, sortBy, showArchived]);
 
   // Trigger sync automatically when auth state changes to logged in
   React.useEffect(() => {
@@ -223,6 +293,7 @@ export default function LibraryScreen({
           progressText={progressText}
           progressPercentage={progressPercentage}
           colors={colors}
+          sortBy={sortBy}
           onPress={(id) => navigation.navigate("NovelDetail", { novelId: id })}
         />
       );
@@ -372,27 +443,28 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 6,
+    paddingVertical: 4,
     paddingHorizontal: Spacing.sm,
     borderRadius: Radius.md,
-    marginBottom: 2,
+    marginBottom: 1,
   },
   cardContent: { flex: 1, marginRight: Spacing.xs },
   cardTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: "NotoSansJP_600SemiBold",
-    marginBottom: 1,
+    marginBottom: 0,
   },
   cardAuthor: {
     fontSize: 11,
     fontFamily: "NotoSansJP_400Regular",
     flexShrink: 1,
   },
-  cardMeta: { flexDirection: "row", alignItems: "center", gap: Spacing.xs },
+  cardMeta: { flexDirection: "row", alignItems: "center", gap: Spacing.xs, marginTop: 1 },
   cardEpisodes: { fontSize: 11, fontFamily: "NotoSansJP_400Regular" },
+  cardDate: { fontSize: 11, fontFamily: "NotoSansJP_400Regular" },
   badge: { paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3 },
   badgeText: { fontSize: 9, fontWeight: "700" },
-  progressBar: { height: 2, borderRadius: 1, marginTop: 4, overflow: "hidden" },
+  progressBar: { height: 2, borderRadius: 1, marginTop: 2, overflow: "hidden" },
   progressFill: { height: "100%", borderRadius: 1 },
   emptyState: {
     flex: 1,

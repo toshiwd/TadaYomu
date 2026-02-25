@@ -130,7 +130,7 @@ export const kakuyomuAdapter: SiteAdapter = {
         const synopsis = work.catchphrase || work.introduction || '';
 
         const isComplete = work.isComplete === true || work.status === 'COMPLETED';
-        const lastUpdatedAt = work.updatedAt ? new Date(work.updatedAt).toISOString() : new Date().toISOString();
+        const lastUpdatedAt = work.updatedAt ? new Date(work.updatedAt).toISOString() : null;
 
         return {
             siteNovelId: novelId,

@@ -59,6 +59,7 @@ const adapterRegistry = new Map<SiteType, SiteAdapter>();
 import { syosetuAdapter } from './adapters/syosetuAdapter';
 import { nocturneAdapter } from './adapters/nocturneAdapter';
 import { kakuyomuAdapter } from './adapters/kakuyomuAdapter';
+import { hamelnAdapter } from './adapters/hamelnAdapter';
 
 export function registerAdapter(adapter: SiteAdapter): void {
     adapterRegistry.set(adapter.siteType, adapter);
@@ -68,6 +69,7 @@ export function registerAdapter(adapter: SiteAdapter): void {
 registerAdapter(syosetuAdapter);
 registerAdapter(nocturneAdapter);
 registerAdapter(kakuyomuAdapter);
+registerAdapter(hamelnAdapter);
 
 export function getAdapter(siteType: SiteType): SiteAdapter | undefined {
     return adapterRegistry.get(siteType);

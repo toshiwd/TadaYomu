@@ -7,6 +7,7 @@ export interface GenerateHtmlParams {
   insets: { top: number; right: number; bottom: number; left: number };
   readerTheme: { bg: string; fg: string; selection: string };
   startAtLastPage: boolean;
+  initialProgress?: number;
   rubyTextToHtml: (text: string) => string;
 }
 
@@ -21,6 +22,7 @@ export function generateReaderHtml({
   insets,
   readerTheme,
   startAtLastPage,
+  initialProgress,
   rubyTextToHtml,
 }: GenerateHtmlParams): string {
   const isVertical = settings.writingMode === 'vertical';
@@ -87,6 +89,8 @@ export function generateReaderHtml({
     ? '"Noto Sans JP", "游ゴシック", "YuGothic", "ヒラギノ角ゴ ProN", sans-serif'
     : '"Noto Serif JP", "游明朝", "YuMincho", "ヒラギノ明朝 ProN", serif';
 
+  const initProg = typeof initialProgress === 'number' ? initialProgress : 0;
+
   return `<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -117,7 +121,7 @@ ${fontLink}
   body {
     width: var(--viewW); height: var(--viewH); overflow: hidden; background: var(--bg);
     -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%;
-    touch-action: none; -webkit-user-select: none; user-select: none;
+    touch-action: none; -webkit-user-select: text; user-select: text;
   }
   ::selection { background: var(--selection); }
 
@@ -164,6 +168,8 @@ ${fontLink}
   .emphasis { text-emphasis: filled sesame; -webkit-text-emphasis: filled sesame; font-style: normal; }
   .tcy { text-combine-upright: all; -webkit-text-combine: horizontal; font-family: "Helvetica Neue", Arial, sans-serif; }
   .image-link { font-size: 0.9em; font-weight: bold; color: currentColor; text-decoration: underline; text-decoration-color: currentColor; padding: 0.2em 0.5em; border: 1px solid currentColor; border-radius: 4px; display: inline-block; background: transparent; margin: 0.2em; }
+  .image-page { text-align: center; margin: 0.5em 0; text-indent: 0; }
+  .image-page img { max-width: 100%; max-height: 80vh; object-fit: contain; display: inline-block; }
   #tap-zone { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 100; }
 </style>
 </head>
@@ -430,6 +436,10 @@ ${fontLink}
       recalcGeometry();
       calcPages();
       if (startAtLast) goToPage(Math.max(0, totalPages - 1));
+      else if (${initProg} > 0) {
+        var restorePage = Math.round(${initProg} * Math.max(0, totalPages - 1));
+        goToPage(restorePage);
+      }
       else goToPage(0);
       
       var imgs = document.querySelectorAll('img');

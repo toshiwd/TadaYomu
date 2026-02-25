@@ -111,7 +111,7 @@ export const syosetuAdapter: SiteAdapter = {
     },
 
     async getNovelInfo(novelId: string): Promise<NovelInfo> {
-        const apiUrl = `${NAROU_API}?out=json&ncode=${novelId}&of=t-w-s-ga-e-gf-n`;
+        const apiUrl = `${NAROU_API}?out=json&ncode=${novelId}&of=t-w-s-ga-e-gf-n-nu`;
         const json = await rateLimitedFetch(apiUrl);
         const novels = parseNarouApiResponse(json);
 
@@ -120,6 +120,13 @@ export const syosetuAdapter: SiteAdapter = {
         }
 
         const n = novels[0];
+        let lastUpdatedAt = null;
+        if (n.novelupdated_at) {
+            lastUpdatedAt = new Date(n.novelupdated_at.replace(/-/g, '/') + ' +0900').toISOString();
+        } else if (n.general_firstup) {
+            lastUpdatedAt = new Date(n.general_firstup.replace(/-/g, '/') + ' +0900').toISOString();
+        }
+
         return {
             siteNovelId: novelId,
             siteType: 'syosetu',
@@ -129,7 +136,7 @@ export const syosetuAdapter: SiteAdapter = {
             totalEpisodes: n.general_all_no || 0,
             isComplete: n.end === 0,
             url: `${NAROU_BASE}/${novelId}/`,
-            lastUpdatedAt: n.novelupdated_at || n.general_firstup || null,
+            lastUpdatedAt,
         };
     },
 
@@ -146,21 +153,41 @@ export const syosetuAdapter: SiteAdapter = {
             // eslint-disable-next-line no-await-in-loop
             const html = await rateLimitedFetch(indexUrl);
 
-            // Match chapter links: <a href="/ncode/1/">第1話 タイトル</a>
-            const linkRegex = /<a\s+href="\/[a-z0-9]+\/(\d+)\/"[^>]*>([\s\S]*?)<\/a>/gi;
+            // Narou chapters are usually wrapped in <dl class="novel_sublist2">
+            // The date is in <dt class="novel_sublist2">2020/05/18 12:00<span title="2020/05/20 10:00 改稿">...</span></dt>
+            // The link is in <dd class="subtitle"><a href="/ncode/1/">...</a></dd>
+            const rowRegex = /<dt\s+class="novel_sublist2">\s*([\d/:\s]+)(?:<span\s+title="([^"]+)"[^>]*>)?[\s\S]*?<\/dt>\s*<dd\s+class="subtitle">\s*<a\s+href="\/[a-z0-9]+\/(\d+)\/"[^>]*>([\s\S]*?)<\/a>\s*<\/dd>/gi;
+
             let match: RegExpExecArray | null;
             let foundInPage = 0;
 
-            while ((match = linkRegex.exec(html)) !== null) {
-                const index = parseInt(match[1], 10);
-                const title = stripHtml(match[2]).trim();
+            while ((match = rowRegex.exec(html)) !== null) {
+                const rawDate = match[1].trim();
+                const rawRevise = match[2] ? match[2].trim() : null; // "2020/05/20 10:00 改稿"
+                const index = parseInt(match[3], 10);
+                const title = stripHtml(match[4]).trim();
+
+                let pbDate = null;
+                let rvDate = null;
+
+                if (rawDate) {
+                    pbDate = new Date(rawDate.replace(/\//g, '-') + ':00+09:00').toISOString();
+                    rvDate = pbDate;
+                }
+                if (rawRevise) {
+                    const rvMatch = rawRevise.match(/([\d/:\s]+)/);
+                    if (rvMatch) {
+                        rvDate = new Date(rvMatch[1].trim().replace(/\//g, '-') + ':00+09:00').toISOString();
+                    }
+                }
+
                 if (index > 0 && title) {
                     chapters.push({
                         index,
                         title,
                         url: `${NAROU_BASE}/${novelId}/${index}/`,
-                        publishedAt: null,
-                        revisedAt: null,
+                        publishedAt: pbDate,
+                        revisedAt: rvDate,
                     });
                     foundInPage++;
                 }

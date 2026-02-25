@@ -43,3 +43,5 @@ yarn-error.*
 
 # Google Services
 google-services.json
+
+KEYSTORE_INFO.txt

@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   ToastAndroid,
   Platform,
+  Linking,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Network from "expo-network";
@@ -27,11 +28,13 @@ import {
   countDownloadedChapters,
   updateNovel,
   upsertReadingProgress,
+  upsertChapter,
 } from "../database/repository";
 import {
   deleteNovelData,
   downloadSingleChapter,
 } from "../services/downloadManager";
+import { getAdapter } from "../services/siteAdapter";
 import {
   useBulkDownloadProgress,
   startDownload as startGlobalDownload,
@@ -54,6 +57,7 @@ export default function NovelDetailScreen({
   const [downloadingIndex, setDownloadingIndex] = useState<number | null>(null);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [isSynopsisExpanded, setIsSynopsisExpanded] = useState(false);
+  const [fetchingChapters, setFetchingChapters] = useState(false);
 
   // Subscribe to global bulk download store
   const storeProgress = useBulkDownloadProgress(novelId);
@@ -62,11 +66,50 @@ export default function NovelDetailScreen({
     ? { downloaded: storeProgress.downloaded, total: storeProgress.total }
     : { downloaded: 0, total: 0 };
 
+  const fetchChapterList = useCallback(async (n: Novel) => {
+    const adapter = getAdapter(n.siteType);
+    if (!adapter) return;
+    setFetchingChapters(true);
+    try {
+      const chapterList = await adapter.getChapterList(n.siteNovelId);
+      for (const ch of chapterList) {
+        upsertChapter(db, {
+          novelId: n.id,
+          index: ch.index,
+          title: ch.title,
+          localPath: null,
+          isDownloaded: false,
+          url: ch.url,
+          publishedAt: ch.publishedAt,
+          revisedAt: ch.revisedAt,
+        });
+      }
+      updateNovel(db, n.id, {
+        totalEpisodes: chapterList.length,
+        lastCheckedAt: new Date().toISOString(),
+      });
+      // Reload
+      setChapters(getChaptersByNovelId(db, n.id));
+      setNovel(getNovelById(db, n.id));
+    } catch (err) {
+      console.error("Failed to fetch chapter list", err);
+    } finally {
+      setFetchingChapters(false);
+    }
+  }, [db]);
+
   const loadData = useCallback(() => {
     const n = getNovelById(db, novelId);
     setNovel(n);
     if (n) {
-      setChapters(getChaptersByNovelId(db, novelId));
+      const localChapters = getChaptersByNovelId(db, novelId);
+      setChapters(localChapters);
+
+      // 同期で追加されたがチャプターが未取得の場合、サイトから取得
+      if (localChapters.length === 0 && n.url) {
+        fetchChapterList(n);
+      }
+
       const progress = getReadingProgress(db, novelId);
       if (progress) setCurrentChapter(progress.currentChapter);
 
@@ -96,7 +139,7 @@ export default function NovelDetailScreen({
           .catch(console.error);
       }
     }
-  }, [db, novelId]);
+  }, [db, novelId, fetchChapterList]);
 
   useFocusEffect(
     useCallback(() => {
@@ -242,6 +285,7 @@ export default function NovelDetailScreen({
           <Text style={[styles.meta, { color: colors.text.disabled }]}>
             {novel.downloadedEpisodes}/{novel.totalEpisodes}話 DL済
             {novel.isComplete ? " · 完結" : " · 連載中"}
+            {novel.siteUpdatedAt ? ` · 更新: ${new Date(novel.siteUpdatedAt).toLocaleDateString('ja-JP')}` : ""}
           </Text>
         </View>
 
@@ -258,6 +302,14 @@ export default function NovelDetailScreen({
               {currentChapter > 1 ? `第${currentChapter}話から` : "読む"}
             </Text>
           </TouchableOpacity>
+          {novel.url ? (
+            <TouchableOpacity
+              style={[styles.archiveButton, { borderColor: colors.ui.primary }]}
+              onPress={() => Linking.openURL(novel.url)}
+            >
+              <Ionicons name="globe-outline" size={14} color={colors.ui.primary} />
+            </TouchableOpacity>
+          ) : null}
           <TouchableOpacity
             style={[styles.archiveButton, { borderColor: novel.isArchived ? colors.ui.success : colors.text.secondary }]}
             onPress={handleToggleArchive}
@@ -312,8 +364,11 @@ export default function NovelDetailScreen({
       <View style={styles.chapterHeader}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
-            目次 ({chapters.length}話)
+            目次 ({fetchingChapters ? "取得中..." : `${chapters.length}話`})
           </Text>
+          {fetchingChapters && (
+            <ActivityIndicator size="small" color={colors.ui.primary} />
+          )}
           <TouchableOpacity
             style={[styles.sortBtn, { backgroundColor: colors.surfaceAlt }]}
             onPress={() => setSortOrder((o) => (o === "asc" ? "desc" : "asc"))}
@@ -435,6 +490,16 @@ export default function NovelDetailScreen({
             >
               {item.title || `第${item.index}話`}
             </Text>
+            <View style={styles.chapterDates}>
+              {item.publishedAt && (
+                <Text style={[styles.chapterDate, { color: colors.text.disabled + "99" }]}>
+                  {new Date(item.publishedAt).toLocaleDateString('ja-JP')}
+                  {item.revisedAt && item.revisedAt !== item.publishedAt && (
+                    <Text style={{ color: colors.ui.primary }}> (改稿)</Text>
+                  )}
+                </Text>
+              )}
+            </View>
             {!item.isDownloaded &&
               (downloadingIndex === item.index ? (
                 <ActivityIndicator size="small" color={colors.ui.primary} />
@@ -540,25 +605,39 @@ const styles = StyleSheet.create({
   chapterRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 2,
+    paddingVertical: 6,
     paddingHorizontal: Spacing.sm,
     borderRadius: Radius.sm,
     gap: Spacing.xs,
   },
   chapterIndex: {
-    width: 28,
+    width: 32,
     textAlign: "right",
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: "NotoSansJP_400Regular",
     fontWeight: "600",
   },
-  chapterTitle: { flex: 1, fontSize: 13, fontFamily: "NotoSansJP_400Regular" },
+  chapterTitle: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: "NotoSansJP_400Regular",
+    lineHeight: 18,
+  },
+  chapterDates: {
+    flexDirection: "column",
+    alignItems: "flex-end",
+    justifyContent: "center",
+    marginRight: 4,
+  },
+  chapterDate: {
+    fontSize: 10,
+    fontFamily: "NotoSansJP_400Regular",
+  },
   errorText: { ...Typography.body, textAlign: "center", marginTop: 100 },
   sortBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
-    paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: Radius.full,
   },

@@ -9,8 +9,6 @@ export type SiteType =
   | 'moonlight'    // ムーンライトノベルズ
   | 'midnight'     // ミッドナイトノベルズ
   | 'hameln'       // ハーメルン
-  | 'arcadia'      // Arcadia
-  | 'akatsuki'     // 暁
   | 'kakuyomu';    // カクヨム
 
 /** Novel metadata stored in local database */
@@ -111,6 +109,8 @@ export interface ReaderSettings {
   paragraphSpacing: number;
   /** Fullscreen mode (hide status bar/clock) */
   fullscreen: boolean;
+  /** Show inline images instead of link placeholders */
+  showImages: boolean;
 }
 
 /** Default reader settings */
@@ -127,4 +127,5 @@ export const DEFAULT_READER_SETTINGS: ReaderSettings = {
   reversePageDirection: false,
   paragraphSpacing: 0.5,
   fullscreen: true,
+  showImages: false,
 };
