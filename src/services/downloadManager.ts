@@ -199,6 +199,7 @@ export async function checkNovelUpdates(
 
     updateNovel(db, novel.id, {
       totalEpisodes: chapterList.length,
+      siteUpdatedAt: chapterList[chapterList.length - 1]?.publishedAt || new Date().toISOString(),
       lastCheckedAt: new Date().toISOString(),
     });
 
