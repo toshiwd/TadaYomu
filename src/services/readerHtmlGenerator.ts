@@ -185,8 +185,16 @@ ${fontLink}
   .emphasis { text-emphasis: filled sesame; -webkit-text-emphasis: filled sesame; font-style: normal; }
   .tcy { text-combine-upright: all; -webkit-text-combine: horizontal; font-family: "Helvetica Neue", Arial, sans-serif; }
   .image-link { font-size: 0.9em; font-weight: bold; color: currentColor; text-decoration: underline; text-decoration-color: currentColor; padding: 0.2em 0.5em; border: 1px solid currentColor; border-radius: 4px; display: inline-block; background: transparent; margin: 0.2em; }
-  .image-page { text-align: center; margin: 0.5em 0; text-indent: 0; }
-  .image-page img { max-width: 100%; max-height: 80vh; object-fit: contain; display: inline-block; }
+  
+  /* Image Layout fixes for 1 page = 1 image */
+  .image-page { 
+    ${isVertical
+      ? `width: ${contentW}px; height: ${contentH}px; display: flex; justify-content: center; align-items: center;`
+      : `break-before: column; break-after: column; height: ${contentH}px; display: flex; justify-content: center; align-items: center;`}
+    margin: 0; padding: 0; text-indent: 0; overflow: hidden;
+  }
+  .image-page img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  
   #tap-zone { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 100; }
 </style>
 </head>
