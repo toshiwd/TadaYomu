@@ -26,7 +26,24 @@ export function generateReaderHtml({
   rubyTextToHtml,
 }: GenerateHtmlParams): string {
   const isVertical = settings.writingMode === 'vertical';
-  const processedText = rubyTextToHtml(chapterText);
+
+  // Dynamically swap image link tags and actual image tags based on the settings
+  let chapterContentWithImages = chapterText;
+  if (settings.showImages) {
+    // If showImages is true, restore any `<span class="image-link">` placeholders to `<div class="image-page"><img /></div>`
+    chapterContentWithImages = chapterContentWithImages.replace(
+      /<span\s+class=["']image-link["']\s+data-src=["']([^"']+)["'][^>]*>.*?<\/span>/gi,
+      '\n<div class="image-page"><img src="$1" /></div>\n'
+    );
+  } else {
+    // If showImages is false, convert any existing `<div class="image-page"><img /></div>` to `<span class="image-link">`
+    chapterContentWithImages = chapterContentWithImages.replace(
+      /<div\s+class=["']image-page["']>\s*<img\s+src=["']([^"']+)["'][^>]*\/>\s*<\/div>/gi,
+      '<span class="image-link" data-src="$1">[画像あり: タップして表示]</span>'
+    );
+  }
+
+  const processedText = rubyTextToHtml(chapterContentWithImages);
   const hasContent = processedText.trim().length > 0;
 
   // Google Fonts CDN
