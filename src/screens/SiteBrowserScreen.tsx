@@ -46,8 +46,8 @@ export default function SiteBrowserScreen({ route, navigation }: RootStackScreen
     const db = useSQLiteContext();
     const webViewRef = useRef<WebView>(null);
 
-    const { siteDomain, siteName } = route.params;
-    const startUrl = SITE_HOME_URLS[siteDomain] || `https://${siteDomain}`;
+    const { siteDomain, siteName, url } = route.params;
+    const startUrl = url || SITE_HOME_URLS[siteDomain] || `https://${siteDomain}`;
 
     const [currentUrl, setCurrentUrl] = useState(startUrl);
     const [canGoBack, setCanGoBack] = useState(false);

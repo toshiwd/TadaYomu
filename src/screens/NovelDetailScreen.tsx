@@ -219,6 +219,9 @@ export default function NovelDetailScreen({
             cancelGlobalDownload(novel.id);
             deleteNovelData(novel.siteNovelId);
             deleteNovel(db, novel.id);
+            if (syncService.isSignedIn()) {
+              syncService.deleteNovelFromLibrary(novel.siteType, novel.siteNovelId);
+            }
           }
           navigation.goBack();
         },
@@ -296,6 +299,8 @@ export default function NovelDetailScreen({
               { backgroundColor: colors.ui.primary },
             ]}
             onPress={handleContinueReading}
+            activeOpacity={0.7}
+            delayPressIn={0}
           >
             <Ionicons name="book" size={14} color="#FFF" />
             <Text style={styles.continueText}>
@@ -305,7 +310,19 @@ export default function NovelDetailScreen({
           {novel.url ? (
             <TouchableOpacity
               style={[styles.archiveButton, { borderColor: colors.ui.primary }]}
-              onPress={() => Linking.openURL(novel.url)}
+              onPress={() => {
+                let domain = novel.siteType + ".syosetu.com"; // Provide a default guess based on type
+                if (novel.siteType === "syosetu") domain = "ncode.syosetu.com";
+                else if (novel.siteType === "nocturne" || novel.siteType === "moonlight" || novel.siteType === "midnight") domain = "novel18.syosetu.com";
+                else if (novel.siteType === "kakuyomu") domain = "kakuyomu.jp";
+                else if (novel.siteType === "hameln") domain = "syosetu.org";
+
+                navigation.navigate("SiteBrowser", {
+                  siteDomain: domain,
+                  siteName: "Webサイト",
+                  url: novel.url,
+                });
+              }}
             >
               <Ionicons name="globe-outline" size={14} color={colors.ui.primary} />
             </TouchableOpacity>
@@ -464,6 +481,8 @@ export default function NovelDetailScreen({
                 chapterIndex: item.index,
               })
             }
+            activeOpacity={0.5}
+            delayPressIn={0}
           >
             <Text
               style={[

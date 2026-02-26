@@ -287,6 +287,8 @@ export default function SettingsScreen(_props: MainTabScreenProps<"Settings">) {
                 },
               ]}
               onPress={() => setMode(opt.value)}
+              activeOpacity={0.7}
+              delayPressIn={0}
             >
               <Text
                 style={{
@@ -314,6 +316,8 @@ export default function SettingsScreen(_props: MainTabScreenProps<"Settings">) {
                   },
                 ]}
                 onPress={() => updateSetting("fontFamily", "serif")}
+                activeOpacity={0.6}
+                delayPressIn={0}
               >
                 <Text
                   style={{
@@ -336,6 +340,8 @@ export default function SettingsScreen(_props: MainTabScreenProps<"Settings">) {
                   },
                 ]}
                 onPress={() => updateSetting("fontFamily", "sans-serif")}
+                activeOpacity={0.6}
+                delayPressIn={0}
               >
                 <Text
                   style={{

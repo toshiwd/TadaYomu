@@ -16,8 +16,10 @@ export interface SyncService {
     downloadProgress(siteNovelId: string, siteType: string): Promise<ReadingProgress | null>;
     /** Upload the entire library list */
     uploadLibrary(novels: Novel[]): Promise<void>;
-    /** Download the library list */
-    downloadLibrary(): Promise<Partial<Novel>[] | null>;
+    /** Download the library list and deleted tombstones */
+    downloadLibrary(): Promise<{ novels: Partial<Novel>[], deletedAt: Record<string, number> } | null>;
+    /** Mark a novel as deleted in the synced library to prevent re-downloading */
+    deleteNovelFromLibrary(siteType: string, siteNovelId: string): Promise<void>;
     /** Get display name or email */
     getUserDisplayName(): string | null;
 }
@@ -148,12 +150,37 @@ export const syncService: SyncService = {
 
             const data = doc.data();
             if (data && data.novels && Array.isArray(data.novels)) {
-                return data.novels as Partial<Novel>[];
+                return {
+                    novels: data.novels as Partial<Novel>[],
+                    deletedAt: data.deletedAt || {}
+                };
             }
         } catch (error) {
             console.error('Download library failed', error);
         }
         return null;
+    },
+
+    async deleteNovelFromLibrary(siteType: string, siteNovelId: string) {
+        const user = auth().currentUser;
+        if (!user) return;
+
+        const docKey = `${siteType}_${siteNovelId}`;
+        try {
+            await firestore()
+                .collection('users')
+                .doc(user.uid)
+                .collection('library')
+                .doc('index')
+                .set({
+                    deletedAt: {
+                        [docKey]: Date.now()
+                    },
+                    updatedAt: firestore.FieldValue.serverTimestamp(),
+                }, { merge: true });
+        } catch (error) {
+            console.error('Delete novel from library sync failed', error);
+        }
     },
 
     getUserDisplayName() {

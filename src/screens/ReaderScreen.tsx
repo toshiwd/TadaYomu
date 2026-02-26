@@ -123,6 +123,7 @@ export default function ReaderScreen({
           try {
             console.log(`[Reader] No chapter in DB, fetching chapter list from site...`);
             const chapterList = await adapter.getChapterList(novel.siteNovelId);
+            if (cancelled) return;
             for (const c of chapterList) {
               upsertChapter(db, {
                 novelId: novel.id,
@@ -252,8 +253,10 @@ export default function ReaderScreen({
         useNativeDriver: true,
         tension: 65,
         friction: 10,
-      }).start(() => {
-        setIsSettingsVisible(false);
+      }).start(({ finished }) => {
+        if (finished) {
+          setIsSettingsVisible(false);
+        }
       });
     }
   }, [showSettings, settingsAnim]);
@@ -358,6 +361,14 @@ export default function ReaderScreen({
     },
     [db, novelId, chapterIndex, goNextChapter, goPrevChapter, toggleToolbar, novel],
   );
+
+  useEffect(() => {
+    return () => {
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const settingsTranslateY = settingsAnim.interpolate({
     inputRange: [0, 1],

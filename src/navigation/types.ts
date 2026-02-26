@@ -11,7 +11,7 @@ export type RootStackParamList = {
     Reader: { novelId: number; chapterIndex?: number };
     NovelDetail: { novelId: number };
     AddNovel: { url?: string };
-    SiteBrowser: { siteDomain: string; siteName: string };
+    SiteBrowser: { siteDomain: string; siteName: string; url?: string };
 };
 
 /** Bottom tab params */

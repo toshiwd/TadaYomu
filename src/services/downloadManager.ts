@@ -343,10 +343,15 @@ export async function readChapterText(
     console.log(
       `[Reader] Attempting re-download for chapter ${chapter.index}...`,
     );
-    return downloadSingleChapter(db, chapter, siteNovelId, siteType);
+    try {
+      return await downloadSingleChapter(db, chapter, siteNovelId, siteType);
+    } catch (err: any) {
+      console.error(`[Reader] Re-download failed:`, err);
+      throw new Error(`再ダウンロードに失敗しました: ${err.message || '通信エラー'}`);
+    }
   }
 
-  throw new Error("Chapter file is empty or missing and cannot re-download");
+  throw new Error("保存されたファイルが空です。通信環境の良い場所で再度お試しください。");
 }
 
 /**

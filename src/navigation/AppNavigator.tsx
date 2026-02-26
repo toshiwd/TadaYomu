@@ -82,7 +82,8 @@ export default function AppNavigator() {
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: colors.background },
-          animation: "slide_from_right",
+          animation: "simple_push", // Faster native-like slide without heavy opacity
+          animationDuration: 200,   // Quicker transition time
         }}
       >
         <Stack.Screen name="Main" component={MainTabs} />

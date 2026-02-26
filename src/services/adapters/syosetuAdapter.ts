@@ -187,6 +187,7 @@ export const syosetuAdapter: SiteAdapter = {
 
         // Use lowercase to avoid redirect screens on Syosetu
         const lowerId = novelId.toLowerCase();
+        let currentChapterTitle = '';
 
         while (hasMore) {
             // Syosetu uses ?p= for pagination. Avoid double slash if base ends with /
@@ -200,31 +201,92 @@ export const syosetuAdapter: SiteAdapter = {
 
             if (html.includes('class="p-eplist"')) {
                 // --- NEW DESIGN (p-eplist) ---
-                const parts = html.split('<div class="p-eplist__sublist">');
-                parts.shift(); // First part doesn't contain a chapter
+                const parts = html.split(/<div\s+class="p-eplist__(chapter-title|sublist)"[^>]*>/i);
 
-                for (const item of parts) {
-                    if (!item) continue;
+                // parts will be [html_before, "chapter-title" or "sublist", html_inside_div, "chapter-title" or "sublist", ...]
+                for (let i = 1; i < parts.length; i += 2) {
+                    const type = parts[i];
+                    const content = parts[i + 1];
+                    if (!content) continue;
 
-                    const linkMatch = item.match(/href="\/[a-z0-9]+\/(\d+)\/"[^>]*>([\s\S]*?)<\/a>/i);
-                    const dateMatch = item.match(/<div class="p-eplist__update">\s*([\d/:\s]+)(?:<span\s+title="([^"]+)"[^>]*>)?/i);
+                    if (type.toLowerCase() === 'chapter-title') {
+                        // Extract text up to the closing div
+                        const textMatch = content.match(/([\s\S]*?)<\/div>/i);
+                        if (textMatch) {
+                            currentChapterTitle = stripHtml(textMatch[1]).trim();
+                        }
+                    } else if (type.toLowerCase() === 'sublist') {
+                        const linkMatch = content.match(/<a\s+href="\/[a-z0-9]+\/(\d+)\/"[^>]*>([\s\S]*?)<\/a>/i);
+                        const dateMatch = content.match(/<div class="p-eplist__update">\s*([\d/:\s]+)(?:<span\s+title="([^"]+)"[^>]*>)?/i);
 
-                    if (linkMatch) {
-                        const index = parseInt(linkMatch[1], 10);
-                        const title = stripHtml(linkMatch[2]).trim();
+                        if (linkMatch) {
+                            const index = parseInt(linkMatch[1], 10);
+                            let title = stripHtml(linkMatch[2]).trim();
+
+                            // Prepend chapter title if available
+                            if (currentChapterTitle) {
+                                title = `${currentChapterTitle} ${title}`;
+                            }
+
+                            let pbDate = null;
+                            let rvDate = null;
+
+                            if (dateMatch && dateMatch[1]) {
+                                pbDate = new Date(dateMatch[1].trim().replace(/\//g, '-') + ':00+09:00').toISOString();
+                                rvDate = pbDate;
+
+                                if (dateMatch[2]) {
+                                    const rvMatch = dateMatch[2].match(/([\d/:\s]+)/);
+                                    if (rvMatch) {
+                                        rvDate = new Date(rvMatch[1].trim().replace(/\//g, '-') + ':00+09:00').toISOString();
+                                    }
+                                }
+                            }
+
+                            if (index > 0 && title) {
+                                chapters.push({
+                                    index,
+                                    title,
+                                    url: `${NAROU_BASE}/${lowerId}/${index}/`,
+                                    publishedAt: pbDate,
+                                    revisedAt: rvDate,
+                                });
+                                foundInPage++;
+                            }
+                        }
+                    }
+                }
+            } else {
+                // --- OLD DESIGN (novel_sublist2) ---
+                const elementRegex = /<div\s+class="chapter_title"[^>]*>([\s\S]*?)<\/div>|<dt\s+class="novel_sublist2">\s*([\d/:\s]+)(?:<span\s+title="([^"]+)"[^>]*>)?[\s\S]*?<\/dt>\s*<dd\s+class="subtitle">\s*<a\s+href="\/[a-z0-9]+\/(\d+)\/"[^>]*>([\s\S]*?)<\/a>\s*<\/dd>/gi;
+                let match: RegExpExecArray | null;
+
+                while ((match = elementRegex.exec(html)) !== null) {
+                    if (match[1]) {
+                        // It's a chapter title
+                        currentChapterTitle = stripHtml(match[1]).trim();
+                    } else if (match[4]) {
+                        // It's an episode
+                        const rawDate = match[2] ? match[2].trim() : '';
+                        const rawRevise = match[3] ? match[3].trim() : null;
+                        const index = parseInt(match[4], 10);
+                        let title = stripHtml(match[5]).trim();
+
+                        if (currentChapterTitle) {
+                            title = `${currentChapterTitle} ${title}`;
+                        }
 
                         let pbDate = null;
                         let rvDate = null;
 
-                        if (dateMatch && dateMatch[1]) {
-                            pbDate = new Date(dateMatch[1].trim().replace(/\//g, '-') + ':00+09:00').toISOString();
+                        if (rawDate) {
+                            pbDate = new Date(rawDate.replace(/\//g, '-') + ':00+09:00').toISOString();
                             rvDate = pbDate;
-
-                            if (dateMatch[2]) {
-                                const rvMatch = dateMatch[2].match(/([\d/:\s]+)/);
-                                if (rvMatch) {
-                                    rvDate = new Date(rvMatch[1].trim().replace(/\//g, '-') + ':00+09:00').toISOString();
-                                }
+                        }
+                        if (rawRevise) {
+                            const rvMatch = rawRevise.match(/([\d/:\s]+)/);
+                            if (rvMatch) {
+                                rvDate = new Date(rvMatch[1].trim().replace(/\//g, '-') + ':00+09:00').toISOString();
                             }
                         }
 
@@ -238,42 +300,6 @@ export const syosetuAdapter: SiteAdapter = {
                             });
                             foundInPage++;
                         }
-                    }
-                }
-            } else {
-                // --- OLD DESIGN (novel_sublist2) ---
-                const rowRegex = /<dt\s+class="novel_sublist2">\s*([\d/:\s]+)(?:<span\s+title="([^"]+)"[^>]*>)?[\s\S]*?<\/dt>\s*<dd\s+class="subtitle">\s*<a\s+href="\/[a-z0-9]+\/(\d+)\/"[^>]*>([\s\S]*?)<\/a>\s*<\/dd>/gi;
-                let match: RegExpExecArray | null;
-
-                while ((match = rowRegex.exec(html)) !== null) {
-                    const rawDate = match[1].trim();
-                    const rawRevise = match[2] ? match[2].trim() : null; // "2020/05/20 10:00 改稿"
-                    const index = parseInt(match[3], 10);
-                    const title = stripHtml(match[4]).trim();
-
-                    let pbDate = null;
-                    let rvDate = null;
-
-                    if (rawDate) {
-                        pbDate = new Date(rawDate.replace(/\//g, '-') + ':00+09:00').toISOString();
-                        rvDate = pbDate;
-                    }
-                    if (rawRevise) {
-                        const rvMatch = rawRevise.match(/([\d/:\s]+)/);
-                        if (rvMatch) {
-                            rvDate = new Date(rvMatch[1].trim().replace(/\//g, '-') + ':00+09:00').toISOString();
-                        }
-                    }
-
-                    if (index > 0 && title) {
-                        chapters.push({
-                            index,
-                            title,
-                            url: `${NAROU_BASE}/${lowerId}/${index}/`,
-                            publishedAt: pbDate,
-                            revisedAt: rvDate,
-                        });
-                        foundInPage++;
                     }
                 }
             }

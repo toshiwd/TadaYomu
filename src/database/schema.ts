@@ -82,4 +82,13 @@ export function initDatabase(db: SQLiteDatabase): void {
   if (!hasIsArchived) {
     db.execSync(`ALTER TABLE novels ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0;`);
   }
+
+  // --- Indexes for performance ---
+  db.execSync(`
+    CREATE INDEX IF NOT EXISTS idx_novels_archived ON novels(is_archived);
+    CREATE INDEX IF NOT EXISTS idx_novels_updated ON novels(site_updated_at);
+    CREATE INDEX IF NOT EXISTS idx_novels_checked ON novels(last_checked_at);
+    CREATE INDEX IF NOT EXISTS idx_novels_added ON novels(added_at);
+    CREATE INDEX IF NOT EXISTS idx_rp_last_read ON reading_progress(last_read_at);
+  `);
 }
