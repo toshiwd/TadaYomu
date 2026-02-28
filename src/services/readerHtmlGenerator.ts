@@ -102,6 +102,18 @@ export function generateReaderHtml({
   let contentW = availW;
   let extraMarginLeft = 0;
 
+  if (isVertical) {
+    const lhNum = parseFloat(String(settings.lineHeight)) || 1.8;
+    const physicalLineWidth = settings.fontSize * lhNum;
+    const numLines = Math.floor(contentW / physicalLineWidth);
+
+    if (numLines > 0) {
+      const newW = numLines * physicalLineWidth;
+      extraMarginLeft = Math.floor((contentW - newW) / 2);
+      contentW = newW;
+    }
+  }
+
   let fontFamilyCSS = settings.fontFamily === 'sans-serif'
     ? '"Noto Sans JP", "游ゴシック", "YuGothic", "ヒラギノ角ゴ ProN", sans-serif'
     : '"Noto Serif JP", "游明朝", "YuMincho", "ヒラギノ明朝 ProN", serif';
@@ -200,7 +212,7 @@ ${fontLink}
 </head>
 <body>
 <div id="reader">
-  ${isVertical ? `<div id="content">${contentHtml}</div>` : contentHtml}
+  ${isVertical ? `<div id="content">${contentHtml}</div><div id="page-mask" style="position: absolute; top: 0; left: 0; bottom: 0; background: var(--bg); z-index: 50; width: 0px;"></div>` : contentHtml}
 </div>
 <script>
 (function() {
@@ -219,6 +231,25 @@ ${fontLink}
   function log(msg) { window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'log', message: msg })); }
 
   var pageBoundaries = [0];
+
+  function updateMaskForOffset(offset, useTransition) {
+    var mask = document.getElementById('page-mask');
+    if (!mask) return;
+    if (useTransition) {
+      mask.style.transition = 'width 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+    } else {
+      mask.style.transition = 'none';
+    }
+    var mw = 0;
+    var nextB = null;
+    for (var k = 1; k < pageBoundaries.length; k++) {
+      if (pageBoundaries[k] > offset + 0.5) { nextB = pageBoundaries[k]; break; }
+    }
+    if (nextB !== null && nextB < offset + pageStepPx - 0.5) {
+      mw = (offset + pageStepPx) - nextB + 1;
+    }
+    mask.style.width = (mw > 0 ? mw : 0) + 'px';
+  }
 
   function recalcGeometry() {
     if (isVertical && content) {
@@ -283,6 +314,7 @@ ${fontLink}
     if (isVertical && content) {
       var offset = pageBoundaries[page] || 0;
       currentVisualOffset = offset;
+      updateMaskForOffset(offset, true);
       content.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
       content.style.transform = 'translateX(' + offset + 'px)';
     } else {
@@ -368,9 +400,13 @@ ${fontLink}
         if (animationFrameId) cancelAnimationFrame(animationFrameId);
         animationFrameId = requestAnimationFrame(function() {
             var target = baseOffset + dx;
-            var maxOffset = content.scrollWidth - reader.clientWidth;
-            currentVisualOffset = Math.max(-100, Math.min(maxOffset + 100, target));
-            content.style.transform = 'translateX(' + currentVisualOffset + 'px)';
+            var maxOff = totalPages > 0 ? (pageBoundaries[totalPages - 1] || 0) : 0;
+            if (target < 0) target = target * 0.3;
+            else if (target > maxOff) target = maxOff + (target - maxOff) * 0.3;
+            currentVisualOffset = target;
+            updateMaskForOffset(target, false);
+            content.style.transform = 'translateX(' + target + 'px)';
+            animationFrameId = null;
         });
     }
   }, { passive: false });
