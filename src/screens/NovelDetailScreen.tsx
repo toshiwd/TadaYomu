@@ -72,18 +72,20 @@ export default function NovelDetailScreen({
     setFetchingChapters(true);
     try {
       const chapterList = await adapter.getChapterList(n.siteNovelId);
-      for (const ch of chapterList) {
-        upsertChapter(db, {
-          novelId: n.id,
-          index: ch.index,
-          title: ch.title,
-          localPath: null,
-          isDownloaded: false,
-          url: ch.url,
-          publishedAt: ch.publishedAt,
-          revisedAt: ch.revisedAt,
-        });
-      }
+      db.withTransactionSync(() => {
+        for (const ch of chapterList) {
+          upsertChapter(db, {
+            novelId: n.id,
+            index: ch.index,
+            title: ch.title,
+            localPath: null,
+            isDownloaded: false,
+            url: ch.url,
+            publishedAt: ch.publishedAt,
+            revisedAt: ch.revisedAt,
+          });
+        }
+      });
       updateNovel(db, n.id, {
         totalEpisodes: chapterList.length,
         lastCheckedAt: new Date().toISOString(),

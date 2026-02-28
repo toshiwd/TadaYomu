@@ -124,18 +124,20 @@ export default function ReaderScreen({
             console.log(`[Reader] No chapter in DB, fetching chapter list from site...`);
             const chapterList = await adapter.getChapterList(novel.siteNovelId);
             if (cancelled) return;
-            for (const c of chapterList) {
-              upsertChapter(db, {
-                novelId: novel.id,
-                index: c.index,
-                title: c.title,
-                localPath: null,
-                isDownloaded: false,
-                url: c.url,
-                publishedAt: c.publishedAt,
-                revisedAt: c.revisedAt,
-              });
-            }
+            db.withTransactionSync(() => {
+              for (const c of chapterList) {
+                upsertChapter(db, {
+                  novelId: novel.id,
+                  index: c.index,
+                  title: c.title,
+                  localPath: null,
+                  isDownloaded: false,
+                  url: c.url,
+                  publishedAt: c.publishedAt,
+                  revisedAt: c.revisedAt,
+                });
+              }
+            });
             updateNovel(db, novel.id, {
               totalEpisodes: chapterList.length,
               lastCheckedAt: new Date().toISOString(),

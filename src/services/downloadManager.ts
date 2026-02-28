@@ -123,18 +123,20 @@ export async function addNovelByUrl(
     });
 
     // Insert chapters into DB
-    for (const ch of chapterList) {
-      upsertChapter(db, {
-        novelId: dbId,
-        index: ch.index,
-        title: ch.title,
-        localPath: null,
-        isDownloaded: false,
-        url: ch.url,
-        publishedAt: ch.publishedAt,
-        revisedAt: ch.revisedAt,
-      });
-    }
+    db.withTransactionSync(() => {
+      for (const ch of chapterList) {
+        upsertChapter(db, {
+          novelId: dbId,
+          index: ch.index,
+          title: ch.title,
+          localPath: null,
+          isDownloaded: false,
+          url: ch.url,
+          publishedAt: ch.publishedAt,
+          revisedAt: ch.revisedAt,
+        });
+      }
+    });
 
     // Done — chapters will be downloaded on-demand when opened
     onProgress?.({
@@ -184,18 +186,20 @@ export async function checkNovelUpdates(
     }
 
     // Insert new chapters as metadata only (content fetched on-demand)
-    for (const ch of newChapters) {
-      upsertChapter(db, {
-        novelId: novel.id,
-        index: ch.index,
-        title: ch.title,
-        localPath: null,
-        isDownloaded: false,
-        url: ch.url,
-        publishedAt: ch.publishedAt,
-        revisedAt: ch.revisedAt,
-      });
-    }
+    db.withTransactionSync(() => {
+      for (const ch of newChapters) {
+        upsertChapter(db, {
+          novelId: novel.id,
+          index: ch.index,
+          title: ch.title,
+          localPath: null,
+          isDownloaded: false,
+          url: ch.url,
+          publishedAt: ch.publishedAt,
+          revisedAt: ch.revisedAt,
+        });
+      }
+    });
 
     updateNovel(db, novel.id, {
       totalEpisodes: chapterList.length,

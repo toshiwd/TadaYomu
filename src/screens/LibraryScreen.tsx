@@ -134,6 +134,7 @@ const NovelItem = memo(
     );
   }
 );
+NovelItem.displayName = "NovelItem";
 // ----------------------------------------------
 
 export default function LibraryScreen({
@@ -279,34 +280,36 @@ export default function LibraryScreen({
                 }
 
                 let localUpdated = false;
-                for (const novel of chunk) {
-                  const info = infoMap.get(novel.siteNovelId);
-                  if (!info) {
-                    updateNovel(db, novel.id, { lastCheckedAt: new Date().toISOString() });
-                    continue;
+                db.withTransactionSync(() => {
+                  for (const novel of chunk) {
+                    const info = infoMap.get(novel.siteNovelId);
+                    if (!info) {
+                      updateNovel(db, novel.id, { lastCheckedAt: new Date().toISOString() });
+                      continue;
+                    }
+
+                    let needsUpdate = false;
+                    const infoTime = info.lastUpdatedAt ? new Date(info.lastUpdatedAt).getTime() : 0;
+                    const localTime = novel.siteUpdatedAt ? new Date(novel.siteUpdatedAt).getTime() : 0;
+
+                    if (info.totalEpisodes > novel.totalEpisodes) needsUpdate = true;
+                    if (infoTime > localTime) needsUpdate = true;
+                    if (info.isComplete !== novel.isComplete) needsUpdate = true;
+
+                    if (needsUpdate) {
+                      updateNovel(db, novel.id, {
+                        totalEpisodes: info.totalEpisodes,
+                        siteUpdatedAt: info.lastUpdatedAt || novel.siteUpdatedAt,
+                        isComplete: info.isComplete,
+                        lastCheckedAt: new Date().toISOString(),
+                      });
+                      updatedCount++;
+                      localUpdated = true;
+                    } else {
+                      updateNovel(db, novel.id, { lastCheckedAt: new Date().toISOString() });
+                    }
                   }
-
-                  let needsUpdate = false;
-                  const infoTime = info.lastUpdatedAt ? new Date(info.lastUpdatedAt).getTime() : 0;
-                  const localTime = novel.siteUpdatedAt ? new Date(novel.siteUpdatedAt).getTime() : 0;
-
-                  if (info.totalEpisodes > novel.totalEpisodes) needsUpdate = true;
-                  if (infoTime > localTime) needsUpdate = true;
-                  if (info.isComplete !== novel.isComplete) needsUpdate = true;
-
-                  if (needsUpdate) {
-                    updateNovel(db, novel.id, {
-                      totalEpisodes: info.totalEpisodes,
-                      siteUpdatedAt: info.lastUpdatedAt || novel.siteUpdatedAt,
-                      isComplete: info.isComplete,
-                      lastCheckedAt: new Date().toISOString(),
-                    });
-                    updatedCount++;
-                    localUpdated = true;
-                  } else {
-                    updateNovel(db, novel.id, { lastCheckedAt: new Date().toISOString() });
-                  }
-                }
+                });
 
                 if (localUpdated) loadNovels();
               } catch (err) {
