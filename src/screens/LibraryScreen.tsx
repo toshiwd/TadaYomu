@@ -43,6 +43,7 @@ const NovelItem = memo(
     colors,
     sortBy,
     onPress,
+    onResumePress,
   }: {
     item: Novel;
     progressText: string | null;
@@ -50,6 +51,7 @@ const NovelItem = memo(
     colors: any;
     sortBy: string;
     onPress: (id: number) => void;
+    onResumePress: (novel: Novel) => void;
   }) => {
     const dateText = React.useMemo(() => {
       const d = sortBy === "updatedAt"
@@ -125,6 +127,20 @@ const NovelItem = memo(
             </View>
           )}
         </View>
+        <TouchableOpacity
+          style={styles.resumeButton}
+          onPress={(e) => {
+            e.stopPropagation();
+            onResumePress(item);
+          }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons
+            name="book-outline"
+            size={22}
+            color={colors.primary}
+          />
+        </TouchableOpacity>
         <Ionicons
           name="chevron-forward"
           size={16}
@@ -410,6 +426,7 @@ export default function LibraryScreen({
           colors={colors}
           sortBy={sortBy}
           onPress={(id) => navigation.navigate("NovelDetail", { novelId: id })}
+          onResumePress={(novel) => navigation.navigate("Reader", { novelId: novel.id, chapterIndex: novel.currentChapter || 1 })}
         />
       );
     },
@@ -565,6 +582,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm,
     borderRadius: Radius.md,
     marginBottom: 1,
+  },
+  resumeButton: {
+    padding: Spacing.xs,
+    marginRight: Spacing.xs,
+    marginLeft: Spacing.sm,
   },
   cardContent: { flex: 1, marginRight: Spacing.xs },
   cardTitle: {
