@@ -4,8 +4,6 @@
  */
 import { Alert, Linking, Platform } from "react-native";
 import Constants from "expo-constants";
-import * as FileSystem from "expo-file-system/legacy";
-import * as IntentLauncher from "expo-intent-launcher";
 
 /** Version manifest hosted on GitHub Pages / Releases */
 interface VersionManifest {
@@ -141,4 +139,3 @@ export async function checkForUpdates(
     return false;
   }
 }
-

@@ -33,16 +33,17 @@ export default function AddNovelScreen({ route, navigation }: RootStackScreenPro
         let cancelled = false;
 
         (async () => {
-            const novel = await addNovelByUrl(db, url, (p) => {
+            const result = await addNovelByUrl(db, url, (p) => {
                 if (!cancelled) setProgress(p);
             });
 
             if (!cancelled) {
                 setDone(true);
-                if (novel && progress.phase !== 'error') {
+                if (result.status === 'success' && result.novel) {
+                    const savedNovel = result.novel;
                     // Navigate to the novel detail after short delay
                     setTimeout(() => {
-                        navigation.replace('NovelDetail', { novelId: novel.id });
+                        navigation.replace('NovelDetail', { novelId: savedNovel.id });
                     }, 800);
                 }
             }
@@ -53,8 +54,6 @@ export default function AddNovelScreen({ route, navigation }: RootStackScreenPro
 
     const isError = progress.phase === 'error';
     const isDone = progress.phase === 'done';
-    const isDownloading = progress.phase === 'downloading';
-
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
             <View style={styles.content}>

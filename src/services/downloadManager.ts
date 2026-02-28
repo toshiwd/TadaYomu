@@ -1,5 +1,5 @@
 /**
- * Download manager — orchestrates novel download and storage.
+ * Download manager - orchestrates novel download and storage.
  * Uses expo-file-system v19 class-based API (File, Directory, Paths).
  */
 import { File, Directory, Paths } from "expo-file-system";
@@ -11,7 +11,6 @@ import {
   updateNovel,
   getNovelBySiteId,
   upsertChapter,
-  countDownloadedChapters,
 } from "../database/repository";
 import { getAdapterForUrl, getAdapter } from "./siteAdapter";
 import { formatNovelText } from "./textFormatter";
@@ -42,68 +41,59 @@ export interface DownloadProgress {
 
 type ProgressCallback = (progress: DownloadProgress) => void;
 
+export interface AddNovelResult {
+  status: "success" | "duplicate" | "error";
+  novel?: Novel;
+  message?: string;
+}
+
 /**
- * Add a novel by URL — fetch info, chapter list, and download all chapters.
+ * Add a novel by URL - fetch info and chapter list metadata.
+ * Chapter bodies are downloaded on-demand when opened.
  */
 export async function addNovelByUrl(
   db: SQLiteDatabase,
   url: string,
   onProgress?: ProgressCallback,
-): Promise<Novel | null> {
+): Promise<AddNovelResult> {
   const adapter = getAdapterForUrl(url);
   if (!adapter) {
-    onProgress?.({
-      phase: "error",
-      current: 0,
-      total: 0,
-      message: "対応していないサイトです",
-    });
-    return null;
+    const message = "Unsupported site URL";
+    onProgress?.({ phase: "error", current: 0, total: 0, message });
+    return { status: "error", message };
   }
 
   const novelId = adapter.extractNovelId(url);
   if (!novelId) {
-    onProgress?.({
-      phase: "error",
-      current: 0,
-      total: 0,
-      message: "URLから小説IDを取得できません",
-    });
-    return null;
+    const message = "Failed to extract novel ID from URL";
+    onProgress?.({ phase: "error", current: 0, total: 0, message });
+    return { status: "error", message };
   }
 
-  // Check if already exists
   const existing = getNovelBySiteId(db, novelId, adapter.siteType);
   if (existing) {
-    onProgress?.({
-      phase: "error",
-      current: 0,
-      total: 0,
-      message: "この小説は既に追加されています",
-    });
-    return existing;
+    const message = "This novel already exists in your library";
+    onProgress?.({ phase: "error", current: 0, total: 0, message });
+    return { status: "duplicate", novel: existing, message };
   }
 
   try {
-    // Phase 1: Get novel info
     onProgress?.({
       phase: "info",
       current: 0,
       total: 0,
-      message: "小説情報を取得中...",
+      message: "Getting novel info...",
     });
     const info = await adapter.getNovelInfo(novelId);
 
-    // Phase 2: Get chapter list
     onProgress?.({
       phase: "chapters",
       current: 0,
       total: 0,
-      message: "目次を取得中...",
+      message: "Fetching chapter list...",
     });
     const chapterList = await adapter.getChapterList(novelId);
 
-    // Insert novel into DB
     const dbId = insertNovel(db, {
       siteNovelId: info.siteNovelId,
       siteType: info.siteType,
@@ -122,7 +112,6 @@ export async function addNovelByUrl(
       addedAt: new Date().toISOString(),
     });
 
-    // Insert chapters into DB
     db.withTransactionSync(() => {
       for (const ch of chapterList) {
         upsertChapter(db, {
@@ -138,27 +127,30 @@ export async function addNovelByUrl(
       }
     });
 
-    // Done — chapters will be downloaded on-demand when opened
+    const savedNovel = getNovelBySiteId(db, novelId, adapter.siteType);
     onProgress?.({
       phase: "done",
       current: 0,
       total: chapterList.length,
-      message: "追加完了",
+      message: "Added to library",
     });
-    return getNovelBySiteId(db, novelId, adapter.siteType);
+
+    if (!savedNovel) {
+      return {
+        status: "error",
+        message: "Novel was added but could not be read back from DB",
+      };
+    }
+    return { status: "success", novel: savedNovel };
   } catch (err: any) {
-    onProgress?.({
-      phase: "error",
-      current: 0,
-      total: 0,
-      message: `エラー: ${err.message || "不明なエラー"}`,
-    });
-    return null;
+    const message = `Error: ${err?.message || "unknown error"}`;
+    onProgress?.({ phase: "error", current: 0, total: 0, message });
+    return { status: "error", message };
   }
 }
 
 /**
- * Check a novel for updates and download new chapters.
+ * Check a novel for updates and insert new chapter metadata.
  */
 export async function checkNovelUpdates(
   db: SQLiteDatabase,
@@ -173,19 +165,16 @@ export async function checkNovelUpdates(
       phase: "info",
       current: 0,
       total: 0,
-      message: "更新を確認中...",
+      message: "Checking for updates...",
     });
     const chapterList = await adapter.getChapterList(novel.siteNovelId);
 
-    const newChapters = chapterList.filter(
-      (ch) => ch.index > novel.totalEpisodes,
-    );
+    const newChapters = chapterList.filter((ch) => ch.index > novel.totalEpisodes);
     if (newChapters.length === 0) {
       updateNovel(db, novel.id, { lastCheckedAt: new Date().toISOString() });
       return 0;
     }
 
-    // Insert new chapters as metadata only (content fetched on-demand)
     db.withTransactionSync(() => {
       for (const ch of newChapters) {
         upsertChapter(db, {
@@ -203,7 +192,9 @@ export async function checkNovelUpdates(
 
     updateNovel(db, novel.id, {
       totalEpisodes: chapterList.length,
-      siteUpdatedAt: chapterList[chapterList.length - 1]?.publishedAt || new Date().toISOString(),
+      siteUpdatedAt:
+        chapterList[chapterList.length - 1]?.publishedAt ||
+        new Date().toISOString(),
       lastCheckedAt: new Date().toISOString(),
     });
 
@@ -211,10 +202,11 @@ export async function checkNovelUpdates(
       phase: "done",
       current: newChapters.length,
       total: newChapters.length,
-      message: `${newChapters.length}話の新着あり`,
+      message: `${newChapters.length} new chapters`,
     });
     return newChapters.length;
-  } catch {
+  } catch (err) {
+    console.warn("[UpdateCheck] Failed to check novel updates", err);
     return 0;
   }
 }
@@ -229,7 +221,7 @@ export async function downloadSingleChapter(
   siteType: string,
 ): Promise<string> {
   const adapter = getAdapter(siteType as any);
-  if (!adapter) throw new Error("No adapter for site type: " + siteType);
+  if (!adapter) throw new Error(`No adapter for site type: ${siteType}`);
 
   console.log(
     `[Reader] Re-downloading chapter ${chapter.index} from ${chapter.url}`,
@@ -243,11 +235,9 @@ export async function downloadSingleChapter(
     );
   }
 
-  // Extract and download images
-  const imgRegex =
-    /(?:<img[^>]+src=["']|<span[^>]+data-src=["'])([^"']+)["']/gi;
+  const imgRegex = /(?:<img[^>]+src=["']|<span[^>]+data-src=["'])([^"']+)["']/gi;
   const originalSrcs: string[] = [];
-  let match;
+  let match: RegExpExecArray | null;
   while ((match = imgRegex.exec(formattedText)) !== null) {
     originalSrcs.push(match[1]);
   }
@@ -264,25 +254,24 @@ export async function downloadSingleChapter(
     ensureDirectory(imageDir);
 
     for (const src of originalSrcs) {
-      let url = src;
-      if (url.startsWith("//")) url = "https:" + url;
+      let imageUrl = src;
+      if (imageUrl.startsWith("//")) imageUrl = `https:${imageUrl}`;
 
       try {
-        // Generate safe filename from URL
-        let filename = url.split("/").pop()?.split("?")[0];
-        if (!filename || !filename.includes("."))
+        let filename = imageUrl.split("/").pop()?.split("?")[0];
+        if (!filename || !filename.includes(".")) {
           filename = `${Date.now()}.jpg`;
+        }
 
         const imageFile = new File(imageDir, filename);
         if (!imageFile.exists) {
-          console.log(`[Reader] Downloading image: ${url}`);
-          await downloadAsync(url, imageFile.uri);
+          console.log(`[Reader] Downloading image: ${imageUrl}`);
+          await downloadAsync(imageUrl, imageFile.uri);
         }
 
-        // Replace URL with local file URI
         formattedText = formattedText.split(src).join(imageFile.uri);
       } catch (err) {
-        console.warn(`[Reader] Failed to download image ${url}:`, err);
+        console.warn(`[Reader] Failed to download image ${imageUrl}:`, err);
       }
     }
   }
@@ -295,7 +284,6 @@ export async function downloadSingleChapter(
   file.create({ intermediates: true, overwrite: true });
   file.write(formattedText);
 
-  // Update DB
   upsertChapter(db, {
     novelId: chapter.novelId,
     index: chapter.index,
@@ -326,7 +314,6 @@ export async function readChapterText(
   const file = getChapterFile(siteNovelId, chapter.index);
   console.log(`[Reader] Looking for file at: ${file.uri}`);
 
-  // Try reading from disk first
   if (file.exists) {
     try {
       const text = await file.text();
@@ -336,13 +323,12 @@ export async function readChapterText(
       }
       console.warn(`[Reader] File exists but is empty: ${file.uri}`);
     } catch (err) {
-      console.warn(`[Reader] Error reading file:`, err);
+      console.warn("[Reader] Error reading file:", err);
     }
   } else {
     console.warn(`[Reader] File does not exist: ${file.uri}`);
   }
 
-  // Fallback: re-download from site
   if (db && siteType && chapter.url) {
     console.log(
       `[Reader] Attempting re-download for chapter ${chapter.index}...`,
@@ -350,12 +336,16 @@ export async function readChapterText(
     try {
       return await downloadSingleChapter(db, chapter, siteNovelId, siteType);
     } catch (err: any) {
-      console.error(`[Reader] Re-download failed:`, err);
-      throw new Error(`再ダウンロードに失敗しました: ${err.message || '通信エラー'}`);
+      console.error("[Reader] Re-download failed:", err);
+      throw new Error(
+        `Failed to re-download chapter: ${err.message || "network error"}`,
+      );
     }
   }
 
-  throw new Error("保存されたファイルが空です。通信環境の良い場所で再度お試しください。");
+  throw new Error(
+    "No local chapter file and no network fallback available for this chapter.",
+  );
 }
 
 /**

@@ -3,6 +3,7 @@
  * Components subscribe to progress updates via useBulkDownloadProgress hook.
  */
 import type { SQLiteDatabase } from 'expo-sqlite';
+import { useSyncExternalStore } from 'react';
 import type { Novel } from '../types/novel';
 import {
     startBulkDownload as _startBulkDownload,
@@ -67,8 +68,6 @@ export function cancelDownload(novelId: number): void {
 }
 
 // ── React hook ──
-
-import { useSyncExternalStore } from 'react';
 
 export function useBulkDownloadProgress(novelId: number): BulkDownloadProgress | null {
     return useSyncExternalStore(

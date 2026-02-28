@@ -220,6 +220,7 @@ ${fontLink}
   var content = document.getElementById('content');
   var isVertical = ${isVertical};
   var reverseDirection = ${settings.reversePageDirection ? 'true' : 'false'};
+  var pageTurnAnimation = ${settings.pageTurnAnimation ? 'true' : 'false'};
   var pageStepPx = 0;
   var containerW = 0;
   var containerH = 0;
@@ -314,13 +315,19 @@ ${fontLink}
     if (isVertical && content) {
       var offset = pageBoundaries[page] || 0;
       currentVisualOffset = offset;
-      updateMaskForOffset(offset, true);
-      content.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+      updateMaskForOffset(offset, pageTurnAnimation);
+      content.style.transition = pageTurnAnimation
+        ? 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+        : 'none';
       content.style.transform = 'translateX(' + offset + 'px)';
     } else {
       var maxOff = Math.max(0, reader.scrollWidth - pageStepPx);
       var offset = Math.min(page * pageStepPx, maxOff);
-      reader.scrollLeft = offset;
+      if (pageTurnAnimation && reader.scrollTo) {
+        reader.scrollTo({ left: offset, top: 0, behavior: 'smooth' });
+      } else {
+        reader.scrollLeft = offset;
+      }
     }
     sendPageInfo();
   }
@@ -359,6 +366,7 @@ ${fontLink}
       if (s.marginBottom !== undefined) root.style.setProperty('--marginB', s.marginBottom + 'px');
       if (s.paragraphSpacing !== undefined) root.style.setProperty('--paragraphSpacing', String(s.paragraphSpacing));
       if (s.reversePageDirection !== undefined) reverseDirection = s.reversePageDirection;
+      if (s.pageTurnAnimation !== undefined) pageTurnAnimation = !!s.pageTurnAnimation;
 
       if (s.fontFamily !== undefined) {
         var ff = '"Noto Serif JP", "游明朝", "YuMincho", "ヒラギノ明朝 ProN", serif';
@@ -374,7 +382,7 @@ ${fontLink}
     } catch(ex) { }
   }
 
-  var touchStartX = 0, touchStartY = 0, touchStartTime = 0, touchMoved = false, baseOffset = 0, isDragging = false, animationFrameId = null;
+  var touchStartX = 0, touchStartY = 0, touchMoved = false, isDragging = false;
 
   document.body.addEventListener('touchstart', function(e) {
     if (e.touches.length > 1) return;
@@ -382,11 +390,8 @@ ${fontLink}
     if (target.tagName.toLowerCase() === 'img' || (target.closest && target.closest('a'))) {
       touchMoved = false; isDragging = false; return;
     }
-    touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY; touchStartTime = Date.now();
+    touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY;
     touchMoved = false; isDragging = true;
-    if (isVertical && content) {
-      content.style.transition = 'none'; baseOffset = currentVisualOffset;
-    }
   }, { passive: false });
 
   document.body.addEventListener('touchmove', function(e) {
@@ -394,81 +399,14 @@ ${fontLink}
     var currentX = e.touches[0].clientX, currentY = e.touches[0].clientY;
     var dx = currentX - touchStartX, dy = currentY - touchStartY;
     if (Math.abs(dx) > 10 || Math.abs(dy) > 10) touchMoved = true;
-
-    if (isVertical && content && touchMoved && Math.abs(dx) > Math.abs(dy) * 0.5) {
-        e.preventDefault();
-        if (animationFrameId) cancelAnimationFrame(animationFrameId);
-        animationFrameId = requestAnimationFrame(function() {
-            var target = baseOffset + dx;
-            var maxOff = totalPages > 0 ? (pageBoundaries[totalPages - 1] || 0) : 0;
-            if (target < 0) target = target * 0.3;
-            else if (target > maxOff) target = maxOff + (target - maxOff) * 0.3;
-            currentVisualOffset = target;
-            updateMaskForOffset(target, false);
-            content.style.transform = 'translateX(' + target + 'px)';
-            animationFrameId = null;
-        });
-    }
   }, { passive: false });
 
   document.body.addEventListener('touchend', function(e) {
     if (!isDragging) return;
     isDragging = false;
     var endX = e.changedTouches[0].clientX, endY = e.changedTouches[0].clientY;
-    var dx = endX - touchStartX, dy = endY - touchStartY;
-    var elapsed = Date.now() - touchStartTime;
-    var absDx = Math.abs(dx), absDy = Math.abs(dy);
-
-    if (isVertical && content) {
-      if (touchMoved) {
-        var velocity = dx / Math.max(1, elapsed);
-        var amplitude = velocity * 150;
-        var targetOffset = currentVisualOffset + amplitude;
-        var maxOffset = content.scrollWidth - reader.clientWidth;
-        targetOffset = Math.max(0, Math.min(maxOffset, targetOffset));
-        content.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
-        
-        var bestPage = currentPage;
-        var minDiff = Infinity;
-        for (var i = 0; i < totalPages; i++) {
-          var diff = Math.abs(pageBoundaries[i] - targetOffset);
-          if (diff < minDiff) { minDiff = diff; bestPage = i; }
-        }
-        
-        var isFastSwipe = Math.abs(velocity) > 0.5;
-        if (isFastSwipe) {
-          if (velocity < -0.5 && reverseDirection && currentPage < totalPages - 1) bestPage = currentPage + 1;
-          else if (velocity > 0.5 && reverseDirection && currentPage > 0) bestPage = currentPage - 1;
-          else if (velocity < -0.5 && !reverseDirection && currentPage > 0) bestPage = currentPage - 1;
-          else if (velocity > 0.5 && !reverseDirection && currentPage < totalPages - 1) bestPage = currentPage + 1;
-        }
-
-        if (bestPage === currentPage && (velocity < -0.8 || dx < -containerW * 0.2)) {
-          if (reverseDirection) goNextPage(); else goPrevPage();
-          return;
-        } else if (bestPage === currentPage && (velocity > 0.8 || dx > containerW * 0.2)) {
-          if (reverseDirection) goPrevPage(); else goNextPage();
-          return;
-        }
-
-        goToPage(bestPage);
-      } else {
-        handleClickBoundary(endX, endY);
-      }
-    } else {
-      if (touchMoved) {
-        if (absDx > absDy && absDx > 40 && elapsed < 500) {
-          if (dx < 0) { if (reverseDirection) goPrevPage(); else goNextPage(); }
-          else { if (reverseDirection) goNextPage(); else goPrevPage(); }
-        } else {
-          calcPages();
-          currentPage = Math.round(reader.scrollLeft / pageStepPx);
-          sendPageInfo();
-        }
-      } else {
-        handleClickBoundary(endX, endY);
-      }
-    }
+    if (touchMoved) return;
+    handleClickBoundary(endX, endY);
   });
 
   function handleClickBoundary(x, y) {
@@ -477,9 +415,9 @@ ${fontLink}
       content.style.transform = 'translateX(' + currentVisualOffset + 'px)';
     }
   
-    if (x < containerW * 0.3) {
+    if (x < containerW * 0.4) {
       if (reverseDirection) goNextPage(); else goPrevPage();
-    } else if (x > containerW * 0.7) {
+    } else if (x > containerW * 0.6) {
       if (reverseDirection) goPrevPage(); else goNextPage();
     } else {
       window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'toggle-toolbar' }));

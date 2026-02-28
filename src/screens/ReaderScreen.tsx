@@ -18,19 +18,18 @@ import {
 import { WebView } from "react-native-webview";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
-import type { Novel } from "../types/novel";
+import type { Novel, ReaderSettings } from "../types/novel";
 import { useSQLiteContext } from "expo-sqlite";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useTheme } from "../theme/ThemeContext";
 import { Spacing, Typography } from "../theme/colors";
 import type { RootStackScreenProps } from "../navigation/types";
-import type { ReaderSettings } from "../types/novel";
 import {
   getNovelById,
   getChapter,
   getReaderSettings,
-  upsertReadingProgress,
+  upsertReadingProgressIfChanged,
   saveReaderSettings,
   upsertChapter,
   updateNovel,
@@ -96,6 +95,14 @@ export default function ReaderScreen({
   const settingsAnim = useRef(new Animated.Value(0)).current;
   const toolbarAnim = useRef(new Animated.Value(1)).current;
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const settingsSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const progressSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const latestProgressRef = useRef<{ progress: number; page: number } | null>(null);
+  const lastSyncedProgressRef = useRef<{
+    novelId: number;
+    chapterIndex: number;
+    progress: number;
+  } | null>(null);
 
   // Load novel info
   useEffect(() => {
@@ -193,6 +200,29 @@ export default function ReaderScreen({
     };
   }, [db, novelId, chapterIndex, novel, retryCount]);
 
+  useEffect(() => {
+    if (settingsSaveTimeoutRef.current) {
+      clearTimeout(settingsSaveTimeoutRef.current);
+    }
+    settingsSaveTimeoutRef.current = setTimeout(() => {
+      saveReaderSettings(db, settings);
+    }, 320);
+    return () => {
+      if (settingsSaveTimeoutRef.current) {
+        clearTimeout(settingsSaveTimeoutRef.current);
+        settingsSaveTimeoutRef.current = null;
+      }
+    };
+  }, [db, settings]);
+
+  useEffect(() => {
+    latestProgressRef.current = null;
+    if (progressSaveTimeoutRef.current) {
+      clearTimeout(progressSaveTimeoutRef.current);
+      progressSaveTimeoutRef.current = null;
+    }
+  }, [chapterIndex]);
+
   const readerTheme = useMemo(() => {
     const themes = {
       light: { bg: "#FAF7F2", fg: "#2C2C2C", selection: "rgba(45,95,79,0.2)" },
@@ -267,7 +297,6 @@ export default function ReaderScreen({
     (key: keyof ReaderSettings, value: any) => {
       setSettings((prev) => {
         const updated = { ...prev, [key]: value };
-        saveReaderSettings(db, updated);
 
         // Send style update to WebView via postMessage (no reload)
         webViewRef.current?.postMessage(
@@ -283,6 +312,7 @@ export default function ReaderScreen({
               paragraphSpacing: updated.paragraphSpacing,
               writingMode: updated.writingMode,
               reversePageDirection: updated.reversePageDirection,
+              pageTurnAnimation: updated.pageTurnAnimation,
               showImages: updated.showImages,
             },
           }),
@@ -291,7 +321,7 @@ export default function ReaderScreen({
         return updated;
       });
     },
-    [db],
+    [],
   );
 
   // ========================================================
@@ -322,30 +352,89 @@ export default function ReaderScreen({
     initialProgress,
   ]);
 
+  const webViewSource = useMemo(
+    () => ({ html: htmlContent, baseUrl: "file:///" }),
+    [htmlContent],
+  );
+
   const handleMessage = useCallback(
     (event: any) => {
       try {
         const data = JSON.parse(event.nativeEvent.data);
         if (data.type === "page-info") {
-          setCurrentPage(data.currentPage);
-          setTotalPages(data.totalPages);
-          upsertReadingProgress(db, novelId, chapterIndex, data.progress);
+          const nextPage =
+            typeof data.currentPage === "number" ? data.currentPage : 1;
+          const nextTotalPages =
+            typeof data.totalPages === "number" ? data.totalPages : 1;
+          const nextProgress =
+            typeof data.progress === "number" ? data.progress : 0;
+
+          setCurrentPage((prev) => (prev === nextPage ? prev : nextPage));
+          setTotalPages((prev) =>
+            prev === nextTotalPages ? prev : nextTotalPages,
+          );
+
+          const flushProgress = (force: boolean) => {
+            const latest = latestProgressRef.current;
+            if (!latest) return;
+            upsertReadingProgressIfChanged(db, novelId, chapterIndex, latest.progress, {
+              minIntervalMs: 800,
+              minProgressDelta: 0.01,
+              force,
+            });
+          };
+
+          const prevPage = latestProgressRef.current?.page ?? null;
+          latestProgressRef.current = { progress: nextProgress, page: nextPage };
+
+          if (prevPage !== null && prevPage !== nextPage) {
+            if (progressSaveTimeoutRef.current) {
+              clearTimeout(progressSaveTimeoutRef.current);
+              progressSaveTimeoutRef.current = null;
+            }
+            flushProgress(true);
+          } else if (!progressSaveTimeoutRef.current) {
+            progressSaveTimeoutRef.current = setTimeout(() => {
+              progressSaveTimeoutRef.current = null;
+              flushProgress(false);
+            }, 800);
+          }
 
           if (syncService.isSignedIn() && novel) {
             if (syncTimeoutRef.current) {
               clearTimeout(syncTimeoutRef.current);
             }
+            const payload = {
+              novelId: novel.id,
+              siteNovelId: novel.siteNovelId,
+              siteType: novel.siteType,
+              currentChapter: chapterIndex,
+              scrollPercentage: nextProgress,
+              lastReadAt: new Date().toISOString(),
+            };
             syncTimeoutRef.current = setTimeout(() => {
+              const lastSynced = lastSyncedProgressRef.current;
+              if (
+                lastSynced &&
+                lastSynced.novelId === payload.novelId &&
+                lastSynced.chapterIndex === payload.currentChapter &&
+                Math.abs(lastSynced.progress - payload.scrollPercentage) < 0.0001
+              ) {
+                return;
+              }
+
               syncService
-                .uploadProgress({
-                  novelId: novel.id,
-                  siteNovelId: novel.siteNovelId,
-                  siteType: novel.siteType,
-                  currentChapter: chapterIndex,
-                  scrollPercentage: data.progress,
-                  lastReadAt: new Date().toISOString(),
+                .uploadProgress(payload)
+                .then(() => {
+                  lastSyncedProgressRef.current = {
+                    novelId: payload.novelId,
+                    chapterIndex: payload.currentChapter,
+                    progress: payload.scrollPercentage,
+                  };
                 })
-                .catch(console.error);
+                .catch((err) => {
+                  console.error("[Sync] uploadProgress failed", err);
+                });
             }, 5000);
           }
         } else if (data.type === "next") {
@@ -359,7 +448,9 @@ export default function ReaderScreen({
         } else if (data.type === "log") {
           console.log("[WebView]", data.message);
         }
-      } catch { }
+      } catch (err) {
+        console.warn("[Reader] Failed to handle WebView message", err);
+      }
     },
     [db, novelId, chapterIndex, goNextChapter, goPrevChapter, toggleToolbar, novel],
   );
@@ -368,6 +459,12 @@ export default function ReaderScreen({
     return () => {
       if (syncTimeoutRef.current) {
         clearTimeout(syncTimeoutRef.current);
+      }
+      if (settingsSaveTimeoutRef.current) {
+        clearTimeout(settingsSaveTimeoutRef.current);
+      }
+      if (progressSaveTimeoutRef.current) {
+        clearTimeout(progressSaveTimeoutRef.current);
       }
     };
   }, []);
@@ -379,7 +476,7 @@ export default function ReaderScreen({
 
   return (
     <View style={styles.container}>
-      <StatusBar hidden={settings.fullscreen} />
+      <StatusBar hidden={settings.fullscreen} style={mode === 'dark' ? 'light' : 'dark'} />
 
       {/* Toolbar — in normal flow above WebView */}
       <View
@@ -450,7 +547,7 @@ export default function ReaderScreen({
         <WebView
           ref={webViewRef}
           originWhitelist={["*"]}
-          source={{ html: htmlContent, baseUrl: "file:///" }}
+          source={webViewSource}
           style={{ flex: 1, backgroundColor: readerTheme.bg }}
           onMessage={handleMessage}
           scrollEnabled={false}
@@ -824,6 +921,31 @@ export default function ReaderScreen({
             >
               <Text style={[styles.settingBtnText, { color: readerTheme.fg }]}>
                 {settings.reversePageDirection ? "ON" : "OFF"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Page Turn Animation Toggle */}
+          <View style={styles.settingRow}>
+            <Text style={[styles.settingLabel, { color: readerTheme.fg }]}>
+              ページ送りアニメーション
+            </Text>
+            <TouchableOpacity
+              style={[
+                styles.toggleBtn,
+                {
+                  backgroundColor: settings.pageTurnAnimation
+                    ? readerTheme.fg + "20"
+                    : "transparent",
+                  borderColor: readerTheme.fg + "30",
+                },
+              ]}
+              onPress={() =>
+                updateSetting("pageTurnAnimation", !settings.pageTurnAnimation)
+              }
+            >
+              <Text style={[styles.settingBtnText, { color: readerTheme.fg }]}>
+                {settings.pageTurnAnimation ? "ON" : "OFF"}
               </Text>
             </TouchableOpacity>
           </View>

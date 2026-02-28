@@ -1,4 +1,4 @@
-import type { ReadingProgress, SiteType, Novel } from '../types/novel';
+import type { ReadingProgress, Novel } from '../types/novel';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
@@ -14,8 +14,12 @@ export interface SyncService {
     uploadProgress(progress: ReadingProgress): Promise<void>;
     /** Download latest progress for a novel */
     downloadProgress(siteNovelId: string, siteType: string): Promise<ReadingProgress | null>;
+    /** Download all progress entries for the signed-in user */
+    downloadAllProgress(): Promise<Record<string, ReadingProgress>>;
     /** Upload the entire library list */
     uploadLibrary(novels: Novel[]): Promise<void>;
+    /** Upload progress entries in batch */
+    uploadProgressBatch(progresses: ReadingProgress[]): Promise<void>;
     /** Download the library list and deleted tombstones */
     downloadLibrary(): Promise<{ novels: Partial<Novel>[], deletedAt: Record<string, number> } | null>;
     /** Mark a novel as deleted in the synced library to prevent re-downloading */
@@ -102,6 +106,32 @@ export const syncService: SyncService = {
         return null;
     },
 
+    async downloadAllProgress() {
+        const user = auth().currentUser;
+        if (!user) return {};
+
+        try {
+            const snapshot = await firestore()
+                .collection('users')
+                .doc(user.uid)
+                .collection('reading_progress')
+                .get();
+
+            const map: Record<string, ReadingProgress> = {};
+            snapshot.forEach((doc) => {
+                const data = doc.data() as Partial<ReadingProgress> | undefined;
+                if (!data?.siteNovelId || !data?.siteType) return;
+                const key = `${data.siteType}_${data.siteNovelId}`;
+                map[key] = data as ReadingProgress;
+            });
+
+            return map;
+        } catch (error) {
+            console.error('Download all progress failed', error);
+            return {};
+        }
+    },
+
     async uploadLibrary(novels: Novel[]) {
         const user = auth().currentUser;
         if (!user) return;
@@ -133,6 +163,34 @@ export const syncService: SyncService = {
                 }, { merge: true });
         } catch (error) {
             console.error('Upload library failed', error);
+        }
+    },
+
+    async uploadProgressBatch(progresses: ReadingProgress[]) {
+        const user = auth().currentUser;
+        if (!user || progresses.length === 0) return;
+
+        const chunkSize = 400; // keep margin under firestore batch limit(500)
+        try {
+            for (let i = 0; i < progresses.length; i += chunkSize) {
+                const chunk = progresses.slice(i, i + chunkSize);
+                const batch = firestore().batch();
+                for (const progress of chunk) {
+                    const docId = `${progress.siteType}_${progress.siteNovelId}`;
+                    const ref = firestore()
+                        .collection('users')
+                        .doc(user.uid)
+                        .collection('reading_progress')
+                        .doc(docId);
+                    batch.set(ref, {
+                        ...progress,
+                        updatedAt: firestore.FieldValue.serverTimestamp(),
+                    }, { merge: true });
+                }
+                await batch.commit();
+            }
+        } catch (error) {
+            console.error('Upload progress batch failed', error);
         }
     },
 

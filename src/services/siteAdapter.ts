@@ -3,6 +3,10 @@
  * Each supported site implements this interface.
  */
 import type { SiteType } from '../types/novel';
+import { syosetuAdapter } from './adapters/syosetuAdapter';
+import { nocturneAdapter } from './adapters/nocturneAdapter';
+import { kakuyomuAdapter } from './adapters/kakuyomuAdapter';
+import { hamelnAdapter } from './adapters/hamelnAdapter';
 
 /** Metadata returned by site search / novel info retrieval */
 export interface NovelInfo {
@@ -57,11 +61,6 @@ export interface SiteAdapter {
 
 /** Registry of adapters by site type */
 const adapterRegistry = new Map<SiteType, SiteAdapter>();
-
-import { syosetuAdapter } from './adapters/syosetuAdapter';
-import { nocturneAdapter } from './adapters/nocturneAdapter';
-import { kakuyomuAdapter } from './adapters/kakuyomuAdapter';
-import { hamelnAdapter } from './adapters/hamelnAdapter';
 
 export function registerAdapter(adapter: SiteAdapter): void {
     adapterRegistry.set(adapter.siteType, adapter);

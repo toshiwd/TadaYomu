@@ -120,8 +120,7 @@ export function insertNovel(db: SQLiteDatabase, novel: Omit<Novel, 'id'>): numbe
 
 export function updateNovel(db: SQLiteDatabase, id: number, updates: Partial<Novel>): void {
     const fields: string[] = [];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const values: any[] = [];
+    const values: (string | number | null)[] = [];
 
     if (updates.title !== undefined) { fields.push('title = ?'); values.push(updates.title); }
     if (updates.author !== undefined) { fields.push('author = ?'); values.push(updates.author); }
@@ -218,6 +217,48 @@ export function upsertReadingProgress(
        last_read_at = datetime('now')`,
         [novelId, chapter, scroll]
     );
+}
+
+export function upsertReadingProgressIfChanged(
+    db: SQLiteDatabase,
+    novelId: number,
+    chapter: number,
+    scroll: number,
+    options?: {
+        minIntervalMs?: number;
+        minProgressDelta?: number;
+        force?: boolean;
+    },
+): boolean {
+    const minIntervalMs = options?.minIntervalMs ?? 800;
+    const minProgressDelta = options?.minProgressDelta ?? 0.01;
+    const force = options?.force === true;
+
+    const current = db.getFirstSync(
+        'SELECT current_chapter, scroll_percentage, last_read_at FROM reading_progress WHERE novel_id = ?',
+        [novelId],
+    ) as {
+        current_chapter: number;
+        scroll_percentage: number;
+        last_read_at: string;
+    } | null;
+
+    if (!current || force) {
+        upsertReadingProgress(db, novelId, chapter, scroll);
+        return true;
+    }
+
+    const chapterChanged = current.current_chapter !== chapter;
+    const progressDelta = Math.abs((current.scroll_percentage ?? 0) - scroll);
+    const elapsed = Date.now() - parseSQLiteDateMs(current.last_read_at);
+    const intervalPassed = elapsed >= minIntervalMs;
+
+    if (chapterChanged || progressDelta >= minProgressDelta || intervalPassed) {
+        upsertReadingProgress(db, novelId, chapter, scroll);
+        return true;
+    }
+
+    return false;
 }
 
 // ── Bookmarks ──
@@ -320,4 +361,15 @@ function mapRowToChapter(row: ChapterRow): Chapter {
 
 function safeParseJson<T>(str: string, fallback: T): T {
     try { return JSON.parse(str); } catch { return fallback; }
+}
+
+function parseSQLiteDateMs(raw: string): number {
+    if (!raw) return 0;
+    if (raw.includes('T')) {
+        const t = Date.parse(raw);
+        return Number.isNaN(t) ? 0 : t;
+    }
+    const normalized = raw.replace(' ', 'T') + 'Z';
+    const t = Date.parse(normalized);
+    return Number.isNaN(t) ? 0 : t;
 }

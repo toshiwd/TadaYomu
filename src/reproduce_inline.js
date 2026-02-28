@@ -40,20 +40,6 @@ function fetchUrl(url) {
     });
 }
 
-function stripHtml(html) {
-    return html
-        .replace(/<ruby>([^<]*)<rb>([^<]*)<\/rb><rp>[^<]*<\/rp><rt>([^<]*)<\/rt><rp>[^<]*<\/rp><\/ruby>/g, '$2')
-        .replace(/<br\s*\/?>/gi, '\n')
-        .replace(/<[^>]+>/g, '')
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/&nbsp;/g, ' ')
-        .trim();
-}
-
 function htmlToNovelFormat(html) {
     let text = html;
     text = text.replace(/<br\s*\/?>/gi, '\n');

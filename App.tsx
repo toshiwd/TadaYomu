@@ -31,20 +31,32 @@ function AppContent() {
         console.log('[Sync] User signed in. Syncing progress...');
         try {
           const novels = getAllNovels(db);
-          for (const novel of novels) {
-            const cloudProgress = await syncService.downloadProgress(novel.siteNovelId, novel.siteType);
-            if (cloudProgress) {
-              const localProgress = getReadingProgress(db, novel.id);
-              const localR = localProgress ? localProgress.currentChapter : 0;
+          const cloudMap = await syncService.downloadAllProgress();
+          const localAhead: Parameters<typeof syncService.uploadProgressBatch>[0] = [];
 
-              if (cloudProgress.currentChapter > localR) {
-                // Cloud is ahead
-                upsertReadingProgress(db, novel.id, cloudProgress.currentChapter, cloudProgress.scrollPercentage || 0);
-              } else if (localProgress && localR > cloudProgress.currentChapter) {
-                // Local is ahead, upload to update cloud
-                syncService.uploadProgress(localProgress);
-              }
+          for (const novel of novels) {
+            const key = `${novel.siteType}_${novel.siteNovelId}`;
+            const cloudProgress = cloudMap[key];
+            const localProgress = getReadingProgress(db, novel.id);
+            const localChapter = localProgress ? localProgress.currentChapter : 0;
+            const cloudChapter = cloudProgress ? cloudProgress.currentChapter : 0;
+
+            if (cloudProgress && cloudChapter > localChapter) {
+              // Cloud is ahead
+              upsertReadingProgress(
+                db,
+                novel.id,
+                cloudProgress.currentChapter,
+                cloudProgress.scrollPercentage || 0,
+              );
+            } else if (localProgress && localChapter > cloudChapter) {
+              // Local is ahead, upload in batch
+              localAhead.push(localProgress);
             }
+          }
+
+          if (localAhead.length > 0) {
+            await syncService.uploadProgressBatch(localAhead);
           }
           console.log('[Sync] Initial progress sync complete.');
         } catch (err) {

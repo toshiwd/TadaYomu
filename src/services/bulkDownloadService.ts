@@ -3,7 +3,7 @@
  * retry with exponential backoff, and cancellation support.
  */
 import type { SQLiteDatabase } from 'expo-sqlite';
-import type { Novel, Chapter } from '../types/novel';
+import type { Novel } from '../types/novel';
 import {
     getChaptersByNovelId, countDownloadedChapters, updateNovel, getReadingProgress
 } from '../database/repository';
@@ -23,6 +23,7 @@ type ProgressCallback = (progress: BulkDownloadProgress) => void;
 const MAX_PARALLEL = 2;
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 1000;
+const PERSIST_EVERY = 5;
 
 /** Active jobs keyed by novelId */
 const activeJobs = new Map<number, { cancelled: boolean }>();
@@ -65,6 +66,7 @@ export async function startBulkDownload(
     const queue = [...pending];
     let errorOccurred = false;
     let errorMessage = '';
+    let completedSincePersist = 0;
 
     async function processOne(): Promise<void> {
         while (queue.length > 0 && !job.cancelled && !errorOccurred) {
@@ -99,8 +101,12 @@ export async function startBulkDownload(
             }
 
             if (success && !job.cancelled) {
-                downloaded = countDownloadedChapters(db, novel.id);
-                updateNovel(db, novel.id, { downloadedEpisodes: downloaded });
+                downloaded += 1;
+                completedSincePersist += 1;
+                if (completedSincePersist >= PERSIST_EVERY) {
+                    updateNovel(db, novel.id, { downloadedEpisodes: downloaded });
+                    completedSincePersist = 0;
+                }
                 onProgress({ state: 'running', downloaded, total });
             }
         }
@@ -116,8 +122,13 @@ export async function startBulkDownload(
     activeJobs.delete(novel.id);
 
     // Final state
-    downloaded = countDownloadedChapters(db, novel.id);
-    updateNovel(db, novel.id, { downloadedEpisodes: downloaded });
+    if (completedSincePersist > 0) {
+        updateNovel(db, novel.id, { downloadedEpisodes: downloaded });
+        completedSincePersist = 0;
+    } else {
+        downloaded = countDownloadedChapters(db, novel.id);
+        updateNovel(db, novel.id, { downloadedEpisodes: downloaded });
+    }
 
     if (job.cancelled) {
         onProgress({ state: 'paused', downloaded, total });

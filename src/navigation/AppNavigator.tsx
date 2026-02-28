@@ -9,7 +9,6 @@ import { Colors } from "../theme/colors";
 import type { RootStackParamList, MainTabParamList } from "./types";
 
 import LibraryScreen from "../screens/LibraryScreen";
-import UpdatesScreen from "../screens/UpdatesScreen";
 import SearchScreen from "../screens/SearchScreen";
 import SettingsScreen from "../screens/SettingsScreen";
 import ReaderScreen from "../screens/ReaderScreen";

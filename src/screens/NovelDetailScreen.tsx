@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useRef, useMemo } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -9,12 +9,12 @@ import {
   ActivityIndicator,
   ToastAndroid,
   Platform,
-  Linking,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Network from "expo-network";
 import { useSQLiteContext } from "expo-sqlite";
 import { useFocusEffect } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useTheme } from "../theme/ThemeContext";
 import { Spacing, Typography, Radius } from "../theme/colors";
@@ -49,6 +49,7 @@ export default function NovelDetailScreen({
 }: RootStackScreenProps<"NovelDetail">) {
   const { colors } = useTheme();
   const db = useSQLiteContext();
+  const insets = useSafeAreaInsets();
   const novelId = route.params.novelId;
 
   const [novel, setNovel] = useState<Novel | null>(null);
@@ -59,95 +60,18 @@ export default function NovelDetailScreen({
   const [isSynopsisExpanded, setIsSynopsisExpanded] = useState(false);
   const [fetchingChapters, setFetchingChapters] = useState(false);
 
-  // Subscribe to global bulk download store
   const storeProgress = useBulkDownloadProgress(novelId);
   const bulkState: BulkDownloadState = storeProgress?.state ?? "idle";
   const bulkProgress = storeProgress
     ? { downloaded: storeProgress.downloaded, total: storeProgress.total }
     : { downloaded: 0, total: 0 };
-
-  const fetchChapterList = useCallback(async (n: Novel) => {
-    const adapter = getAdapter(n.siteType);
-    if (!adapter) return;
-    setFetchingChapters(true);
-    try {
-      const chapterList = await adapter.getChapterList(n.siteNovelId);
-      db.withTransactionSync(() => {
-        for (const ch of chapterList) {
-          upsertChapter(db, {
-            novelId: n.id,
-            index: ch.index,
-            title: ch.title,
-            localPath: null,
-            isDownloaded: false,
-            url: ch.url,
-            publishedAt: ch.publishedAt,
-            revisedAt: ch.revisedAt,
-          });
-        }
-      });
-      updateNovel(db, n.id, {
-        totalEpisodes: chapterList.length,
-        lastCheckedAt: new Date().toISOString(),
-      });
-      // Reload
-      setChapters(getChaptersByNovelId(db, n.id));
-      setNovel(getNovelById(db, n.id));
-    } catch (err) {
-      console.error("Failed to fetch chapter list", err);
-    } finally {
-      setFetchingChapters(false);
-    }
-  }, [db]);
-
-  const loadData = useCallback(() => {
-    const n = getNovelById(db, novelId);
-    setNovel(n);
-    if (n) {
-      const localChapters = getChaptersByNovelId(db, novelId);
-      setChapters(localChapters);
-
-      // 同期で追加されたがチャプターが未取得の場合、サイトから取得
-      if (localChapters.length === 0 && n.url) {
-        fetchChapterList(n);
-      }
-
-      const progress = getReadingProgress(db, novelId);
-      if (progress) setCurrentChapter(progress.currentChapter);
-
-      // Check cloud for newer progress
-      if (syncService.isSignedIn()) {
-        syncService
-          .downloadProgress(n.siteNovelId, n.siteType)
-          .then((remoteProgress) => {
-            if (remoteProgress) {
-              const localTime = progress
-                ? new Date(progress.lastReadAt).getTime()
-                : 0;
-              const remoteTime = new Date(remoteProgress.lastReadAt).getTime();
-
-              // If remote is newer, use it
-              if (remoteTime > localTime) {
-                setCurrentChapter(remoteProgress.currentChapter);
-                upsertReadingProgress(
-                  db,
-                  novelId,
-                  remoteProgress.currentChapter,
-                  remoteProgress.scrollPercentage,
-                );
-              }
-            }
-          })
-          .catch(console.error);
-      }
-    }
-  }, [db, novelId, fetchChapterList]);
-
-  useFocusEffect(
-    useCallback(() => {
-      loadData();
-    }, [loadData]),
-  );
+  const bulkPercent = useMemo(() => {
+    if (!bulkProgress.total) return 0;
+    return Math.max(
+      0,
+      Math.min(100, (bulkProgress.downloaded / bulkProgress.total) * 100),
+    );
+  }, [bulkProgress.downloaded, bulkProgress.total]);
 
   const showToast = (msg: string) => {
     if (Platform.OS === "android") {
@@ -157,16 +81,97 @@ export default function NovelDetailScreen({
     }
   };
 
+  const fetchChapterList = useCallback(
+    async (n: Novel) => {
+      const adapter = getAdapter(n.siteType);
+      if (!adapter) return;
+
+      setFetchingChapters(true);
+      try {
+        const chapterList = await adapter.getChapterList(n.siteNovelId);
+        db.withTransactionSync(() => {
+          for (const ch of chapterList) {
+            upsertChapter(db, {
+              novelId: n.id,
+              index: ch.index,
+              title: ch.title,
+              localPath: null,
+              isDownloaded: false,
+              url: ch.url,
+              publishedAt: ch.publishedAt,
+              revisedAt: ch.revisedAt,
+            });
+          }
+        });
+        updateNovel(db, n.id, {
+          totalEpisodes: chapterList.length,
+          lastCheckedAt: new Date().toISOString(),
+        });
+        setChapters(getChaptersByNovelId(db, n.id));
+        setNovel(getNovelById(db, n.id));
+      } catch (err) {
+        console.error("Failed to fetch chapter list", err);
+      } finally {
+        setFetchingChapters(false);
+      }
+    },
+    [db],
+  );
+
+  const loadData = useCallback(() => {
+    const n = getNovelById(db, novelId);
+    setNovel(n);
+    if (!n) return;
+
+    const localChapters = getChaptersByNovelId(db, novelId);
+    setChapters(localChapters);
+    if (localChapters.length === 0 && n.url) {
+      fetchChapterList(n);
+    }
+
+    const progress = getReadingProgress(db, novelId);
+    if (progress) setCurrentChapter(progress.currentChapter);
+
+    if (syncService.isSignedIn()) {
+      syncService
+        .downloadProgress(n.siteNovelId, n.siteType)
+        .then((remoteProgress) => {
+          if (!remoteProgress) return;
+          const localTime = progress ? new Date(progress.lastReadAt).getTime() : 0;
+          const remoteTime = new Date(remoteProgress.lastReadAt).getTime();
+          if (remoteTime > localTime) {
+            setCurrentChapter(remoteProgress.currentChapter);
+            upsertReadingProgress(
+              db,
+              novelId,
+              remoteProgress.currentChapter,
+              remoteProgress.scrollPercentage,
+            );
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to download cloud progress", err);
+        });
+    }
+  }, [db, novelId, fetchChapterList]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData]),
+  );
+
   const handleBulkDownload = async () => {
     if (!novel || bulkState === "running") return;
     try {
       const networkState = await Network.getNetworkStateAsync();
-      const r = currentChapter;
-      const end = Math.min(chapters.length, r + 50);
-      const start = r + 1;
+      const end = Math.min(chapters.length, currentChapter + 50);
       const pending = chapters.filter(
         (ch) =>
-          ch.index >= start && ch.index <= end && !ch.isDownloaded && ch.url,
+          ch.index > currentChapter &&
+          ch.index <= end &&
+          !ch.isDownloaded &&
+          Boolean(ch.url),
       );
 
       if (
@@ -174,10 +179,10 @@ export default function NovelDetailScreen({
         pending.length > 20
       ) {
         Alert.alert(
-          "モバイル通信での一括ダウンロード",
-          `対象: ${pending.length}話 (見込み約200MB以上)\n挿絵画像が含まれる場合、大量のデータ通信が発生します。\n\n続行しますか？`,
+          "モバイル通信での一括DL",
+          `${pending.length}話のダウンロードを開始します。続行しますか？`,
           [
-            { text: "Wi-Fiを待つ", style: "cancel" },
+            { text: "キャンセル", style: "cancel" },
             {
               text: "続行",
               style: "destructive",
@@ -189,46 +194,65 @@ export default function NovelDetailScreen({
       }
       startGlobalDownload(db, novel);
     } catch (err) {
-      console.error(err);
+      console.error("Failed to start bulk download", err);
       startGlobalDownload(db, novel);
     }
   };
 
   const handleCancelBulk = () => {
-    if (novel) {
-      cancelGlobalDownload(novel.id);
-      showToast("ダウンロードを中断しました");
-    }
+    if (!novel) return;
+    cancelGlobalDownload(novel.id);
+    showToast("一括ダウンロードを中止しました");
   };
 
   const handleToggleArchive = () => {
-    if (novel) {
-      const isArchived = !novel.isArchived;
-      updateNovel(db, novel.id, { isArchived });
-      showToast(isArchived ? "保管庫に移動しました" : "本棚に戻しました");
-      navigation.goBack();
-    }
+    if (!novel) return;
+    const isArchived = !novel.isArchived;
+    updateNovel(db, novel.id, { isArchived });
+    showToast(isArchived ? "アーカイブに移動しました" : "本棚に戻しました");
+    navigation.goBack();
   };
 
   const handleDelete = () => {
-    Alert.alert("削除確認", "この小説を書庫から削除しますか？", [
+    Alert.alert("作品を削除", "この作品を削除しますか？", [
       { text: "キャンセル", style: "cancel" },
       {
         text: "削除",
         style: "destructive",
         onPress: () => {
-          if (novel) {
-            cancelGlobalDownload(novel.id);
-            deleteNovelData(novel.siteNovelId);
-            deleteNovel(db, novel.id);
-            if (syncService.isSignedIn()) {
-              syncService.deleteNovelFromLibrary(novel.siteType, novel.siteNovelId);
-            }
+          if (!novel) return;
+          cancelGlobalDownload(novel.id);
+          deleteNovelData(novel.siteNovelId);
+          deleteNovel(db, novel.id);
+          if (syncService.isSignedIn()) {
+            syncService
+              .deleteNovelFromLibrary(novel.siteType, novel.siteNovelId)
+              .catch(console.error);
           }
           navigation.goBack();
         },
       },
     ]);
+  };
+
+  const handleOpenWeb = () => {
+    if (!novel?.url) return;
+    let domain = `${novel.siteType}.syosetu.com`;
+    if (novel.siteType === "syosetu") domain = "ncode.syosetu.com";
+    else if (
+      novel.siteType === "nocturne" ||
+      novel.siteType === "moonlight" ||
+      novel.siteType === "midnight"
+    ) {
+      domain = "novel18.syosetu.com";
+    } else if (novel.siteType === "kakuyomu") domain = "kakuyomu.jp";
+    else if (novel.siteType === "hameln") domain = "syosetu.org";
+
+    navigation.navigate("SiteBrowser", {
+      siteDomain: domain,
+      siteName: "Web",
+      url: novel.url,
+    });
   };
 
   const handleContinueReading = () => {
@@ -239,32 +263,27 @@ export default function NovelDetailScreen({
     if (!novel || downloadingIndex !== null) return;
     setDownloadingIndex(chapter.index);
     try {
-      await downloadSingleChapter(
-        db,
-        chapter,
-        novel.siteNovelId,
-        novel.siteType,
-      );
-      // Update download count
+      await downloadSingleChapter(db, chapter, novel.siteNovelId, novel.siteType);
       const downloaded = countDownloadedChapters(db, novel.id);
       updateNovel(db, novel.id, { downloadedEpisodes: downloaded });
       loadData();
     } catch (err: any) {
-      Alert.alert("ダウンロード失敗", err?.message || "不明なエラー");
+      Alert.alert("ダウンロード失敗", err?.message || "通信エラー");
     } finally {
       setDownloadingIndex(null);
     }
   };
 
-  const displayChapters = useMemo(() => {
-    return sortOrder === "desc" ? [...chapters].reverse() : chapters;
-  }, [chapters, sortOrder]);
+  const displayChapters = useMemo(
+    () => (sortOrder === "desc" ? [...chapters].reverse() : chapters),
+    [chapters, sortOrder],
+  );
 
   if (!novel) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <Text style={[styles.errorText, { color: colors.text.disabled }]}>
-          小説が見つかりません
+          作品が見つかりません
         </Text>
       </View>
     );
@@ -272,92 +291,103 @@ export default function NovelDetailScreen({
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.surface }]}>
-        <Text
-          style={[styles.title, { color: colors.text.primary }]}
-          numberOfLines={2}
-        >
+      <View
+        style={[
+          styles.header,
+          { backgroundColor: colors.surface, paddingTop: insets.top + Spacing.xs },
+        ]}
+      >
+        <Text style={[styles.title, { color: colors.text.primary }]} numberOfLines={2}>
           {novel.title}
         </Text>
         <View style={styles.authorRow}>
-          <Text
-            style={[styles.author, { color: colors.text.secondary }]}
-            numberOfLines={1}
-          >
+          <Text style={[styles.author, { color: colors.text.secondary }]} numberOfLines={1}>
             {novel.author}
           </Text>
           <Text style={[styles.meta, { color: colors.text.disabled }]}>
-            {novel.downloadedEpisodes}/{novel.totalEpisodes}話 DL済
-            {novel.isComplete ? " · 完結" : " · 連載中"}
-            {novel.siteUpdatedAt ? ` · 更新: ${new Date(novel.siteUpdatedAt).toLocaleDateString('ja-JP')}` : ""}
+            {novel.downloadedEpisodes}/{novel.totalEpisodes}話 DL
           </Text>
         </View>
 
         <View style={styles.actions}>
           <TouchableOpacity
-            style={[
-              styles.continueButton,
-              { backgroundColor: colors.ui.primary },
-            ]}
+            style={[styles.continueButton, { backgroundColor: colors.ui.primary }]}
             onPress={handleContinueReading}
-            activeOpacity={0.7}
-            delayPressIn={0}
+            activeOpacity={0.8}
           >
             <Ionicons name="book" size={14} color="#FFF" />
             <Text style={styles.continueText}>
               {currentChapter > 1 ? `第${currentChapter}話から` : "読む"}
             </Text>
           </TouchableOpacity>
-          {novel.url ? (
+          <View style={styles.actionIcons}>
+            {novel.url ? (
+              <TouchableOpacity
+                style={[styles.iconButton, { borderColor: colors.ui.primary }]}
+                onPress={handleOpenWeb}
+              >
+                <Ionicons name="globe-outline" size={14} color={colors.ui.primary} />
+              </TouchableOpacity>
+            ) : null}
             <TouchableOpacity
-              style={[styles.archiveButton, { borderColor: colors.ui.primary }]}
-              onPress={() => {
-                let domain = novel.siteType + ".syosetu.com"; // Provide a default guess based on type
-                if (novel.siteType === "syosetu") domain = "ncode.syosetu.com";
-                else if (novel.siteType === "nocturne" || novel.siteType === "moonlight" || novel.siteType === "midnight") domain = "novel18.syosetu.com";
-                else if (novel.siteType === "kakuyomu") domain = "kakuyomu.jp";
-                else if (novel.siteType === "hameln") domain = "syosetu.org";
-
-                navigation.navigate("SiteBrowser", {
-                  siteDomain: domain,
-                  siteName: "Webサイト",
-                  url: novel.url,
-                });
-              }}
+              style={[
+                styles.iconButton,
+                {
+                  borderColor: novel.isArchived
+                    ? colors.ui.success
+                    : colors.text.secondary,
+                },
+              ]}
+              onPress={handleToggleArchive}
             >
-              <Ionicons name="globe-outline" size={14} color={colors.ui.primary} />
+              <Ionicons
+                name={novel.isArchived ? "folder-open-outline" : "archive-outline"}
+                size={14}
+                color={novel.isArchived ? colors.ui.success : colors.text.secondary}
+              />
             </TouchableOpacity>
-          ) : null}
-          <TouchableOpacity
-            style={[styles.archiveButton, { borderColor: novel.isArchived ? colors.ui.success : colors.text.secondary }]}
-            onPress={handleToggleArchive}
-          >
-            <Ionicons name={novel.isArchived ? "folder-open-outline" : "archive-outline"} size={14} color={novel.isArchived ? colors.ui.success : colors.text.secondary} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.deleteButton, { borderColor: colors.ui.error }]}
-            onPress={handleDelete}
-          >
-            <Ionicons name="trash-outline" size={14} color={colors.ui.error} />
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.iconButton, { borderColor: colors.ui.error }]}
+              onPress={handleDelete}
+            >
+              <Ionicons name="trash-outline" size={14} color={colors.ui.error} />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
-      {/* Synopsis */}
+      {bulkState === "running" && (
+        <View style={[styles.bulkFixedBar, { backgroundColor: colors.surface }]}>
+          <View style={styles.bulkFixedInfo}>
+            <ActivityIndicator size="small" color={colors.ui.primary} />
+            <Text style={[styles.bulkFixedText, { color: colors.text.primary }]}>
+              一括DL中 {bulkProgress.downloaded}/{bulkProgress.total}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.bulkCancelBtn, { borderColor: colors.ui.error }]}
+            onPress={handleCancelBulk}
+          >
+            <Text style={[styles.bulkCancelText, { color: colors.ui.error }]}>中止</Text>
+          </TouchableOpacity>
+          <View style={[styles.bulkTrack, { backgroundColor: colors.surfaceAlt }]}>
+            <View
+              style={[
+                styles.bulkFill,
+                { backgroundColor: colors.ui.primary, width: `${bulkPercent}%` },
+              ]}
+            />
+          </View>
+        </View>
+      )}
+
       {novel.synopsis ? (
         <TouchableOpacity
           style={styles.synopsisSection}
-          onPress={() => setIsSynopsisExpanded(!isSynopsisExpanded)}
-          activeOpacity={0.7}
+          onPress={() => setIsSynopsisExpanded((prev) => !prev)}
+          activeOpacity={0.8}
         >
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
+          <View style={styles.synopsisHeader}>
             <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
               あらすじ
             </Text>
@@ -368,10 +398,7 @@ export default function NovelDetailScreen({
             />
           </View>
           <Text
-            style={[
-              styles.synopsis,
-              { color: colors.text.secondary, marginTop: 4 },
-            ]}
+            style={[styles.synopsis, { color: colors.text.secondary }]}
             numberOfLines={isSynopsisExpanded ? undefined : 3}
           >
             {novel.synopsis}
@@ -379,9 +406,8 @@ export default function NovelDetailScreen({
         </TouchableOpacity>
       ) : null}
 
-      {/* Chapter list header with bulk DL */}
       <View style={styles.chapterHeader}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <View style={styles.chapterHeaderLeft}>
           <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
             目次 ({fetchingChapters ? "取得中..." : `${chapters.length}話`})
           </Text>
@@ -397,71 +423,22 @@ export default function NovelDetailScreen({
               size={12}
               color={colors.text.secondary}
             />
-            <Text
-              style={[styles.sortBtnText, { color: colors.text.secondary }]}
-            >
+            <Text style={[styles.sortBtnText, { color: colors.text.secondary }]}>
               {sortOrder === "desc" ? "降順" : "昇順"}
             </Text>
           </TouchableOpacity>
         </View>
-        <View style={styles.bulkActions}>
-          {bulkState === "running" ? (
-            <>
-              <View
-                style={[
-                  styles.bulkBtn,
-                  styles.bulkBtnRunning,
-                  { backgroundColor: colors.ui.primary + "15" },
-                ]}
-              >
-                <ActivityIndicator size="small" color={colors.ui.primary} />
-                <Text
-                  style={[styles.bulkBtnText, { color: colors.ui.primary }]}
-                >
-                  {bulkProgress.downloaded}/{bulkProgress.total}
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={[
-                  styles.bulkBtn,
-                  { borderColor: colors.ui.error, borderWidth: 1 },
-                ]}
-                onPress={handleCancelBulk}
-              >
-                <Text style={[styles.bulkBtnText, { color: colors.ui.error }]}>
-                  中断
-                </Text>
-              </TouchableOpacity>
-            </>
-          ) : novel && novel.downloadedEpisodes >= novel.totalEpisodes ? (
-            <View
-              style={[
-                styles.bulkBtn,
-                { backgroundColor: colors.ui.success + "15" },
-              ]}
-            >
-              <Ionicons
-                name="checkmark-circle"
-                size={14}
-                color={colors.ui.success}
-              />
-              <Text style={[styles.bulkBtnText, { color: colors.ui.success }]}>
-                DL済み
-              </Text>
-            </View>
-          ) : (
-            <TouchableOpacity
-              style={[styles.bulkBtn, { backgroundColor: colors.ui.primary }]}
-              onPress={handleBulkDownload}
-            >
-              <Ionicons name="download-outline" size={14} color="#FFF" />
-              <Text style={[styles.bulkBtnText, { color: "#FFF" }]}>
-                一括DL
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        {bulkState !== "running" && (
+          <TouchableOpacity
+            style={[styles.bulkBtn, { backgroundColor: colors.ui.primary }]}
+            onPress={handleBulkDownload}
+          >
+            <Ionicons name="download-outline" size={14} color="#FFF" />
+            <Text style={[styles.bulkBtnText, { color: "#FFF" }]}>一括DL</Text>
+          </TouchableOpacity>
+        )}
       </View>
+
       <FlatList
         data={displayChapters}
         keyExtractor={(item) => String(item.id ?? item.index)}
@@ -472,9 +449,7 @@ export default function NovelDetailScreen({
               styles.chapterRow,
               {
                 backgroundColor:
-                  item.index === currentChapter
-                    ? colors.surfaceAlt
-                    : "transparent",
+                  item.index === currentChapter ? colors.surfaceAlt : "transparent",
               },
             ]}
             onPress={() =>
@@ -483,8 +458,7 @@ export default function NovelDetailScreen({
                 chapterIndex: item.index,
               })
             }
-            activeOpacity={0.5}
-            delayPressIn={0}
+            activeOpacity={0.7}
           >
             <Text
               style={[
@@ -514,10 +488,7 @@ export default function NovelDetailScreen({
             <View style={styles.chapterDates}>
               {item.publishedAt && (
                 <Text style={[styles.chapterDate, { color: colors.text.disabled + "99" }]}>
-                  {new Date(item.publishedAt).toLocaleDateString('ja-JP')}
-                  {item.revisedAt && item.revisedAt !== item.publishedAt && (
-                    <Text style={{ color: colors.ui.primary }}> (改稿)</Text>
-                  )}
+                  {new Date(item.publishedAt).toLocaleDateString("ja-JP")}
                 </Text>
               )}
             </View>
@@ -546,9 +517,8 @@ export default function NovelDetailScreen({
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
-    paddingTop: Spacing.md,
     paddingHorizontal: Spacing.md,
-    paddingBottom: 4,
+    paddingBottom: Spacing.sm,
   },
   title: {
     fontSize: 16,
@@ -565,7 +535,11 @@ const styles = StyleSheet.create({
   },
   author: { ...Typography.caption, flexShrink: 1 },
   meta: { ...Typography.caption },
-  actions: { flexDirection: "row", alignItems: "center", gap: Spacing.sm },
+  actions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
   continueButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -577,7 +551,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   continueText: { color: "#FFF", fontWeight: "700", fontSize: 13 },
-  archiveButton: {
+  actionIcons: { flexDirection: "row", gap: Spacing.xs },
+  iconButton: {
     width: 34,
     height: 34,
     borderRadius: 17,
@@ -585,24 +560,56 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 1,
   },
-  deleteButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    justifyContent: "center",
+  bulkFixedBar: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(0,0,0,0.08)",
+    gap: 6,
+  },
+  bulkFixedInfo: {
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
+  },
+  bulkFixedText: {
+    ...Typography.caption,
+    flex: 1,
+    marginLeft: Spacing.xs,
+    fontWeight: "700",
+  },
+  bulkCancelBtn: {
+    alignSelf: "flex-end",
     borderWidth: 1,
+    borderRadius: Radius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  bulkCancelText: { fontSize: 11, fontWeight: "700" },
+  bulkTrack: {
+    height: 4,
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  bulkFill: {
+    height: "100%",
   },
   synopsisSection: {
     paddingHorizontal: Spacing.md,
     paddingTop: 4,
     paddingBottom: Spacing.xs,
   },
+  synopsisHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
   sectionTitle: {
     fontSize: 14,
     fontFamily: "NotoSansJP_600SemiBold",
     letterSpacing: 0.2,
   },
+  synopsis: { ...Typography.caption, lineHeight: 18, marginTop: 4 },
   chapterHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -610,7 +617,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     marginBottom: 2,
   },
-  bulkActions: { flexDirection: "row", gap: 6 },
+  chapterHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   bulkBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -619,9 +630,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     gap: 4,
   },
-  bulkBtnRunning: {},
   bulkBtnText: { fontSize: 11, fontWeight: "700" },
-  synopsis: { ...Typography.caption, lineHeight: 18 },
   chapterList: { paddingHorizontal: Spacing.sm, paddingBottom: 100 },
   chapterRow: {
     flexDirection: "row",
@@ -660,6 +669,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 3,
     paddingVertical: 2,
+    paddingHorizontal: 6,
     borderRadius: Radius.full,
   },
   sortBtnText: { fontSize: 10, fontWeight: "700" },

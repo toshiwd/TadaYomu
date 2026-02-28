@@ -3,10 +3,9 @@ import * as BackgroundFetch from 'expo-background-fetch';
 import * as Battery from 'expo-battery';
 import * as Network from 'expo-network';
 import { openDatabaseSync } from 'expo-sqlite';
-import { getAllNovels, updateNovel } from '../database/repository';
+import { getAllNovels } from '../database/repository';
 import { checkNovelUpdates } from './downloadManager';
 import { startBulkDownload } from './bulkDownloadService';
-import type { Novel } from '../types/novel';
 
 const BACKGROUND_FETCH_TASK = 'tadayomu-background-fetch';
 

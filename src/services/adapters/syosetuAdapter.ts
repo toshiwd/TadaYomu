@@ -194,7 +194,6 @@ export const syosetuAdapter: SiteAdapter = {
             const base = `${NAROU_BASE}/${lowerId}`;
             const cleanBase = base.endsWith('/') ? base.slice(0, -1) : base;
             const indexUrl = `${cleanBase}/?p=${page}`;
-            // eslint-disable-next-line no-await-in-loop
             const html = await rateLimitedFetch(indexUrl);
 
             let foundInPage = 0;

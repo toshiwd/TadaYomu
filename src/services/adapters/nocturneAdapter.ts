@@ -314,7 +314,6 @@ export const nocturneAdapter: SiteAdapter = {
     },
 
     async getChapterContent(novelId: string, chapterUrl: string): Promise<ChapterContent> {
-        const lowerId = novelId.toLowerCase();
         const html = await rateLimitedFetch(chapterUrl);
 
         let title = '';

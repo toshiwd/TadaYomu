@@ -5,10 +5,10 @@
 /** Supported novel hosting sites */
 export type SiteType =
   | 'syosetu'      // 小説家になろう
-  | 'nocturne'     // ノクターンノベルズ
+  | 'nocturne'     // ノクターンノ�Eルズ
   | 'moonlight'    // ムーンライトノベルズ
   | 'midnight'     // ミッドナイトノベルズ
-  | 'hameln'       // ハーメルン
+  | 'hameln'       // ハ�Eメルン
   | 'kakuyomu';    // カクヨム
 
 /** Novel metadata stored in local database */
@@ -105,7 +105,8 @@ export interface ReaderSettings {
   autoScrollSpeed: number;
   /** Reverse page tap direction (left=next, right=prev) */
   reversePageDirection: boolean;
-  /** Paragraph spacing multiplier (0.0–1.0) */
+  pageTurnAnimation: boolean;
+  /** Paragraph spacing multiplier (0.0 E.0) */
   paragraphSpacing: number;
   /** Fullscreen mode (hide status bar/clock) */
   fullscreen: boolean;
@@ -125,7 +126,10 @@ export const DEFAULT_READER_SETTINGS: ReaderSettings = {
   marginBottom: 28,
   autoScrollSpeed: 0,
   reversePageDirection: false,
+  pageTurnAnimation: true,
   paragraphSpacing: 0.5,
   fullscreen: true,
   showImages: false,
 };
+
+

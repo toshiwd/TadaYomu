@@ -4,10 +4,10 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
-import { useSQLiteContext } from 'expo-sqlite';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '../theme/ThemeContext';
-import { Spacing, Typography, Radius } from '../theme/colors';
+import { Spacing, Radius } from '../theme/colors';
 import type { RootStackScreenProps } from '../navigation/types';
 
 /**
@@ -21,7 +21,7 @@ const NOVEL_URL_PATTERNS = [
     /^https?:\/\/novel18\.syosetu\.com\/n\w+\/?$/i,
     // カクヨム: https://kakuyomu.jp/works/XXXX
     /^https?:\/\/kakuyomu\.jp\/works\/\d+\/?$/i,
-    // ハーメルン: https://syosetu.org/novel/XXXX/
+    // ハ�Eメルン: https://syosetu.org/novel/XXXX/
     /^https?:\/\/syosetu\.org\/novel\/\d+\/?$/i,
 ];
 
@@ -43,10 +43,10 @@ const SITE_HOME_URLS: Record<string, string> = {
 
 export default function SiteBrowserScreen({ route, navigation }: RootStackScreenProps<'SiteBrowser'>) {
     const { colors } = useTheme();
-    const db = useSQLiteContext();
+    const insets = useSafeAreaInsets();
     const webViewRef = useRef<WebView>(null);
 
-    const { siteDomain, siteName, url } = route.params;
+    const { siteDomain, url } = route.params;
     const startUrl = url || SITE_HOME_URLS[siteDomain] || `https://${siteDomain}`;
 
     const [currentUrl, setCurrentUrl] = useState(startUrl);
@@ -76,10 +76,16 @@ export default function SiteBrowserScreen({ route, navigation }: RootStackScreen
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
             {/* Browser toolbar */}
-            <View style={[styles.toolbar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-                <TouchableOpacity onPress={handleGoBack} style={styles.toolbarBtn}>
-                    <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
-                </TouchableOpacity>
+            <View
+                style={[
+                    styles.toolbar,
+                    {
+                        backgroundColor: colors.surface,
+                        borderBottomColor: colors.border,
+                        paddingTop: insets.top + 4,
+                    },
+                ]}
+            >
 
                 <View style={[styles.urlBar, { backgroundColor: colors.surfaceAlt }]}>
                     {pageLoading ? (
@@ -104,7 +110,7 @@ export default function SiteBrowserScreen({ route, navigation }: RootStackScreen
                 style={styles.webview}
                 onNavigationStateChange={handleNavigationChange}
                 onShouldStartLoadWithRequest={(request) => {
-                    // Keep ALL navigation inside the WebView — never open Chrome
+                    // Keep ALL navigation inside the WebView  Enever open Chrome
                     setCurrentUrl(request.url);
                     setShowAddButton(isNovelUrl(request.url));
                     return true;
@@ -122,17 +128,32 @@ export default function SiteBrowserScreen({ route, navigation }: RootStackScreen
                 )}
             />
 
-            {/* Floating Add button — appears when on a novel page */}
+            {/* Floating Add button  Eappears when on a novel page */}
             {showAddButton && (
                 <TouchableOpacity
-                    style={[styles.addButton, { backgroundColor: colors.ui.primary }]}
+                    style={[styles.addButton, { backgroundColor: colors.ui.primary, bottom: insets.bottom + 16 }]}
                     onPress={handleAddNovel}
                     activeOpacity={0.8}
                 >
                     <Ionicons name="add" size={20} color="#FFF" />
-                    <Text style={styles.addButtonText}>この小説を追加</Text>
+                    <Text style={styles.addButtonText}>こ�E小説を追加</Text>
                 </TouchableOpacity>
             )}
+
+            <TouchableOpacity
+                style={[
+                    styles.backButton,
+                    {
+                        backgroundColor: colors.surface,
+                        borderColor: colors.border,
+                        bottom: insets.bottom + 16,
+                    },
+                ]}
+                onPress={handleGoBack}
+                activeOpacity={0.8}
+            >
+                <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
+            </TouchableOpacity>
         </View>
     );
 }
@@ -142,7 +163,6 @@ const styles = StyleSheet.create({
     toolbar: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingTop: 44,
         paddingBottom: 8,
         paddingHorizontal: Spacing.xs,
         borderBottomWidth: 0.5,
@@ -190,5 +210,20 @@ const styles = StyleSheet.create({
         color: '#FFF',
         fontWeight: '700',
         fontSize: 15,
+    },
+    backButton: {
+        position: 'absolute',
+        left: 16,
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        elevation: 6,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.2,
+        shadowRadius: 6,
     },
 });

@@ -12,7 +12,6 @@ import { useFocusEffect } from "@react-navigation/native";
 
 import { useTheme } from "../theme/ThemeContext";
 import { Spacing, Typography, Radius } from "../theme/colors";
-import type { MainTabScreenProps } from "../navigation/types";
 import type { Novel } from "../types/novel";
 import { getAllNovels } from "../database/repository";
 import { checkNovelUpdates } from "../services/downloadManager";
