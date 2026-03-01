@@ -11,6 +11,22 @@ import { hamelnAdapter } from './adapters/hamelnAdapter';
 /** Metadata returned by site search / novel info retrieval */
 export interface NovelInfo {
     siteNovelId: string;
+    siteType: SiteType;
+    title: string;
+    author: string;
+    synopsis: string;
+    totalEpisodes: number;
+    isComplete: boolean;
+    url: string;
+    lastUpdatedAt: string | null;
+    /** Short story = 1, Series = 2? */
+    novelType?: number;
+}
+
+/** Chapter listing entry from the table of contents */
+export interface ChapterInfo {
+    index: number;
+    title: string;
     url: string;
     publishedAt: string | null;
     revisedAt: string | null;
