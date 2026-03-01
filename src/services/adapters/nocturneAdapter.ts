@@ -202,6 +202,13 @@ export const nocturneAdapter: SiteAdapter = {
             const indexUrl = `${cleanBase}/?p=${page}`;
             const html = await rateLimitedFetch(indexUrl);
 
+            // Debug logging
+            console.log(`[NocturneAdapter] getChapterList page=${page} htmlLength=${html.length}`);
+            console.log(`[NocturneAdapter] HTML preview: ${html.substring(0, 500)}`);
+            console.log(`[NocturneAdapter] has p-eplist: ${html.includes('class="p-eplist"')}`);
+            console.log(`[NocturneAdapter] has novel_sublist2: ${html.includes('novel_sublist2')}`);
+            console.log(`[NocturneAdapter] has age check: ${html.includes('年齢確認') || html.includes('over18')}`);
+
             let foundInPage = 0;
 
             if (html.includes('class="p-eplist"')) {
@@ -290,6 +297,8 @@ export const nocturneAdapter: SiteAdapter = {
                 }
             }
 
+            console.log(`[NocturneAdapter] foundInPage=${foundInPage} totalChapters=${chapters.length}`);
+
             if (foundInPage === 0) {
                 hasMore = false;
             } else if (foundInPage < 100) {
@@ -301,6 +310,7 @@ export const nocturneAdapter: SiteAdapter = {
         }
 
         if (chapters.length === 0) {
+            console.log(`[NocturneAdapter] WARNING: No chapters found, falling back to single chapter`);
             chapters.push({
                 index: 1,
                 title: '本文',
@@ -310,6 +320,7 @@ export const nocturneAdapter: SiteAdapter = {
             });
         }
 
+        console.log(`[NocturneAdapter] Returning ${chapters.length} chapters`);
         return chapters;
     },
 

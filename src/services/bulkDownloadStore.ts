@@ -41,7 +41,9 @@ export function startDownload(db: SQLiteDatabase, novel: Novel): void {
     notify();
 
     // Start the download — fire-and-forget (the promise resolves when done)
+    console.log(`[BulkStore] Starting bulk download for novel ${novel.id} (${novel.title})`);
     _startBulkDownload(db, novel, (progress: BulkDownloadProgress) => {
+        console.log(`[BulkStore] Progress: state=${progress.state} ${progress.downloaded}/${progress.total}`);
         progressMap.set(novel.id, progress);
         notify();
 
@@ -55,6 +57,22 @@ export function startDownload(db: SQLiteDatabase, novel: Novel): void {
                 }
             }, 5000);
         }
+    }).catch((err: any) => {
+        console.error(`[BulkStore] Bulk download failed for novel ${novel.id}:`, err);
+        progressMap.set(novel.id, {
+            state: 'error',
+            downloaded: 0,
+            total: novel.totalEpisodes,
+            errorMessage: err?.message || '不明なエラー',
+        });
+        notify();
+        setTimeout(() => {
+            const current = progressMap.get(novel.id);
+            if (current && current.state === 'error') {
+                progressMap.delete(novel.id);
+                notify();
+            }
+        }, 5000);
     });
 }
 

@@ -47,14 +47,19 @@ export async function startBulkDownload(
     const progress = getReadingProgress(db, novel.id);
     const r = progress ? progress.currentChapter : 0;
 
-    // Filter to chapter after the current read position that need downloading, limit to 50
+    console.log(`[BulkDL] novel=${novel.id} totalChapters=${chapters.length} currentChapter=${r}`);
+
+    // Filter to chapters after the current read position that need downloading, limit to 50
     const pending = chapters
         .filter((ch) => ch.index > r && !ch.isDownloaded && ch.url)
         .slice(0, 50);
     const total = chapters.length;
     let downloaded = countDownloadedChapters(db, novel.id);
 
+    console.log(`[BulkDL] pending=${pending.length} downloaded=${downloaded} total=${total}`);
+
     if (pending.length === 0) {
+        console.log(`[BulkDL] No pending chapters — returning idle immediately`);
         onProgress({ state: 'idle', downloaded, total });
         activeJobs.delete(novel.id);
         return;

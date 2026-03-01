@@ -125,7 +125,7 @@ export default function NovelDetailScreen({
 
     const localChapters = getChaptersByNovelId(db, novelId);
     setChapters(localChapters);
-    if (localChapters.length === 0 && n.url) {
+    if (n.url) {
       fetchChapterList(n);
     }
 
@@ -164,9 +164,18 @@ export default function NovelDetailScreen({
   const handleBulkDownload = async () => {
     if (!novel || bulkState === "running") return;
     try {
+      // Always fetch the latest chapter list before starting bulk download
+      if (novel.url) {
+        await fetchChapterList(novel);
+      }
+      // Re-read latest chapter data from DB after fetch
+      const freshNovel = getNovelById(db, novel.id);
+      if (!freshNovel) return;
+
       const networkState = await Network.getNetworkStateAsync();
-      const end = Math.min(chapters.length, currentChapter + 50);
-      const pending = chapters.filter(
+      const freshChapters = getChaptersByNovelId(db, novel.id);
+      const end = Math.min(freshChapters.length, currentChapter + 50);
+      const pending = freshChapters.filter(
         (ch) =>
           ch.index > currentChapter &&
           ch.index <= end &&
@@ -186,16 +195,15 @@ export default function NovelDetailScreen({
             {
               text: "続行",
               style: "destructive",
-              onPress: () => startGlobalDownload(db, novel),
+              onPress: () => startGlobalDownload(db, freshNovel),
             },
           ],
         );
         return;
       }
-      startGlobalDownload(db, novel);
+      startGlobalDownload(db, freshNovel);
     } catch (err) {
       console.error("Failed to start bulk download", err);
-      startGlobalDownload(db, novel);
     }
   };
 
