@@ -157,6 +157,7 @@ export const nocturneAdapter: SiteAdapter = {
             isComplete: n.end === 0,
             url: `${NOCTURNE_BASE}/${lowerId}/`,
             lastUpdatedAt,
+            novelType: n.novel_type,
         };
     },
 
@@ -186,6 +187,7 @@ export const nocturneAdapter: SiteAdapter = {
                 isComplete: n.end === 0,
                 url: `${NOCTURNE_BASE}/${siteNovelId}/`,
                 lastUpdatedAt,
+                novelType: n.novel_type,
             };
         });
     },
@@ -204,10 +206,16 @@ export const nocturneAdapter: SiteAdapter = {
 
             // Debug logging
             console.log(`[NocturneAdapter] getChapterList page=${page} htmlLength=${html.length}`);
-            console.log(`[NocturneAdapter] HTML preview: ${html.substring(0, 500)}`);
             console.log(`[NocturneAdapter] has p-eplist: ${html.includes('class="p-eplist"')}`);
-            console.log(`[NocturneAdapter] has novel_sublist2: ${html.includes('novel_sublist2')}`);
             console.log(`[NocturneAdapter] has age check: ${html.includes('年齢確認') || html.includes('over18')}`);
+
+            if (html.includes('年齢確認') || html.includes('Enter') || html.includes('over18')) {
+                throw new Error('Age verification required. Please open in browser once.');
+            }
+
+            if (html.includes('指定された小説は削除')) {
+                throw new Error('This novel has been deleted.');
+            }
 
             let foundInPage = 0;
 

@@ -109,8 +109,12 @@ export default function NovelDetailScreen({
         });
         setChapters(getChaptersByNovelId(db, n.id));
         setNovel(getNovelById(db, n.id));
-      } catch (err) {
+      } catch (err: any) {
         console.error("Failed to fetch chapter list", err);
+        Alert.alert(
+          "目次取得失敗",
+          `作品情報の更新に失敗しました。\n${err?.message || "ネットワークエラー"}`
+        );
       } finally {
         setFetchingChapters(false);
       }
