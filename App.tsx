@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SQLiteProvider, useSQLiteContext } from 'expo-sqlite';
@@ -6,7 +6,7 @@ import {
   useFonts,
 } from 'expo-font';
 
-import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
+import { ThemeProvider, useTheme, type ThemeMode } from './src/theme/ThemeContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { initDatabase } from './src/database/schema';
 import { registerAdapter } from './src/services/siteAdapter';
@@ -15,7 +15,7 @@ import { nocturneAdapter } from './src/services/adapters/nocturneAdapter';
 import { registerBackgroundTask } from './src/services/backgroundTask';
 import auth from '@react-native-firebase/auth';
 import { syncService } from './src/services/syncService';
-import { getAllNovels, getReadingProgress, upsertReadingProgress } from './src/database/repository';
+import { getAllNovels, getSetting, setSetting, getReadingProgress, upsertReadingProgress } from './src/database/repository';
 
 // Register site adapters
 registerAdapter(syosetuAdapter);
@@ -75,6 +75,27 @@ function AppContent() {
   );
 }
 
+/** Wrapper that loads theme from DB and provides persistence */
+function ThemedApp() {
+  const db = useSQLiteContext();
+
+  const [initialMode] = useState<ThemeMode>(() => {
+    const saved = getSetting(db, 'theme_mode');
+    if (saved === 'light' || saved === 'dark' || saved === 'sepia') return saved;
+    return 'light';
+  });
+
+  const handleModeChange = useCallback((newMode: ThemeMode) => {
+    setSetting(db, 'theme_mode', newMode);
+  }, [db]);
+
+  return (
+    <ThemeProvider initialMode={initialMode} onModeChange={handleModeChange}>
+      <AppContent />
+    </ThemeProvider>
+  );
+}
+
 async function onDbInit(db: any) {
   initDatabase(db);
 }
@@ -99,11 +120,9 @@ export default function App() {
   }
 
   return (
-    <ThemeProvider>
-      <SQLiteProvider databaseName="tadayomu.db" onInit={onDbInit}>
-        <AppContent />
-      </SQLiteProvider>
-    </ThemeProvider>
+    <SQLiteProvider databaseName="tadayomu.db" onInit={onDbInit}>
+      <ThemedApp />
+    </SQLiteProvider>
   );
 }
 

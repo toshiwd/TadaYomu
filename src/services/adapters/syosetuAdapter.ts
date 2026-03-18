@@ -19,7 +19,8 @@ let lastRequestTime = 0;
 function parseNarouDate(dateStr: string | null | undefined): string | null {
     if (!dateStr || dateStr.startsWith('0000') || dateStr.trim() === '') return null;
     try {
-        const d = new Date(dateStr.replace(/-/g, '/') + ' +0900');
+        const isoString = dateStr.trim().replace(' ', 'T') + '+09:00';
+        const d = new Date(isoString);
         if (Number.isNaN(d.getTime())) return null;
         return d.toISOString();
     } catch {
@@ -231,13 +232,13 @@ export const syosetuAdapter: SiteAdapter = {
                             let rvDate = null;
 
                             if (dateMatch && dateMatch[1]) {
-                                pbDate = new Date(dateMatch[1].trim().replace(/\//g, '-') + ':00+09:00').toISOString();
+                                pbDate = new Date(dateMatch[1].trim().replace(/\//g, '-').replace(' ', 'T') + ':00+09:00').toISOString();
                                 rvDate = pbDate;
 
                                 if (dateMatch[2]) {
                                     const rvMatch = dateMatch[2].match(/([\d/:\s]+)/);
                                     if (rvMatch) {
-                                        rvDate = new Date(rvMatch[1].trim().replace(/\//g, '-') + ':00+09:00').toISOString();
+                                        rvDate = new Date(rvMatch[1].trim().replace(/\//g, '-').replace(' ', 'T') + ':00+09:00').toISOString();
                                     }
                                 }
                             }
@@ -279,13 +280,13 @@ export const syosetuAdapter: SiteAdapter = {
                         let rvDate = null;
 
                         if (rawDate) {
-                            pbDate = new Date(rawDate.replace(/\//g, '-') + ':00+09:00').toISOString();
+                            pbDate = new Date(rawDate.replace(/\//g, '-').replace(' ', 'T') + ':00+09:00').toISOString();
                             rvDate = pbDate;
                         }
                         if (rawRevise) {
                             const rvMatch = rawRevise.match(/([\d/:\s]+)/);
                             if (rvMatch) {
-                                rvDate = new Date(rvMatch[1].trim().replace(/\//g, '-') + ':00+09:00').toISOString();
+                                rvDate = new Date(rvMatch[1].trim().replace(/\//g, '-').replace(' ', 'T') + ':00+09:00').toISOString();
                             }
                         }
 

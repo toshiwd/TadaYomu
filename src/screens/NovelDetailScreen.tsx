@@ -459,10 +459,13 @@ export default function NovelDetailScreen({
           <TouchableOpacity
             style={[
               styles.chapterRow,
-              {
-                backgroundColor:
-                  item.index === currentChapter ? colors.surfaceAlt : "transparent",
-              },
+              item.index === currentChapter
+                ? {
+                    backgroundColor: colors.surfaceAlt,
+                    borderLeftWidth: 3,
+                    borderLeftColor: colors.ui.primary,
+                  }
+                : { backgroundColor: "transparent" },
             ]}
             onPress={() =>
               navigation.navigate("Reader", {
@@ -531,6 +534,13 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: Spacing.md,
     paddingBottom: Spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(0,0,0,0.08)',
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
   },
   title: {
     fontSize: 16,
@@ -651,6 +661,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm,
     borderRadius: Radius.sm,
     gap: Spacing.xs,
+    borderLeftWidth: 0,
   },
   chapterIndex: {
     width: 32,

@@ -384,10 +384,19 @@ ${fontLink}
 
   var touchStartX = 0, touchStartY = 0, touchMoved = false, isDragging = false;
 
+  function isInteractiveImageTarget(target) {
+    if (!target) return false;
+    if (target.tagName && target.tagName.toLowerCase() === 'img') return true;
+    if (target.closest && (target.closest('.image-link') || target.closest('a'))) {
+      return true;
+    }
+    return false;
+  }
+
   document.body.addEventListener('touchstart', function(e) {
     if (e.touches.length > 1) return;
     var target = e.target;
-    if (target.tagName.toLowerCase() === 'img' || (target.closest && target.closest('a'))) {
+    if (isInteractiveImageTarget(target)) {
       touchMoved = false; isDragging = false; return;
     }
     touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY;
@@ -402,6 +411,10 @@ ${fontLink}
   }, { passive: false });
 
   document.body.addEventListener('touchend', function(e) {
+    if (isInteractiveImageTarget(e.target)) {
+      isDragging = false;
+      return;
+    }
     if (!isDragging) return;
     isDragging = false;
     var endX = e.changedTouches[0].clientX, endY = e.changedTouches[0].clientY;
@@ -451,18 +464,27 @@ ${fontLink}
       }
       
       // Image expansion handling
+      function postExpandImage(target) {
+        var src = target.getAttribute('data-src') || target.getAttribute('href') || target.getAttribute('src');
+        if (src) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'expand-image',
+            url: src
+          }));
+        }
+      }
+
       var imageLinks = document.querySelectorAll('.image-link, img');
       for (var i = 0; i < imageLinks.length; i++) {
           imageLinks[i].addEventListener('click', function(e) {
               e.preventDefault();
               e.stopPropagation();
-              var src = this.getAttribute('data-src') || this.getAttribute('href') || this.getAttribute('src');
-              if (src) {
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                      type: 'expand-image',
-                      url: src
-                  }));
-              }
+              postExpandImage(this);
+          });
+          imageLinks[i].addEventListener('touchend', function(e) {
+              e.preventDefault();
+              e.stopPropagation();
+              postExpandImage(this);
           });
       }
     }, 100);

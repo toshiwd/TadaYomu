@@ -147,7 +147,7 @@ const NovelItem = memo(
           }}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Ionicons name="book-outline" size={18} color={colors.ui.primary} />
+          <Ionicons name="book-outline" size={24} color={colors.ui.primary} />
         </TouchableOpacity>
         <Ionicons
           name="chevron-forward"
@@ -346,8 +346,10 @@ export default function LibraryScreen({
                     : 0;
                   const needsUpdate =
                     info.totalEpisodes > novel.totalEpisodes ||
-                    infoTime > localTime ||
-                    info.isComplete !== novel.isComplete;
+                    info.isComplete !== novel.isComplete ||
+                    (isNaN(localTime) && !!info.lastUpdatedAt) ||
+                    (!isNaN(infoTime) && !isNaN(localTime) && infoTime > localTime) ||
+                    (info.lastUpdatedAt !== novel.siteUpdatedAt);
 
                   if (needsUpdate) {
                     updateNovel(db, novel.id, {
@@ -394,8 +396,10 @@ export default function LibraryScreen({
                     : 0;
                   const needsUpdate =
                     info.totalEpisodes > novel.totalEpisodes ||
-                    infoTime > localTime ||
-                    info.isComplete !== novel.isComplete;
+                    info.isComplete !== novel.isComplete ||
+                    (isNaN(localTime) && !!info.lastUpdatedAt) ||
+                    (!isNaN(infoTime) && !isNaN(localTime) && infoTime > localTime) ||
+                    (info.lastUpdatedAt !== novel.siteUpdatedAt);
 
                   if (needsUpdate) {
                     updateNovel(db, novel.id, {
@@ -492,9 +496,9 @@ export default function LibraryScreen({
         ]}
       >
         <View style={styles.headerLeft}>
-          <View style={styles.tabContainer}>
+          <View style={[styles.tabContainer, { backgroundColor: colors.surfaceAlt }]}>
             <TouchableOpacity
-              style={[styles.tabButton, !showArchived && styles.tabButtonActive]}
+              style={[styles.tabButton, !showArchived && [styles.tabButtonActive, { backgroundColor: colors.surface }]]}
               onPress={() => setShowArchived(false)}
               activeOpacity={0.8}
             >
@@ -510,7 +514,7 @@ export default function LibraryScreen({
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.tabButton, showArchived && styles.tabButtonActive]}
+              style={[styles.tabButton, showArchived && [styles.tabButtonActive, { backgroundColor: colors.surface }]]}
               onPress={() => setShowArchived(true)}
               activeOpacity={0.8}
             >
@@ -606,7 +610,6 @@ const styles = StyleSheet.create({
   },
   tabContainer: {
     flexDirection: "row",
-    backgroundColor: "#E0E0E0",
     borderRadius: Radius.full,
     padding: 1,
   },
@@ -616,7 +619,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
   },
   tabButtonActive: {
-    backgroundColor: "#FFF",
     elevation: 2,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
@@ -641,21 +643,24 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 3,
+    paddingVertical: 9,
     paddingHorizontal: 3,
     borderRadius: Radius.md,
-    marginBottom: 1,
+    marginBottom: 4,
   },
   cardContent: { flex: 1, marginRight: 2 },
   cardHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.xs,
+    marginBottom: 3,
   },
   cardTitle: {
     flex: 1,
     fontSize: 14,
     fontFamily: "NotoSansJP_600SemiBold",
+    includeFontPadding: false,
+    lineHeight: 20,
   },
   statusBadge: {
     paddingHorizontal: 3,
@@ -663,32 +668,46 @@ const styles = StyleSheet.create({
     borderRadius: Radius.sm,
   },
   statusBadgeText: {
-    fontSize: 7,
+    fontSize: 10,
     fontWeight: "700",
   },
   cardMeta: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 0,
+    marginTop: 2,
   },
   cardAuthor: {
-    fontSize: 9,
+    fontSize: 12,
     fontFamily: "NotoSansJP_400Regular",
+    includeFontPadding: false,
+    lineHeight: 18,
     flexShrink: 1,
   },
   dot: {
-    fontSize: 9,
+    fontSize: 12,
     marginHorizontal: 2,
+    includeFontPadding: false,
+    lineHeight: 14,
   },
-  cardEpisodes: { fontSize: 9, fontFamily: "NotoSansJP_400Regular" },
-  cardDate: { fontSize: 9, fontFamily: "NotoSansJP_400Regular" },
+  cardEpisodes: {
+    fontSize: 12,
+    fontFamily: "NotoSansJP_400Regular",
+    includeFontPadding: false,
+    lineHeight: 14,
+  },
+  cardDate: {
+    fontSize: 12,
+    fontFamily: "NotoSansJP_400Regular",
+    includeFontPadding: false,
+    lineHeight: 14,
+  },
   progressBar: {
-    height: 2,
-    borderRadius: 1,
-    marginTop: 1,
+    height: 3,
+    borderRadius: 1.5,
+    marginTop: 3,
     overflow: "hidden",
   },
-  progressFill: { height: "100%", borderRadius: 1 },
+  progressFill: { height: "100%", borderRadius: 1.5 },
   resumeButton: {
     padding: 2,
     marginRight: 2,

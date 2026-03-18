@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react';
+﻿import React, { useRef, useState, useCallback } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity, ActivityIndicator,
 } from 'react-native';
@@ -21,7 +21,7 @@ const NOVEL_URL_PATTERNS = [
     /^https?:\/\/novel18\.syosetu\.com\/n\w+\/?$/i,
     // カクヨム: https://kakuyomu.jp/works/XXXX
     /^https?:\/\/kakuyomu\.jp\/works\/\d+\/?$/i,
-    // ハ�Eメルン: https://syosetu.org/novel/XXXX/
+    // ハ�Eメルン: https://syosetu.org/novel/XXXX/
     /^https?:\/\/syosetu\.org\/novel\/\d+\/?$/i,
 ];
 
@@ -136,7 +136,7 @@ export default function SiteBrowserScreen({ route, navigation }: RootStackScreen
                     activeOpacity={0.8}
                 >
                     <Ionicons name="add" size={20} color="#FFF" />
-                    <Text style={styles.addButtonText}>こ�E小説を追加</Text>
+                    <Text style={styles.addButtonText}>この小説を追加する</Text>
                 </TouchableOpacity>
             )}
 

@@ -498,7 +498,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   section: {
     paddingHorizontal: Spacing.md,
-    marginBottom: Spacing.xs,
+    marginBottom: Spacing.md,
   },
   sectionTitle: {
     ...Typography.caption,

@@ -6,6 +6,7 @@ setlocal
 :: =============================================
 
 set "JAVA_HOME=C:\Program Files\Java\jdk-20"
+set "NODE_ENV=production"
 set KEYSTORE_PASSWORD=TadaYomu2026!
 set KEY_PASSWORD=TadaYomu2026!
 
@@ -14,7 +15,7 @@ echo  TadaYomu Release Build
 echo ========================================
 echo.
 
-set VERSION=1.3.44
+set VERSION=1.3.50
 echo Version: %VERSION%
 echo.
 

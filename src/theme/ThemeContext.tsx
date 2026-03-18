@@ -43,16 +43,29 @@ function getThemeColors(mode: ThemeMode): ThemeColors {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-    const [mode, setMode] = useState<ThemeMode>('light');
+interface ThemeProviderProps {
+    children: React.ReactNode;
+    initialMode?: ThemeMode;
+    onModeChange?: (mode: ThemeMode) => void;
+}
+
+export function ThemeProvider({ children, initialMode = 'light', onModeChange }: ThemeProviderProps) {
+    const [mode, setModeInternal] = useState<ThemeMode>(initialMode);
+
+    const setMode = useCallback((newMode: ThemeMode) => {
+        setModeInternal(newMode);
+        onModeChange?.(newMode);
+    }, [onModeChange]);
 
     const toggleMode = useCallback(() => {
-        setMode((prev) => {
+        setModeInternal((prev) => {
             const modes: ThemeMode[] = ['light', 'dark', 'sepia'];
             const idx = modes.indexOf(prev);
-            return modes[(idx + 1) % modes.length];
+            const next = modes[(idx + 1) % modes.length];
+            onModeChange?.(next);
+            return next;
         });
-    }, []);
+    }, [onModeChange]);
 
     const colors = useMemo(() => getThemeColors(mode), [mode]);
 
