@@ -1,0 +1,312 @@
+{
+  "props": {
+    "pageProps": {
+      "__REDUX_STATE__": {
+        "tier": "regular",
+        "platform": {
+          "type": "web",
+          "version": null
+        }
+      },
+      "__MAINTENANCE_BLIND_STATE__": {
+        "activated": false
+      },
+      "__DATA_LAYER__": {
+        "visitorType": "guest",
+        "accessedFrom": "Web",
+        "deviceType": "isPC",
+        "hasPassport": false,
+        "hasNextOption": false,
+        "supportersPassportPlan": "none"
+      },
+      "__APOLLO_STATE__": {
+        "ROOT_QUERY": {
+          "__typename": "Query",
+          "visitor": null,
+          "canShowFeatures({\"names\":[\"kakuyomu-contest-selection\",\"payment-maintenance\",\"user-mute-web\",\"notification-complete-work-of-following-user\",\"notification-complete-work-of-following-work\",\"notification-publish-reserved-episode\",\"search_condition_read\",\"react_login\",\"image-optimizer\",\"3d_secure\",\"kakuyomu_next_episode_image\",\"natsugatari_contest\",\"debug-itsudemo-natsugatari\",\"adjust_custom_link\",\"kakuyomu-qrcode\",\"recaptcha\",\"payments-paypay\",\"ranking-separation\",\"subscription-page-v2\",\"publication-migration\",\"10th-anniversary-logo\",\"typo_reports\",\"publication2nd-index-genre\",\"publication2nd-index-hero\",\"publication2nd-index-latest\",\"publication2nd-index-movie\",\"publication-official-notice\",\"payment-only-gift-user\",\"publication-related-work\",\"work-toc-v2\"]})": [
+            {
+              "__ref": "FeatureFlag:kakuyomu-contest-selection"
+            },
+            {
+              "__ref": "FeatureFlag:payment-maintenance"
+            },
+            {
+              "__ref": "FeatureFlag:user-mute-web"
+            },
+            {
+              "__ref": "FeatureFlag:notification-complete-work-of-following-user"
+            },
+            {
+              "__ref": "FeatureFlag:notification-complete-work-of-following-work"
+            },
+            {
+              "__ref": "FeatureFlag:notification-publish-reserved-episode"
+            },
+            {
+              "__ref": "FeatureFlag:search_condition_read"
+            },
+            {
+              "__ref": "FeatureFlag:react_login"
+            },
+            {
+              "__ref": "FeatureFlag:image-optimizer"
+            },
+            {
+              "__ref": "FeatureFlag:3d_secure"
+            },
+            {
+              "__ref": "FeatureFlag:kakuyomu_next_episode_image"
+            },
+            {
+              "__ref": "FeatureFlag:natsugatari_contest"
+            },
+            {
+              "__ref": "FeatureFlag:debug-itsudemo-natsugatari"
+            },
+            {
+              "__ref": "FeatureFlag:adjust_custom_link"
+            },
+            {
+              "__ref": "FeatureFlag:kakuyomu-qrcode"
+            },
+            {
+              "__ref": "FeatureFlag:recaptcha"
+            },
+            {
+              "__ref": "FeatureFlag:payments-paypay"
+            },
+            {
+              "__ref": "FeatureFlag:ranking-separation"
+            },
+            {
+              "__ref": "FeatureFlag:subscription-page-v2"
+            },
+            {
+              "__ref": "FeatureFlag:publication-migration"
+            },
+            {
+              "__ref": "FeatureFlag:10th-anniversary-logo"
+            },
+            {
+              "__ref": "FeatureFlag:typo_reports"
+            },
+            {
+              "__ref": "FeatureFlag:publication2nd-index-genre"
+            },
+            {
+              "__ref": "FeatureFlag:publication2nd-index-hero"
+            },
+            {
+              "__ref": "FeatureFlag:publication2nd-index-latest"
+            },
+            {
+              "__ref": "FeatureFlag:publication2nd-index-movie"
+            },
+            {
+              "__ref": "FeatureFlag:publication-official-notice"
+            },
+            {
+              "__ref": "FeatureFlag:payment-only-gift-user"
+            },
+            {
+              "__ref": "FeatureFlag:publication-related-work"
+            },
+            {
+              "__ref": "FeatureFlag:work-toc-v2"
+            }
+          ]
+        },
+        "FeatureFlag:kakuyomu-contest-selection": {
+          "__typename": "FeatureFlag",
+          "id": "kakuyomu-contest-selection",
+          "name": "kakuyomu-contest-selection",
+          "released": true
+        },
+        "FeatureFlag:payment-maintenance": {
+          "__typename": "FeatureFlag",
+          "id": "payment-maintenance",
+          "name": "payment-maintenance",
+          "released": false
+        },
+        "FeatureFlag:user-mute-web": {
+          "__typename": "FeatureFlag",
+          "id": "user-mute-web",
+          "name": "user-mute-web",
+          "released": false
+        },
+        "FeatureFlag:notification-complete-work-of-following-user": {
+          "__typename": "FeatureFlag",
+          "id": "notification-complete-work-of-following-user",
+          "name": "notification-complete-work-of-following-user",
+          "released": true
+        },
+        "FeatureFlag:notification-complete-work-of-following-work": {
+          "__typename": "FeatureFlag",
+          "id": "notification-complete-work-of-following-work",
+          "name": "notification-complete-work-of-following-work",
+          "released": true
+        },
+        "FeatureFlag:notification-publish-reserved-episode": {
+          "__typename": "FeatureFlag",
+          "id": "notification-publish-reserved-episode",
+          "name": "notification-publish-reserved-episode",
+          "released": true
+        },
+        "FeatureFlag:search_condition_read": {
+          "__typename": "FeatureFlag",
+          "id": "search_condition_read",
+          "name": "search_condition_read",
+          "released": false
+        },
+        "FeatureFlag:react_login": {
+          "__typename": "FeatureFlag",
+          "id": "react_login",
+          "name": "react_login",
+          "released": false
+        },
+        "FeatureFlag:image-optimizer": {
+          "__typename": "FeatureFlag",
+          "id": "image-optimizer",
+          "name": "image-optimizer",
+          "released": true
+        },
+        "FeatureFlag:3d_secure": {
+          "__typename": "FeatureFlag",
+          "id": "3d_secure",
+          "name": "3d_secure",
+          "released": true
+        },
+        "FeatureFlag:kakuyomu_next_episode_image": {
+          "__typename": "FeatureFlag",
+          "id": "kakuyomu_next_episode_image",
+          "name": "kakuyomu_next_episode_image",
+          "released": true
+        },
+        "FeatureFlag:natsugatari_contest": {
+          "__typename": "FeatureFlag",
+          "id": "natsugatari_contest",
+          "name": "natsugatari_contest",
+          "released": false
+        },
+        "FeatureFlag:debug-itsudemo-natsugatari": {
+          "__typename": "FeatureFlag",
+          "id": "debug-itsudemo-natsugatari",
+          "name": "debug-itsudemo-natsugatari",
+          "released": false
+        },
+        "FeatureFlag:adjust_custom_link": {
+          "__typename": "FeatureFlag",
+          "id": "adjust_custom_link",
+          "name": "adjust_custom_link",
+          "released": true
+        },
+        "FeatureFlag:kakuyomu-qrcode": {
+          "__typename": "FeatureFlag",
+          "id": "kakuyomu-qrcode",
+          "name": "kakuyomu-qrcode",
+          "released": true
+        },
+        "FeatureFlag:recaptcha": {
+          "__typename": "FeatureFlag",
+          "id": "recaptcha",
+          "name": "recaptcha",
+          "released": true
+        },
+        "FeatureFlag:payments-paypay": {
+          "__typename": "FeatureFlag",
+          "id": "payments-paypay",
+          "name": "payments-paypay",
+          "released": true
+        },
+        "FeatureFlag:ranking-separation": {
+          "__typename": "FeatureFlag",
+          "id": "ranking-separation",
+          "name": "ranking-separation",
+          "released": true
+        },
+        "FeatureFlag:subscription-page-v2": {
+          "__typename": "FeatureFlag",
+          "id": "subscription-page-v2",
+          "name": "subscription-page-v2",
+          "released": true
+        },
+        "FeatureFlag:publication-migration": {
+          "__typename": "FeatureFlag",
+          "id": "publication-migration",
+          "name": "publication-migration",
+          "released": true
+        },
+        "FeatureFlag:10th-anniversary-logo": {
+          "__typename": "FeatureFlag",
+          "id": "10th-anniversary-logo",
+          "name": "10th-anniversary-logo",
+          "released": true
+        },
+        "FeatureFlag:typo_reports": {
+          "__typename": "FeatureFlag",
+          "id": "typo_reports",
+          "name": "typo_reports",
+          "released": true
+        },
+        "FeatureFlag:publication2nd-index-genre": {
+          "__typename": "FeatureFlag",
+          "id": "publication2nd-index-genre",
+          "name": "publication2nd-index-genre",
+          "released": false
+        },
+        "FeatureFlag:publication2nd-index-hero": {
+          "__typename": "FeatureFlag",
+          "id": "publication2nd-index-hero",
+          "name": "publication2nd-index-hero",
+          "released": false
+        },
+        "FeatureFlag:publication2nd-index-latest": {
+          "__typename": "FeatureFlag",
+          "id": "publication2nd-index-latest",
+          "name": "publication2nd-index-latest",
+          "released": false
+        },
+        "FeatureFlag:publication2nd-index-movie": {
+          "__typename": "FeatureFlag",
+          "id": "publication2nd-index-movie",
+          "name": "publication2nd-index-movie",
+          "released": false
+        },
+        "FeatureFlag:publication-official-notice": {
+          "__typename": "FeatureFlag",
+          "id": "publication-official-notice",
+          "name": "publication-official-notice",
+          "released": false
+        },
+        "FeatureFlag:payment-only-gift-user": {
+          "__typename": "FeatureFlag",
+          "id": "payment-only-gift-user",
+          "name": "payment-only-gift-user",
+          "released": false
+        },
+        "FeatureFlag:publication-related-work": {
+          "__typename": "FeatureFlag",
+          "id": "publication-related-work",
+          "name": "publication-related-work",
+          "released": false
+        },
+        "FeatureFlag:work-toc-v2": {
+          "__typename": "FeatureFlag",
+          "id": "work-toc-v2",
+          "name": "work-toc-v2",
+          "released": true
+        }
+      },
+      "_sentryTraceData": "2e26e5fd16134274855b147938f2ed27-99fc0f0b9a96c801-0",
+      "_sentryBaggage": "sentry-environment=production,sentry-release=release-8786e6bb44,sentry-public_key=292a799d6bfc4ebfbe3e651c276b9ac1,sentry-trace_id=2e26e5fd16134274855b147938f2ed27,sentry-sample_rate=0,sentry-transaction=%2F-%2Fnot_found,sentry-sampled=false"
+    },
+    "__N_SSP": true
+  },
+  "page": "/-/not_found",
+  "query": {},
+  "buildId": "_TmfdTn2iEscbC0cNbJXB",
+  "isFallback": false,
+  "isExperimentalCompile": false,
+  "gssp": true,
+  "scriptLoader": []
+}

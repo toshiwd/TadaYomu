@@ -1,10 +1,11 @@
-﻿import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import {
-    View, Text, StyleSheet, TouchableOpacity, ActivityIndicator,
+    View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, BackHandler,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 
 import { useTheme } from '../theme/ThemeContext';
 import { Spacing, Radius } from '../theme/colors';
@@ -33,13 +34,23 @@ function isNovelUrl(url: string): boolean {
  * Default ranking / top pages for each site.
  */
 const SITE_HOME_URLS: Record<string, string> = {
-    'ncode.syosetu.com': 'https://yomou.syosetu.com/rank/top/',
+    'ncode.syosetu.com': 'https://syosetu.com/',
     'novel18.syosetu.com': 'https://noc.syosetu.com/rank/top/',
     'kakuyomu.jp': 'https://kakuyomu.jp/rankings/all/weekly?work_variation=long',
-    'syosetu.org': 'https://syosetu.org/?mode=rank',
+    'syosetu.org': 'https://syosetu.org/',
     'mai-net.net': 'https://www.mai-net.net/',
     'akatsuki-novels.com': 'https://www.akatsuki-novels.com/',
 };
+
+function getBrowserFallbackUrl(url: string): string | null {
+    if (/^https:\/\/yomou\.syosetu\.com\/rank\/top\/?/i.test(url)) {
+        return 'https://syosetu.com/';
+    }
+    if (/^https:\/\/syosetu\.org\/\?mode=rank/i.test(url)) {
+        return 'https://syosetu.org/';
+    }
+    return null;
+}
 
 export default function SiteBrowserScreen({ route, navigation }: RootStackScreenProps<'SiteBrowser'>) {
     const { colors } = useTheme();
@@ -49,10 +60,28 @@ export default function SiteBrowserScreen({ route, navigation }: RootStackScreen
     const { siteDomain, url } = route.params;
     const startUrl = url || SITE_HOME_URLS[siteDomain] || `https://${siteDomain}`;
 
+    const [webSourceUrl, setWebSourceUrl] = useState(startUrl);
     const [currentUrl, setCurrentUrl] = useState(startUrl);
     const [canGoBack, setCanGoBack] = useState(false);
     const [pageLoading, setPageLoading] = useState(true);
     const [showAddButton, setShowAddButton] = useState(false);
+
+    const loadUrl = useCallback((nextUrl: string) => {
+        setWebSourceUrl(nextUrl);
+        setCurrentUrl(nextUrl);
+        setPageLoading(true);
+        setShowAddButton(isNovelUrl(nextUrl));
+    }, []);
+
+    const handleLoadFailure = useCallback((event: any) => {
+        const failedUrl = event?.nativeEvent?.url || currentUrl;
+        const fallbackUrl = getBrowserFallbackUrl(failedUrl);
+        if (fallbackUrl && fallbackUrl !== webSourceUrl) {
+            loadUrl(fallbackUrl);
+            return;
+        }
+        setPageLoading(false);
+    }, [currentUrl, loadUrl, webSourceUrl]);
 
     const handleNavigationChange = useCallback((navState: any) => {
         setCurrentUrl(navState.url);
@@ -72,6 +101,18 @@ export default function SiteBrowserScreen({ route, navigation }: RootStackScreen
             navigation.goBack();
         }
     }, [canGoBack, navigation]);
+
+    useFocusEffect(
+        useCallback(() => {
+            const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+                if (!canGoBack) return false;
+                webViewRef.current?.goBack();
+                return true;
+            });
+
+            return () => subscription.remove();
+        }, [canGoBack]),
+    );
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -101,14 +142,30 @@ export default function SiteBrowserScreen({ route, navigation }: RootStackScreen
                 <TouchableOpacity onPress={() => webViewRef.current?.reload()} style={styles.toolbarBtn}>
                     <Ionicons name="refresh" size={20} color={colors.text.primary} />
                 </TouchableOpacity>
+
+                <TouchableOpacity
+                    onPress={() => navigation.goBack()}
+                    style={styles.toolbarBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel="ブラウザを閉じる"
+                >
+                    <Ionicons name="close" size={24} color={colors.text.primary} />
+                </TouchableOpacity>
             </View>
 
             {/* WebView */}
             <WebView
+                key={webSourceUrl}
                 ref={webViewRef}
-                source={{ uri: startUrl }}
+                source={{ uri: webSourceUrl }}
                 style={styles.webview}
                 onNavigationStateChange={handleNavigationChange}
+                onError={handleLoadFailure}
+                onHttpError={(event) => {
+                    if (event.nativeEvent.statusCode === 403) {
+                        handleLoadFailure(event);
+                    }
+                }}
                 onShouldStartLoadWithRequest={(request) => {
                     // Keep ALL navigation inside the WebView  Enever open Chrome
                     setCurrentUrl(request.url);

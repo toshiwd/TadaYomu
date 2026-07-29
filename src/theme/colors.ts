@@ -5,47 +5,68 @@
 
 export const Colors = {
     // ── Brand ──
-    primary: '#2D5F4F',        // 深緑 (Deep Green - like old book covers)
-    primaryLight: '#4A8B72',
-    primaryDark: '#1A3D32',
+    primary: '#994200',        // テラコッタ (Deep terracotta)
+    primaryLight: '#C46D2D',
+    primaryDark: '#662B00',
+    onPrimary: '#FFFFFF',
     accent: '#C2956B',         // 丁子色 (warm gold/amber)
     accentLight: '#D4B896',
 
     // ── Backgrounds ──
     background: {
-        light: '#FAF7F2',        // 生成り色 (Off-white, like aged paper)
-        dark: '#1A1A2E',         // 鉄紺 (Deep navy)
+        light: '#FFF8EF',        // 生成り色 (Washi cream)
+        dark: '#1E1B13',         // 深い墨色 (Deep ink black)
         sepia: '#F5E6C8',        // セピア
     },
 
     // ── Surfaces ──
     surface: {
-        light: '#FFFFFF',
-        dark: '#22223B',
-        sepia: '#EDD9B3',
+        light: '#FFF8EF',
+        dark: '#1E1B13',
+        sepia: '#F5E6C8',
+    },
+    surfaceContainerLow: {
+        light: '#FDF1E3',
+        dark: '#26221A',
+        sepia: '#EFDBC2',
+    },
+    surfaceContainer: {
+        light: '#F8E7D5',
+        dark: '#2F2B21',
+        sepia: '#EAD1B1',
+    },
+    surfaceContainerHigh: {
+        light: '#F2DCBA',
+        dark: '#38332A',
+        sepia: '#E3C8A1',
+    },
+    surfaceContainerHighest: {
+        light: '#EBCE9E',
+        dark: '#413C32',
+        sepia: '#DDBFA0',
     },
     surfaceAlt: {
-        light: '#F0ECE6',
-        dark: '#2E2E4A',
-        sepia: '#E0D1B5',
+        light: '#FDF1E3',
+        dark: '#26221A',
+        sepia: '#EFDBC2',
     },
 
     // ── Text ──
     text: {
         light: {
-            primary: '#2C2C2C',
-            secondary: '#6B6B6B',
-            disabled: '#ABABAB',
+            primary: '#1E1B13',
+            secondary: '#5E5A53',
+            disabled: '#A19C94',
         },
         dark: {
-            primary: '#E8E8E8',
-            secondary: '#9B9B9B',
-            disabled: '#5A5A5A',
+            primary: '#F0EBE1',
+            secondary: '#B5B1A8',
+            disabled: '#7A7771',
         },
         sepia: {
             primary: '#3E2F1C',
             secondary: '#6B5A42',
-            disabled: '#9B8B72',
+            disabled: '#A69279',
         },
     },
 
@@ -73,11 +94,11 @@ export const Colors = {
         dark: '#16162A',
         sepia: '#EDD9B3',
     },
-    tabActive: '#2D5F4F',
+    tabActive: '#994200',
     tabInactive: {
-        light: '#ABABAB',
-        dark: '#5A5A5A',
-        sepia: '#9B8B72',
+        light: '#A19C94',
+        dark: '#7A7771',
+        sepia: '#A69279',
     },
 } as const;
 
@@ -100,31 +121,42 @@ export const Radius = {
     full: 999,
 } as const;
 
-/** Typography scale — uses Noto Sans JP loaded via expo-google-fonts */
+/** Typography scale — uses Noto Serif JP and Plus Jakarta Sans */
 export const Typography = {
     displaySmall: {
         fontSize: 28,
-        fontFamily: 'NotoSansJP_700Bold',
+        fontFamily: 'NotoSerifJP_700Bold',
         letterSpacing: 0.3,
     },
     title: {
         fontSize: 22,
-        fontFamily: 'NotoSansJP_700Bold',
+        fontFamily: 'NotoSerifJP_700Bold',
         letterSpacing: 0.5,
     },
     subtitle: {
         fontSize: 16,
-        fontFamily: 'NotoSansJP_600SemiBold',
+        fontFamily: 'NotoSerifJP_600SemiBold', // Fallback if SemiBold not exactly available, usually 600 or 700
         letterSpacing: 0.3,
     },
     body: {
         fontSize: 14,
-        fontFamily: 'NotoSansJP_400Regular',
+        fontFamily: 'NotoSerifJP_400Regular',
         letterSpacing: 0.2,
+    },
+    bodyLg: {
+        fontSize: 16,
+        fontFamily: 'NotoSerifJP_400Regular',
+        lineHeight: 28,
+        letterSpacing: 0.2,
+    },
+    uiLabel: {
+        fontSize: 14,
+        fontFamily: 'PlusJakartaSans_600SemiBold',
+        letterSpacing: 0.1,
     },
     caption: {
         fontSize: 12,
-        fontFamily: 'NotoSansJP_400Regular',
+        fontFamily: 'PlusJakartaSans_400Regular',
         letterSpacing: 0.1,
     },
 } as const;

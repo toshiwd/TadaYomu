@@ -29,6 +29,15 @@ function goToPage(page, totalPages, pageStepPx, scrollWidth) {
     return { page, offset, maxOffset };
 }
 
+function restorePage(progress, totalPages) {
+    const normalized = Math.max(0, Math.min(Number(progress), 1));
+    return Math.round(normalized * Math.max(0, totalPages - 1));
+}
+
+function shouldAcceptPageDuringRestore(progress, totalPages, currentPage) {
+    return restorePage(progress, totalPages) + 1 === currentPage;
+}
+
 function assert(label, actual, expected) {
     if (actual === expected) {
         console.log(`  PASS: ${label} — got ${actual}`);
@@ -139,6 +148,28 @@ console.log('\n=== Test 10: pageStepPx = 0 edge case ===');
 {
     const { totalPages } = calcPages(1000, 0);
     assert('totalPages when pageStep=0', totalPages, 1);
+}
+
+console.log('\n=== Test 11: Reading position round trip (5 / 25) ===');
+{
+    const totalPages = 25;
+    const savedProgress = (5 - 1) / (totalPages - 1);
+    assert('restored page (zero-based)', restorePage(savedProgress, totalPages), 4);
+}
+
+console.log('\n=== Test 12: Ignore page 1 until saved page 5 is restored ===');
+{
+    const savedProgress = (5 - 1) / (25 - 1);
+    assert(
+        'reject provisional first page',
+        shouldAcceptPageDuringRestore(savedProgress, 25, 1),
+        false,
+    );
+    assert(
+        'accept restored fifth page',
+        shouldAcceptPageDuringRestore(savedProgress, 25, 5),
+        true,
+    );
 }
 
 // ============================================================

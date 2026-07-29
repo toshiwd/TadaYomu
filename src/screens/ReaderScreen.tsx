@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   Text,
   Animated,
+  AppState,
   Modal,
   Image,
   TouchableWithoutFeedback,
@@ -98,11 +99,25 @@ export default function ReaderScreen({
   const settingsSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const progressSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const latestProgressRef = useRef<{ progress: number; page: number } | null>(null);
+  const pendingRestoreProgressRef = useRef<number | null>(null);
   const lastSyncedProgressRef = useRef<{
     novelId: number;
     chapterIndex: number;
     progress: number;
   } | null>(null);
+
+  const flushLatestProgress = useCallback(() => {
+    const latest = latestProgressRef.current;
+    if (!latest) return;
+    upsertReadingProgressIfChanged(db, novelId, chapterIndex, latest.progress, {
+      force: true,
+    });
+  }, [db, novelId, chapterIndex]);
+
+  const handleCloseReader = useCallback(() => {
+    flushLatestProgress();
+    navigation.goBack();
+  }, [flushLatestProgress, navigation]);
 
   // Load novel info
   useEffect(() => {
@@ -166,6 +181,18 @@ export default function ReaderScreen({
             novel.siteType,
           );
           if (!cancelled) {
+            const savedProgress = getReadingProgress(db, novelId);
+            const openedChapterProgress =
+              savedProgress?.currentChapter === chapterIndex
+                ? savedProgress.scrollPercentage
+                : 0;
+            upsertReadingProgressIfChanged(
+              db,
+              novelId,
+              chapterIndex,
+              openedChapterProgress,
+              { force: true },
+            );
             setChapterText(rawText);
             setChapterTitle(ch.title || `第${chapterIndex}話`);
           }
@@ -187,8 +214,10 @@ export default function ReaderScreen({
         // Load initial progress for this chapter if available
         const progress = getReadingProgress(db, novelId);
         if (progress && progress.currentChapter === chapterIndex) {
+          pendingRestoreProgressRef.current = progress.scrollPercentage;
           setInitialProgress(progress.scrollPercentage);
         } else {
+          pendingRestoreProgressRef.current = 0;
           setInitialProgress(0);
         }
         setLoading(false);
@@ -369,6 +398,26 @@ export default function ReaderScreen({
           const nextProgress =
             typeof data.progress === "number" ? data.progress : 0;
 
+          const pendingRestore = pendingRestoreProgressRef.current;
+          if (pendingRestore !== null) {
+            const expectedPage =
+              Math.round(
+                Math.max(0, Math.min(pendingRestore, 1)) *
+                  Math.max(0, nextTotalPages - 1),
+              ) + 1;
+
+            if (nextPage !== expectedPage) {
+              webViewRef.current?.injectJavaScript(`
+                if (window.__tadayomuRestoreProgress) {
+                  window.__tadayomuRestoreProgress(${pendingRestore});
+                }
+                true;
+              `);
+              return;
+            }
+            pendingRestoreProgressRef.current = null;
+          }
+
           setCurrentPage((prev) => (prev === nextPage ? prev : nextPage));
           setTotalPages((prev) =>
             prev === nextTotalPages ? prev : nextTotalPages,
@@ -455,8 +504,40 @@ export default function ReaderScreen({
     [db, novelId, chapterIndex, goNextChapter, goPrevChapter, toggleToolbar, novel],
   );
 
+  const getLatestRestorableProgress = useCallback(() => {
+    const latest = latestProgressRef.current;
+    if (latest) return latest.progress;
+
+    const saved = getReadingProgress(db, novelId);
+    if (saved && saved.currentChapter === chapterIndex) {
+      return saved.scrollPercentage;
+    }
+    return 0;
+  }, [db, novelId, chapterIndex]);
+
+  const restoreWebViewProgress = useCallback((progress: number) => {
+    pendingRestoreProgressRef.current = progress;
+    webViewRef.current?.injectJavaScript(`
+      if (window.__tadayomuRestoreProgress) {
+        window.__tadayomuRestoreProgress(${progress});
+      }
+      true;
+    `);
+  }, []);
+
   useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState !== "active") {
+        flushLatestProgress();
+        return;
+      }
+
+      restoreWebViewProgress(getLatestRestorableProgress());
+    });
+
     return () => {
+      flushLatestProgress();
+      subscription.remove();
       if (syncTimeoutRef.current) {
         clearTimeout(syncTimeoutRef.current);
       }
@@ -467,7 +548,11 @@ export default function ReaderScreen({
         clearTimeout(progressSaveTimeoutRef.current);
       }
     };
-  }, []);
+  }, [
+    flushLatestProgress,
+    getLatestRestorableProgress,
+    restoreWebViewProgress,
+  ]);
 
   const settingsTranslateY = settingsAnim.interpolate({
     inputRange: [0, 1],
@@ -489,7 +574,7 @@ export default function ReaderScreen({
         ]}
       >
         <TouchableOpacity
-          onPress={() => navigation.goBack()}
+          onPress={handleCloseReader}
           style={styles.toolbarBtn}
         >
           <Ionicons name="arrow-back" size={20} color={readerTheme.fg} />
@@ -549,6 +634,12 @@ export default function ReaderScreen({
           originWhitelist={["*"]}
           source={webViewSource}
           style={{ flex: 1, backgroundColor: readerTheme.bg }}
+          onLoadStart={() => {
+            pendingRestoreProgressRef.current = getLatestRestorableProgress();
+          }}
+          onLoadEnd={() => {
+            restoreWebViewProgress(getLatestRestorableProgress());
+          }}
           onMessage={handleMessage}
           scrollEnabled={false}
           showsVerticalScrollIndicator={false}

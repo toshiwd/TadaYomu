@@ -7,12 +7,16 @@ export interface ThemeColors {
     background: string;
     surface: string;
     surfaceAlt: string;
+    surfaceContainerLow: string;
+    surfaceContainer: string;
+    surfaceContainerHigh: string;
+    surfaceContainerHighest: string;
     text: { primary: string; secondary: string; disabled: string };
     border: string;
     divider: string;
     tabBar: string;
     tabInactive: string;
-    ui: { primary: string; error: string; success: string; warning: string };
+    ui: { primary: string; onPrimary: string; error: string; success: string; warning: string };
 }
 
 interface ThemeContextType {
@@ -27,6 +31,10 @@ function getThemeColors(mode: ThemeMode): ThemeColors {
         background: Colors.background[mode],
         surface: Colors.surface[mode],
         surfaceAlt: Colors.surfaceAlt[mode],
+        surfaceContainerLow: Colors.surfaceContainerLow[mode],
+        surfaceContainer: Colors.surfaceContainer[mode],
+        surfaceContainerHigh: Colors.surfaceContainerHigh[mode],
+        surfaceContainerHighest: Colors.surfaceContainerHighest[mode],
         text: Colors.text[mode],
         border: Colors.border[mode],
         divider: Colors.divider[mode],
@@ -34,6 +42,7 @@ function getThemeColors(mode: ThemeMode): ThemeColors {
         tabInactive: Colors.tabInactive[mode],
         ui: {
             primary: Colors.primary,
+            onPrimary: Colors.onPrimary,
             error: Colors.error,
             success: Colors.success,
             warning: Colors.warning,
@@ -71,7 +80,7 @@ export function ThemeProvider({ children, initialMode = 'light', onModeChange }:
 
     const value = useMemo(
         () => ({ mode, colors, setMode, toggleMode }),
-        [mode, colors, toggleMode]
+        [mode, colors, setMode, toggleMode]
     );
 
     return (

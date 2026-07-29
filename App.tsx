@@ -5,6 +5,15 @@ import { SQLiteProvider, useSQLiteContext } from 'expo-sqlite';
 import {
   useFonts,
 } from 'expo-font';
+import {
+  NotoSerifJP_400Regular,
+  NotoSerifJP_600SemiBold,
+  NotoSerifJP_700Bold,
+} from '@expo-google-fonts/noto-serif-jp';
+import {
+  PlusJakartaSans_400Regular,
+  PlusJakartaSans_600SemiBold,
+} from '@expo-google-fonts/plus-jakarta-sans';
 
 import { ThemeProvider, useTheme, type ThemeMode } from './src/theme/ThemeContext';
 import AppNavigator from './src/navigation/AppNavigator';
@@ -12,7 +21,7 @@ import { initDatabase } from './src/database/schema';
 import { registerAdapter } from './src/services/siteAdapter';
 import { syosetuAdapter } from './src/services/adapters/syosetuAdapter';
 import { nocturneAdapter } from './src/services/adapters/nocturneAdapter';
-import { registerBackgroundTask } from './src/services/backgroundTask';
+import { registerBackgroundTask, unregisterBackgroundTask } from './src/services/backgroundTask';
 import auth from '@react-native-firebase/auth';
 import { syncService } from './src/services/syncService';
 import { getAllNovels, getSetting, setSetting, getReadingProgress, upsertReadingProgress } from './src/database/repository';
@@ -24,6 +33,15 @@ registerAdapter(nocturneAdapter);
 function AppContent() {
   const { mode } = useTheme();
   const db = useSQLiteContext();
+
+  useEffect(() => {
+    const backgroundEnabled = getSetting(db, 'background_enabled') !== '0';
+    if (backgroundEnabled) {
+      void registerBackgroundTask();
+    } else {
+      void unregisterBackgroundTask();
+    }
+  }, [db]);
 
   useEffect(() => {
     const unsubscribe = auth().onAuthStateChanged(async (user) => {
@@ -105,11 +123,12 @@ export default function App() {
     NotoSansJP_400Regular: require('./assets/fonts/NotoSansJP-Regular.ttf'),
     NotoSansJP_600SemiBold: require('./assets/fonts/NotoSansJP-SemiBold.ttf'),
     NotoSansJP_700Bold: require('./assets/fonts/NotoSansJP-Bold.ttf'),
+    NotoSerifJP_400Regular,
+    NotoSerifJP_600SemiBold,
+    NotoSerifJP_700Bold,
+    PlusJakartaSans_400Regular,
+    PlusJakartaSans_600SemiBold,
   });
-
-  useEffect(() => {
-    registerBackgroundTask();
-  }, []);
 
   if (!fontsLoaded) {
     return (

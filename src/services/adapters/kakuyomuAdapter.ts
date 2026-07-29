@@ -129,8 +129,9 @@ export const kakuyomuAdapter: SiteAdapter = {
         const author = authorRef ? state[authorRef]?.activityName || '' : '';
         const synopsis = work.catchphrase || work.introduction || '';
 
-        const isComplete = work.isComplete === true || work.status === 'COMPLETED';
-        const lastUpdatedAt = work.updatedAt ? new Date(work.updatedAt).toISOString() : null;
+        const isComplete = work.isComplete === true || work.status === 'COMPLETED' || work.serialStatus === 'COMPLETED';
+        const lastUpdatedAt = work.updatedAt || work.lastEpisodePublishedAt ? new Date(work.updatedAt || work.lastEpisodePublishedAt).toISOString() : null;
+        const totalEpisodes = work.publicEpisodeCount || 0;
 
         return {
             siteNovelId: novelId,
@@ -138,7 +139,7 @@ export const kakuyomuAdapter: SiteAdapter = {
             title,
             author,
             synopsis,
-            totalEpisodes: 0, // Calculated via getChapterList subsequently
+            totalEpisodes, // Might also be calculated via getChapterList subsequently
             isComplete,
             url,
             lastUpdatedAt,
@@ -160,7 +161,7 @@ export const kakuyomuAdapter: SiteAdapter = {
         const state = data.props.pageProps.__APOLLO_STATE__;
         const workKey = `Work:${novelId}`;
         const work = state[workKey];
-        const toc = work?.tableOfContents;
+        const toc = work?.tableOfContents || work?.tableOfContentsV2;
 
         if (toc && Array.isArray(toc)) {
             let index = 1;

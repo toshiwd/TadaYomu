@@ -64,7 +64,9 @@ export const syncService: SyncService = {
 
     async uploadProgress(progress: ReadingProgress) {
         const user = auth().currentUser;
-        if (!user) return;
+        if (!user) {
+            throw new Error('Cannot upload progress while signed out');
+        }
 
         const docId = `${progress.siteType}_${progress.siteNovelId}`;
         try {
@@ -79,6 +81,7 @@ export const syncService: SyncService = {
                 }, { merge: true });
         } catch (error) {
             console.error('Upload progress failed', error);
+            throw error;
         }
     },
 

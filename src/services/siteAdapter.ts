@@ -55,6 +55,8 @@ export interface SiteAdapter {
     getNovelInfo(novelId: string): Promise<NovelInfo>;
     /** Fetch table of contents (list of chapters) */
     getChapterList(novelId: string): Promise<ChapterInfo[]>;
+    /** OPTIONAL: Fetch only the latest table-of-contents page when the site supports paging. */
+    getLatestChapterList?(novelId: string, knownTotalEpisodes: number): Promise<ChapterInfo[]>;
     /** Download a single chapter's content */
     getChapterContent(novelId: string, chapterUrl: string): Promise<ChapterContent>;
     /** OPTIONAL: Fetch novel metadata in bulk (used for fast library updates) */

@@ -73,6 +73,10 @@ export async function startBulkDownload(
     let errorMessage = '';
     let completedSincePersist = 0;
 
+    const isStrictRateLimit = novel.siteType === 'kakuyomu' || novel.siteType === 'syosetu';
+    const activeMaxParallel = isStrictRateLimit ? 1 : MAX_PARALLEL;
+    const workerDelayMs = isStrictRateLimit ? 2000 : 0;
+
     async function processOne(): Promise<void> {
         while (queue.length > 0 && !job.cancelled && !errorOccurred) {
             const chapter = queue.shift()!;
@@ -113,13 +117,17 @@ export async function startBulkDownload(
                     completedSincePersist = 0;
                 }
                 onProgress({ state: 'running', downloaded, total });
+
+                if (workerDelayMs > 0 && queue.length > 0 && !job.cancelled) {
+                    await new Promise((r) => setTimeout(r, workerDelayMs));
+                }
             }
         }
     }
 
     // Run workers in parallel
     const workers: Promise<void>[] = [];
-    for (let i = 0; i < Math.min(MAX_PARALLEL, pending.length); i++) {
+    for (let i = 0; i < Math.min(activeMaxParallel, pending.length); i++) {
         workers.push(processOne());
     }
     await Promise.all(workers);

@@ -17,6 +17,24 @@ const RATE_LIMIT_MS = 2000;
 
 let lastRequestTime = 0;
 
+class HttpStatusError extends Error {
+    constructor(
+        readonly status: number,
+        readonly url: string,
+    ) {
+        super(`HTTP ${status}: ${url}`);
+        this.name = 'HttpStatusError';
+    }
+}
+
+export function isExpectedChapterListEndStatus(
+    status: number,
+    page: number,
+    chaptersFound: number,
+): boolean {
+    return status === 404 && page > 1 && chaptersFound > 0;
+}
+
 function parseNarouDate(dateStr: string | null | undefined): string | null {
     if (!dateStr || dateStr.startsWith('0000') || dateStr.trim() === '') return null;
     try {
@@ -47,7 +65,7 @@ async function rateLimitedFetch(url: string): Promise<string> {
         },
     });
     console.log(`[NocturneAdapter] Status: ${res.status}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${url}`);
+    if (!res.ok) throw new HttpStatusError(res.status, url);
     const text = await res.text();
     console.log(`[NocturneAdapter] Response Length: ${text.length}`);
     return text;
@@ -77,6 +95,108 @@ function stripHtml(html: string): string {
         .replace(/&#39;/g, "'")
         .replace(/&nbsp;/g, ' ')
         .trim();
+}
+
+function buildIndexUrl(novelId: string, page: number): string {
+    const lowerId = novelId.toLowerCase();
+    return `${NOCTURNE_BASE}/${lowerId}/?p=${page}`;
+}
+
+function parseChapterIndexPage(html: string, novelId: string): ChapterInfo[] {
+    const lowerId = novelId.toLowerCase();
+    const chapters: ChapterInfo[] = [];
+
+    if (html.includes('年齢確認') || html.includes('Enter') || html.includes('over18')) {
+        throw new Error('Age verification required. Please open in browser once.');
+    }
+
+    if (html.includes('指定された小説は削除')) {
+        throw new Error('This novel has been deleted.');
+    }
+
+    if (html.includes('class="p-eplist"')) {
+        const parts = html.split('<div class="p-eplist__sublist">');
+        parts.shift();
+
+        for (const item of parts) {
+            if (!item) continue;
+
+            const linkMatch = item.match(/href="\/[a-z0-9]+\/(\d+)\/"[^>]*>([\s\S]*?)<\/a>/i);
+            const dateMatch = item.match(/<div class="p-eplist__update">\s*([\d/:\s]+)(?:<span\s+title="([^"]+)"[^>]*>)?/i);
+
+            if (!linkMatch) continue;
+
+            const index = parseInt(linkMatch[1], 10);
+            const title = stripHtml(linkMatch[2]).trim();
+
+            let publishedAt: string | null = null;
+            let revisedAt: string | null = null;
+
+            if (dateMatch && dateMatch[1]) {
+                publishedAt = new Date(dateMatch[1].trim().replace(/\//g, '-').replace(' ', 'T') + ':00+09:00').toISOString();
+                revisedAt = publishedAt;
+
+                if (dateMatch[2]) {
+                    const rvMatch = dateMatch[2].match(/([\d/:\s]+)/);
+                    if (rvMatch) {
+                        revisedAt = new Date(rvMatch[1].trim().replace(/\//g, '-').replace(' ', 'T') + ':00+09:00').toISOString();
+                    }
+                }
+            }
+
+            if (index > 0 && title) {
+                chapters.push({
+                    index,
+                    title,
+                    url: `${NOCTURNE_BASE}/${lowerId}/${index}/`,
+                    publishedAt,
+                    revisedAt,
+                });
+            }
+        }
+    } else {
+        const rowRegex = /<dt\s+class="novel_sublist2">\s*([\d/:\s]+)(?:<span\s+title="([^"]+)"[^>]*>)?[\s\S]*?<\/dt>\s*<dd\s+class="subtitle">\s*<a\s+href="\/[a-z0-9]+\/(\d+)\/"[^>]*>([\s\S]*?)<\/a>\s*<\/dd>/gi;
+        let match: RegExpExecArray | null;
+
+        while ((match = rowRegex.exec(html)) !== null) {
+            const rawDate = match[1].trim();
+            const rawRevise = match[2] ? match[2].trim() : null;
+
+            const index = parseInt(match[3], 10);
+            const title = stripHtml(match[4]).trim();
+
+            let publishedAt: string | null = null;
+            let revisedAt: string | null = null;
+
+            try {
+                const parsedDate = new Date(rawDate.replace(/-/g, '/') + ' +0900');
+                if (!Number.isNaN(parsedDate.getTime())) {
+                    publishedAt = parsedDate.toISOString();
+                }
+                if (rawRevise) {
+                    const rDateStr = rawRevise.replace('改稿', '').trim();
+                    const rParsed = new Date(rDateStr.replace(/-/g, '/') + ' +0900');
+                    if (!Number.isNaN(rParsed.getTime())) {
+                        revisedAt = rParsed.toISOString();
+                    }
+                }
+            } catch {
+                // Ignore date parse errors
+            }
+
+            if (index > 0 && title) {
+                chapters.push({
+                    index,
+                    title,
+                    url: `${NOCTURNE_BASE}/${lowerId}/${index}/`,
+                    publishedAt,
+                    revisedAt,
+                });
+            }
+        }
+    }
+
+    return chapters;
 }
 
 /** Preserve ruby tags for the reader, strip everything else */
@@ -193,6 +313,12 @@ export const nocturneAdapter: SiteAdapter = {
         });
     },
 
+    async getLatestChapterList(novelId: string, knownTotalEpisodes: number): Promise<ChapterInfo[]> {
+        const latestPage = Math.max(1, Math.ceil(Math.max(knownTotalEpisodes, 1) / 100));
+        const html = await rateLimitedFetch(buildIndexUrl(novelId, latestPage));
+        return parseChapterIndexPage(html, novelId);
+    },
+
     async getChapterList(novelId: string): Promise<ChapterInfo[]> {
         const chapters: ChapterInfo[] = [];
         let page = 1;
@@ -203,7 +329,19 @@ export const nocturneAdapter: SiteAdapter = {
             const base = `${NOCTURNE_BASE}/${lowerId}`;
             const cleanBase = base.endsWith('/') ? base.slice(0, -1) : base;
             const indexUrl = `${cleanBase}/?p=${page}`;
-            const html = await rateLimitedFetch(indexUrl);
+            let html: string;
+            try {
+                html = await rateLimitedFetch(indexUrl);
+            } catch (error) {
+                if (
+                    error instanceof HttpStatusError
+                    && isExpectedChapterListEndStatus(error.status, page, chapters.length)
+                ) {
+                    console.log(`[NocturneAdapter] Reached chapter-list end at page=${page} (${error.status})`);
+                    break;
+                }
+                throw error;
+            }
 
             // Debug logging
             console.log(`[NocturneAdapter] getChapterList page=${page} htmlLength=${html.length}`);

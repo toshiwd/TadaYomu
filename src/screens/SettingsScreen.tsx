@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState, useRef } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -7,6 +7,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  PanResponder,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSQLiteContext } from "expo-sqlite";
@@ -18,11 +19,141 @@ import { useTheme, type ThemeMode } from "../theme/ThemeContext";
 import { Radius, Spacing, Typography } from "../theme/colors";
 import type { MainTabScreenProps } from "../navigation/types";
 import type { ReaderSettings } from "../types/novel";
-import { getReaderSettings, saveReaderSettings } from "../database/repository";
+import { getReaderSettings, saveReaderSettings, getSetting } from "../database/repository";
 import { checkForUpdates, getCurrentVersion } from "../services/updateChecker";
 import { syncService } from "../services/syncService";
+import { toggleBackgroundTask } from "../services/backgroundTask";
 
 type ThemeColors = ReturnType<typeof useTheme>["colors"];
+
+/**
+ * Custom Slider implementing Warm Editorialism aesthetics
+ * Replaces clinical standard UI with a physical, wood-shelf-like slider
+ */
+function CustomSlider({
+  value,
+  min,
+  max,
+  step,
+  leftLabel,
+  rightLabel,
+  currentValueLabel,
+  onSlidingComplete,
+  colors,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  leftLabel: string;
+  rightLabel: string;
+  currentValueLabel: string;
+  onSlidingComplete: (val: number) => void;
+  colors: ThemeColors;
+}) {
+  const [localValue, setLocalValue] = useState(value);
+  const [width, setWidth] = useState(0);
+  const startValueRef = useRef(value);
+
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        startValueRef.current = localValue;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (width === 0) return;
+        const range = max - min;
+        const dxValue = (gestureState.dx / width) * range;
+        let newValue = startValueRef.current + dxValue;
+        newValue = Math.max(min, Math.min(max, newValue));
+        newValue = Math.round(newValue / step) * step;
+        newValue = Number(newValue.toFixed(2));
+        setLocalValue(newValue);
+      },
+      onPanResponderRelease: () => {
+        setLocalValue((finalValue) => {
+          onSlidingComplete(finalValue);
+          return finalValue;
+        });
+      },
+    })
+  ).current;
+
+  const percentage = Math.max(0, Math.min(100, ((localValue - min) / (max - min)) * 100));
+
+  return (
+    <View style={sliderStyles.container}>
+      <View style={sliderStyles.headerRow}>
+        <Text style={[sliderStyles.label, { color: colors.text.primary }]}>{currentValueLabel}</Text>
+      </View>
+      <View
+        style={sliderStyles.trackContainer}
+        onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+        {...panResponder.panHandlers}
+      >
+        {/* Track */}
+        <View style={[sliderStyles.track, { backgroundColor: colors.surfaceContainerHighest }]} />
+        {/* Active Track (optional, omitted to match pure wood aesthetic, but we add a thumb) */}
+        {/* Thumb */}
+        <View
+          style={[
+            sliderStyles.thumb,
+            { backgroundColor: colors.ui.primary, left: `${percentage}%` }
+          ]}
+        />
+      </View>
+      <View style={sliderStyles.footerRow}>
+        <Text style={[sliderStyles.footerText, { color: colors.text.disabled }]}>{leftLabel}</Text>
+        <Text style={[sliderStyles.footerText, { color: colors.text.disabled }]}>{rightLabel}</Text>
+      </View>
+    </View>
+  );
+}
+
+const sliderStyles = StyleSheet.create({
+  container: {
+    paddingVertical: Spacing.sm,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: Spacing.sm,
+  },
+  label: {
+    ...Typography.body,
+    fontWeight: '700',
+  },
+  trackContainer: {
+    height: 24,
+    justifyContent: 'center',
+    marginHorizontal: 8,
+  },
+  track: {
+    height: 6,
+    borderRadius: Radius.full,
+  },
+  thumb: {
+    position: 'absolute',
+    width: 16,
+    height: 16,
+    borderRadius: Radius.full,
+    marginLeft: -8,
+  },
+  footerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: Spacing.sm,
+  },
+  footerText: {
+    ...Typography.caption,
+  },
+});
 
 export default function SettingsScreen(
   _props: MainTabScreenProps<"Settings">,
@@ -35,9 +166,13 @@ export default function SettingsScreen(
   const [user, setUser] = useState<FirebaseAuthTypes.User | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [bgEnabled, setBgEnabled] = useState(true);
+  const [isTogglingBackground, setIsTogglingBackground] = useState(false);
 
   const loadSettings = useCallback(() => {
     setSettings(getReaderSettings(db));
+    const bgSetting = getSetting(db, 'background_enabled');
+    setBgEnabled(bgSetting !== '0'); // default ON
   }, [db]);
 
   useEffect(() => {
@@ -105,332 +240,312 @@ export default function SettingsScreen(
     }
   };
 
+  const handleBackgroundToggle = async (enabled: boolean) => {
+    if (enabled === bgEnabled || isTogglingBackground) return;
+
+    const previous = bgEnabled;
+    setBgEnabled(enabled);
+    setIsTogglingBackground(true);
+
+    try {
+      const changed = await toggleBackgroundTask(db, enabled);
+      if (!changed) {
+        setBgEnabled(previous);
+        Alert.alert(
+          "自動更新の変更に失敗",
+          "バックグラウンド処理の設定を変更できませんでした。",
+        );
+      }
+    } catch (e: any) {
+      setBgEnabled(previous);
+      Alert.alert(
+        "自動更新の変更に失敗",
+        e?.message || "バックグラウンド処理の設定を変更できませんでした。",
+      );
+    } finally {
+      setIsTogglingBackground(false);
+    }
+  };
+
   const themeOptions: { label: string; value: ThemeMode }[] = [
-    { label: "ライト", value: "light" },
-    { label: "ダーク", value: "dark" },
-    { label: "セピア", value: "sepia" },
+    { label: "生成", value: "light" },
+    { label: "琥珀", value: "sepia" },
+    { label: "玄色", value: "dark" },
   ];
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={{ height: insets.top + 2 }} />
+      <View style={{ height: insets.top + Spacing.lg }} />
 
-      <Section title="クラウド同期" colors={colors}>
+      {/* Profile Section */}
+      <View style={styles.sectionContainer}>
         {user ? (
-          <View style={[styles.card, { backgroundColor: colors.surface }]}>
+          <View style={[styles.profileCard, { backgroundColor: colors.surfaceContainerLow }]}>
             <View style={styles.userRow}>
-              <Ionicons
-                name="person-circle-outline"
-                size={34}
-                color={colors.ui.primary}
-              />
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.userLabel, { color: colors.text.secondary }]}>
-                  ログイン中
-                </Text>
+              <View style={[styles.avatarCircle, { backgroundColor: colors.surfaceContainerHighest }]}>
+                <Ionicons name="person" size={24} color={colors.text.secondary} />
+              </View>
+              <View style={{ flex: 1, marginLeft: Spacing.md }}>
                 <Text
                   style={[styles.userValue, { color: colors.text.primary }]}
                   numberOfLines={1}
                 >
-                  {user.displayName || user.email || "ゲスト"}
+                  {user.displayName || user.email || "ログイン中"}
+                </Text>
+                <Text style={[styles.userLabel, { color: colors.text.secondary }]}>
+                  ログイン中
                 </Text>
               </View>
             </View>
-
-            <Text style={[styles.cardDescription, { color: colors.text.secondary }]}>
-              読書中の進捗は自動で同期されます。必要に応じて状態確認ができます。
-            </Text>
-
             <View style={styles.actionRow}>
               <TouchableOpacity
-                style={[
-                  styles.actionBtn,
-                  {
-                    borderColor: colors.border,
-                    backgroundColor: colors.surfaceAlt,
-                  },
-                ]}
+                style={[styles.actionBtn, { backgroundColor: colors.surfaceContainerHigh }]}
                 onPress={handleSync}
                 disabled={syncing}
               >
                 {syncing ? (
                   <ActivityIndicator size="small" color={colors.ui.primary} />
                 ) : (
-                  <Text style={[styles.actionBtnText, { color: colors.text.primary }]}>
-                    状態確認
-                  </Text>
+                  <Text style={[styles.actionBtnText, { color: colors.text.primary }]}>状態確認</Text>
                 )}
               </TouchableOpacity>
-
               <TouchableOpacity
-                style={[
-                  styles.actionBtn,
-                  {
-                    borderColor: colors.ui.error,
-                    backgroundColor: colors.surfaceAlt,
-                  },
-                ]}
+                style={[styles.actionBtn, { backgroundColor: colors.surfaceContainerHigh }]}
                 onPress={handleSignOut}
               >
-                <Text style={[styles.actionBtnText, { color: colors.ui.error }]}>
-                  ログアウト
-                </Text>
+                <Text style={[styles.actionBtnText, { color: colors.ui.error }]}>ログアウト</Text>
               </TouchableOpacity>
             </View>
           </View>
         ) : (
-          <View style={[styles.card, { backgroundColor: colors.surface }]}>
+          <View style={[styles.profileCard, { backgroundColor: colors.surfaceContainerLow }]}>
             <Text style={[styles.cardDescription, { color: colors.text.secondary }]}>
-              Googleでログインすると読書データをクラウド保存し、複数端末で同期できます。
+              ログインすると読書データをクラウド保存し、複数端末で同期できます。
             </Text>
             <TouchableOpacity
               style={[styles.primaryBtn, { backgroundColor: colors.ui.primary }]}
               onPress={handleSignIn}
             >
-              <Ionicons name="logo-google" size={18} color="#FFF" />
-              <Text style={styles.primaryBtnText}>Googleでログイン</Text>
+              <Ionicons name="logo-google" size={18} color={colors.ui.onPrimary} />
+              <Text style={[styles.primaryBtnText, { color: colors.ui.onPrimary }]}>ログイン</Text>
             </TouchableOpacity>
           </View>
         )}
-      </Section>
+      </View>
 
-      <Section title="テーマ" colors={colors}>
+      <Section title="テーマ設定" colors={colors}>
         <View style={styles.themeRow}>
-          {themeOptions.map((opt) => (
-            <TouchableOpacity
-              key={opt.value}
-              style={[
-                styles.themeButton,
-                {
-                  backgroundColor:
-                    mode === opt.value ? colors.ui.primary : colors.surface,
-                },
-              ]}
-              onPress={() => setMode(opt.value)}
-              activeOpacity={0.7}
-            >
-              <Text
-                style={{
-                  color: mode === opt.value ? "#FFF" : colors.text.primary,
-                  fontWeight: "700",
-                  fontSize: 12,
-                }}
+          {themeOptions.map((opt) => {
+            const isSelected = mode === opt.value;
+            return (
+              <TouchableOpacity
+                key={opt.value}
+                style={[
+                  styles.themeButton,
+                  isSelected ? { borderColor: colors.ui.primary, borderWidth: 2 } : { borderColor: 'transparent', borderWidth: 2 },
+                  { backgroundColor: colors.surfaceContainerHigh } // or something to represent the theme box
+                ]}
+                onPress={() => setMode(opt.value)}
+                activeOpacity={0.8}
               >
-                {opt.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
+                {/* Visual representation of the theme color */}
+                <View
+                  style={[
+                    styles.themePreviewBox,
+                    { backgroundColor: opt.value === 'light' ? '#FFF8EF' : opt.value === 'sepia' ? '#F5E6C8' : '#1E1B13' }
+                  ]}
+                />
+                <Text
+                  style={{
+                    color: colors.text.primary,
+                    ...Typography.uiLabel,
+                    marginTop: Spacing.sm,
+                  }}
+                >
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </Section>
 
       {settings && (
-        <Section title="リーダー" colors={colors}>
-          <SettingRow label="フォント" colors={colors}>
-            <View style={styles.toggleRow}>
-              {(["serif", "sans-serif"] as const).map((value) => {
-                const selected = settings.fontFamily === value;
-                return (
-                  <TouchableOpacity
-                    key={value}
-                    style={[
-                      styles.toggleBtn,
-                      {
-                        backgroundColor: selected
-                          ? colors.ui.primary
-                          : colors.surfaceAlt,
-                      },
-                    ]}
-                    onPress={() => updateSetting("fontFamily", value)}
-                  >
-                    <Text
-                      style={[
-                        styles.toggleText,
-                        { color: selected ? "#FFF" : colors.text.primary },
-                      ]}
-                    >
-                      {value === "serif" ? "明朝" : "ゴシック"}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </SettingRow>
+        <Section title="閲覧設定" colors={colors}>
+          <View style={[styles.settingCard, { backgroundColor: colors.surfaceContainerLow }]}>
 
-          <SettingRow label="方向" colors={colors}>
-            <View style={styles.toggleRow}>
-              {(["vertical", "horizontal"] as const).map((value) => {
-                const selected = settings.writingMode === value;
-                return (
-                  <TouchableOpacity
-                    key={value}
-                    style={[
-                      styles.toggleBtn,
-                      {
-                        backgroundColor: selected
-                          ? colors.ui.primary
-                          : colors.surfaceAlt,
-                      },
-                    ]}
-                    onPress={() => updateSetting("writingMode", value)}
-                  >
-                    <Text
-                      style={[
-                        styles.toggleText,
-                        { color: selected ? "#FFF" : colors.text.primary },
-                      ]}
-                    >
-                      {value === "vertical" ? "縦書き" : "横書き"}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+            <View style={styles.inlineRow}>
+              <Text style={[styles.settingLabel, { color: colors.text.primary }]}>書体</Text>
+              <View style={[styles.pillContainer, { backgroundColor: colors.surfaceContainerHighest }]}>
+                {(["serif", "sans-serif"] as const).map((value) => {
+                   const selected = settings.fontFamily === value;
+                   return (
+                     <TouchableOpacity
+                       key={value}
+                       style={[
+                         styles.pillBtn,
+                         selected && { backgroundColor: colors.ui.primary }
+                       ]}
+                       onPress={() => updateSetting("fontFamily", value)}
+                     >
+                       <Text style={[
+                           styles.pillText,
+                           { color: selected ? colors.ui.onPrimary : colors.text.primary }
+                       ]}>
+                         {value === "serif" ? "明朝" : "ゴシック"}
+                       </Text>
+                     </TouchableOpacity>
+                   );
+                })}
+              </View>
             </View>
-          </SettingRow>
 
-          <SettingRow label="文字サイズ" colors={colors}>
-            <View style={styles.sizeRow}>
-              <TouchableOpacity
-                onPress={() =>
-                  updateSetting("fontSize", Math.max(12, settings.fontSize - 1))
-                }
-              >
-                <Ionicons
-                  name="remove-circle-outline"
-                  size={22}
-                  color={colors.text.primary}
-                />
-              </TouchableOpacity>
-              <Text style={[styles.sizeValue, { color: colors.text.primary }]}>
-                {settings.fontSize}
-              </Text>
-              <TouchableOpacity
-                onPress={() =>
-                  updateSetting("fontSize", Math.min(32, settings.fontSize + 1))
-                }
-              >
-                <Ionicons
-                  name="add-circle-outline"
-                  size={22}
-                  color={colors.text.primary}
-                />
-              </TouchableOpacity>
+            <View style={styles.inlineRow}>
+              <Text style={[styles.settingLabel, { color: colors.text.primary }]}>組み方向</Text>
+              <View style={[styles.pillContainer, { backgroundColor: colors.surfaceContainerHighest }]}>
+                {(["horizontal", "vertical"] as const).map((value) => {
+                   const selected = settings.writingMode === value;
+                   return (
+                     <TouchableOpacity
+                       key={value}
+                       style={[
+                         styles.pillBtn,
+                         selected && { backgroundColor: colors.ui.primary }
+                       ]}
+                       onPress={() => updateSetting("writingMode", value)}
+                     >
+                       <Text style={[
+                           styles.pillText,
+                           { color: selected ? colors.ui.onPrimary : colors.text.primary }
+                       ]}>
+                         {value === "vertical" ? "縦" : "横"}
+                       </Text>
+                     </TouchableOpacity>
+                   );
+                })}
+              </View>
             </View>
-          </SettingRow>
 
-          <SettingRow label="行間" colors={colors}>
-            <View style={styles.sizeRow}>
-              <TouchableOpacity
-                onPress={() =>
-                  updateSetting(
-                    "lineHeight",
-                    Math.max(1.2, Number((settings.lineHeight - 0.1).toFixed(1))),
-                  )
-                }
-              >
-                <Ionicons
-                  name="remove-circle-outline"
-                  size={22}
-                  color={colors.text.primary}
-                />
-              </TouchableOpacity>
-              <Text style={[styles.sizeValue, { color: colors.text.primary }]}>
-                {settings.lineHeight.toFixed(1)}
-              </Text>
-              <TouchableOpacity
-                onPress={() =>
-                  updateSetting(
-                    "lineHeight",
-                    Math.min(2.5, Number((settings.lineHeight + 0.1).toFixed(1))),
-                  )
-                }
-              >
-                <Ionicons
-                  name="add-circle-outline"
-                  size={22}
-                  color={colors.text.primary}
-                />
-              </TouchableOpacity>
-            </View>
-          </SettingRow>
+          </View>
 
-          <SettingRow label="ページ送りアニメーション" colors={colors}>
-            <View style={styles.toggleRow}>
-              {([true, false] as const).map((value) => {
-                const selected = settings.pageTurnAnimation === value;
-                return (
-                  <TouchableOpacity
-                    key={`animation-${String(value)}`}
-                    style={[
-                      styles.toggleBtn,
-                      {
-                        backgroundColor: selected
-                          ? colors.ui.primary
-                          : colors.surfaceAlt,
-                      },
-                    ]}
-                    onPress={() => updateSetting("pageTurnAnimation", value)}
-                  >
-                    <Text
-                      style={[
-                        styles.toggleText,
-                        { color: selected ? "#FFF" : colors.text.primary },
-                      ]}
-                    >
-                      {value ? "ON" : "OFF"}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </SettingRow>
+          <View style={[styles.sliderCard, { backgroundColor: colors.surfaceContainerLow }]}>
+            <Text style={[styles.settingLabel, { color: colors.text.primary }]}>文字サイズ</Text>
+            <CustomSlider
+              value={settings.fontSize}
+              min={12}
+              max={32}
+              step={1}
+              leftLabel="極小"
+              rightLabel="極大"
+              currentValueLabel={`${settings.fontSize}px`}
+              onSlidingComplete={(val) => updateSetting("fontSize", val)}
+              colors={colors}
+            />
+          </View>
 
-          <SettingRow label="全画面モード" colors={colors}>
-            <View style={styles.toggleRow}>
-              {([true, false] as const).map((value) => {
-                const selected = settings.fullscreen === value;
-                return (
-                  <TouchableOpacity
-                    key={`fullscreen-${String(value)}`}
-                    style={[
-                      styles.toggleBtn,
-                      {
-                        backgroundColor: selected
-                          ? colors.ui.primary
-                          : colors.surfaceAlt,
-                      },
-                    ]}
-                    onPress={() => updateSetting("fullscreen", value)}
-                  >
-                    <Text
-                      style={[
-                        styles.toggleText,
-                        { color: selected ? "#FFF" : colors.text.primary },
-                      ]}
-                    >
-                      {value ? "ON" : "OFF"}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+          <View style={[styles.sliderCard, { backgroundColor: colors.surfaceContainerLow }]}>
+            <Text style={[styles.settingLabel, { color: colors.text.primary }]}>行間</Text>
+            <CustomSlider
+              value={settings.lineHeight}
+              min={1.2}
+              max={2.5}
+              step={0.1}
+              leftLabel="狭い"
+              rightLabel="広い"
+              currentValueLabel={`${settings.lineHeight.toFixed(1)}`}
+              onSlidingComplete={(val) => updateSetting("lineHeight", val)}
+              colors={colors}
+            />
+          </View>
+
+          <View style={[styles.settingCard, { backgroundColor: colors.surfaceContainerLow }]}>
+             <View style={styles.inlineRow}>
+              <Text style={[styles.settingLabel, { color: colors.text.primary }]}>アニメーション</Text>
+              <View style={[styles.pillContainer, { backgroundColor: colors.surfaceContainerHighest }]}>
+                {([true, false] as const).map((value) => {
+                   const selected = settings.pageTurnAnimation === value;
+                   return (
+                     <TouchableOpacity
+                       key={`anim-${value}`}
+                       style={[styles.pillBtn, selected && { backgroundColor: colors.ui.primary }]}
+                       onPress={() => updateSetting("pageTurnAnimation", value)}
+                     >
+                       <Text style={[styles.pillText, { color: selected ? colors.ui.onPrimary : colors.text.primary }]}>
+                         {value ? "ON" : "OFF"}
+                       </Text>
+                     </TouchableOpacity>
+                   );
+                })}
+              </View>
             </View>
-          </SettingRow>
+
+            <View style={styles.inlineRow}>
+              <Text style={[styles.settingLabel, { color: colors.text.primary }]}>全画面モード</Text>
+              <View style={[styles.pillContainer, { backgroundColor: colors.surfaceContainerHighest }]}>
+                {([true, false] as const).map((value) => {
+                   const selected = settings.fullscreen === value;
+                   return (
+                     <TouchableOpacity
+                       key={`fullscreen-${value}`}
+                       style={[styles.pillBtn, selected && { backgroundColor: colors.ui.primary }]}
+                       onPress={() => updateSetting("fullscreen", value)}
+                     >
+                       <Text style={[styles.pillText, { color: selected ? colors.ui.onPrimary : colors.text.primary }]}>
+                         {value ? "ON" : "OFF"}
+                       </Text>
+                     </TouchableOpacity>
+                   );
+                })}
+              </View>
+            </View>
+          </View>
+
         </Section>
       )}
 
+      <Section title="自動更新" colors={colors}>
+        <View style={[styles.settingCard, { backgroundColor: colors.surfaceContainerLow }]}>
+          <View style={styles.inlineRow}>
+            <Text style={[styles.settingLabel, { color: colors.text.primary }]}>バックグラウンド処理</Text>
+            <View style={[styles.pillContainer, { backgroundColor: colors.surfaceContainerHighest }]}>
+              {([true, false] as const).map((value) => {
+                const selected = bgEnabled === value;
+                return (
+                  <TouchableOpacity
+                    key={`bg-${value}`}
+                    style={[styles.pillBtn, selected && { backgroundColor: colors.ui.primary }]}
+                    onPress={() => handleBackgroundToggle(value)}
+                    disabled={isTogglingBackground}
+                  >
+                    <Text style={[styles.pillText, { color: selected ? colors.ui.onPrimary : colors.text.primary }]}>
+                      {value ? "ON" : "OFF"}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+          <Text style={[styles.bgDescription, { color: colors.text.secondary }]}>
+            深夜3〜8時・充電中・WiFi接続時に新着話の取り込みと先読みダウンロードを自動実行します。
+          </Text>
+        </View>
+      </Section>
       <Section title="アプリ" colors={colors}>
         <TouchableOpacity
-          style={[styles.appActionRow, { backgroundColor: colors.surface }]}
+          style={[styles.appActionCard, { backgroundColor: colors.surfaceContainerLow }]}
           onPress={handleCheckUpdate}
           disabled={isCheckingUpdate}
         >
-          <Ionicons
-            name="cloud-download-outline"
-            size={18}
-            color={colors.text.primary}
-          />
-          <Text style={[styles.actionLabel, { color: colors.text.primary }]}>
-            {isCheckingUpdate ? "確認中..." : "アップデートを確認"}
-          </Text>
+          <View style={styles.appActionLeft}>
+            <Ionicons
+              name="cloud-download-outline"
+              size={18}
+              color={colors.text.primary}
+            />
+            <Text style={[styles.appActionText, { color: colors.text.primary }]}>
+              {isCheckingUpdate ? "確認中..." : "アップデートを確認"}
+            </Text>
+          </View>
           {isCheckingUpdate ? (
             <ActivityIndicator size="small" color={colors.ui.primary} />
           ) : (
@@ -441,17 +556,14 @@ export default function SettingsScreen(
             />
           )}
         </TouchableOpacity>
-        <View style={[styles.infoRow, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.infoLabel, { color: colors.text.secondary }]}>
-            バージョン
-          </Text>
-          <Text style={[styles.infoValue, { color: colors.text.disabled }]}>
-            {getCurrentVersion()}
+        <View style={styles.footerContainer}>
+          <Text style={[styles.versionText, { color: colors.text.disabled }]}>
+            VERSION {getCurrentVersion()}
           </Text>
         </View>
       </Section>
 
-      <View style={{ height: 14 }} />
+      <View style={{ height: Spacing.xxl }} />
     </ScrollView>
   );
 }
@@ -466,174 +578,164 @@ function Section({
   colors: ThemeColors;
 }) {
   return (
-    <View style={styles.section}>
-      <Text style={[styles.sectionTitle, { color: colors.text.secondary }]}>
-        {title}
-      </Text>
-      {children}
-    </View>
-  );
-}
-
-function SettingRow({
-  label,
-  children,
-  colors,
-}: {
-  label: string;
-  children: React.ReactNode;
-  colors: ThemeColors;
-}) {
-  return (
-    <View style={[styles.settingRow, { backgroundColor: colors.surface }]}>
-      <Text style={[styles.settingLabel, { color: colors.text.primary }]}>
-        {label}
-      </Text>
+    <View style={styles.sectionContainer}>
+      {title ? (
+        <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+          {title}
+        </Text>
+      ) : null}
       {children}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  section: {
-    paddingHorizontal: Spacing.md,
-    marginBottom: Spacing.md,
+  container: {
+    flex: 1
+  },
+  sectionContainer: {
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.xl,
   },
   sectionTitle: {
-    ...Typography.caption,
+    ...Typography.uiLabel,
     fontWeight: "700",
-    marginBottom: 2,
+    marginBottom: Spacing.md,
+    marginLeft: Spacing.sm, // Asymmetry touch
   },
-  card: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 7,
-    borderRadius: Radius.md,
-    gap: Spacing.xs,
+  profileCard: {
+    padding: Spacing.lg,
+    borderRadius: Radius.lg,
+    marginBottom: Spacing.sm,
   },
   userRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.xs,
+    marginBottom: Spacing.md,
+  },
+  avatarCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: "center",
+    alignItems: "center",
   },
   userLabel: {
     ...Typography.caption,
-    fontSize: 11,
+    marginTop: 4,
   },
   userValue: {
-    ...Typography.body,
-    fontSize: 15,
-    fontWeight: "700",
+    ...Typography.title,
   },
   cardDescription: {
-    ...Typography.caption,
-    lineHeight: 16,
+    ...Typography.body,
+    marginBottom: Spacing.md,
   },
   actionRow: {
     flexDirection: "row",
-    gap: Spacing.xs,
+    gap: Spacing.md,
   },
   actionBtn: {
     flex: 1,
-    minHeight: 34,
-    borderWidth: 1,
-    borderRadius: Radius.md,
+    borderRadius: Radius.full,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 8,
-    paddingVertical: 7,
+    paddingVertical: Spacing.sm,
   },
   actionBtnText: {
-    fontSize: 12,
-    fontWeight: "700",
+    ...Typography.uiLabel,
   },
   primaryBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    paddingVertical: 9,
-    borderRadius: Radius.md,
+    gap: 8,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.full,
   },
   primaryBtnText: {
-    color: "#FFF",
-    fontSize: 12,
-    fontWeight: "700",
+    ...Typography.uiLabel,
   },
   themeRow: {
     flexDirection: "row",
-    gap: Spacing.xs,
+    gap: Spacing.md,
   },
   themeButton: {
     flex: 1,
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
     alignItems: "center",
-    paddingVertical: 7,
+    padding: Spacing.sm,
   },
-  settingRow: {
+  themePreviewBox: {
+    width: '100%',
+    aspectRatio: 1.5,
+    borderRadius: Radius.sm,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  settingCard: {
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
+    gap: Spacing.lg,
+    marginBottom: Spacing.md,
+  },
+  sliderCard: {
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
+    marginBottom: Spacing.md,
+  },
+  inlineRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 7,
-    marginBottom: 2,
   },
   settingLabel: {
     ...Typography.body,
-    fontSize: 14,
-  },
-  toggleRow: {
-    flexDirection: "row",
-    gap: 4,
-  },
-  toggleBtn: {
-    borderRadius: Radius.sm,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  toggleText: {
-    fontSize: 12,
     fontWeight: "700",
   },
-  sizeRow: {
+  pillContainer: {
+    flexDirection: "row",
+    borderRadius: Radius.full,
+    padding: 2,
+  },
+  pillBtn: {
+    borderRadius: Radius.full,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+  },
+  pillText: {
+    ...Typography.uiLabel,
+  },
+  bgDescription: {
+    ...Typography.caption,
+    marginTop: Spacing.sm,
+    lineHeight: 18,
+  },
+  appActionCard: {
+    borderRadius: Radius.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    marginBottom: Spacing.md,
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.xs,
-  },
-  sizeValue: {
-    ...Typography.body,
-    minWidth: 30,
-    textAlign: "center",
-    fontWeight: "700",
-  },
-  appActionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.xs,
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 7,
-    marginBottom: 2,
-  },
-  actionLabel: {
-    ...Typography.body,
-    flex: 1,
-    fontSize: 13,
-  },
-  infoRow: {
-    flexDirection: "row",
     justifyContent: "space-between",
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 7,
   },
-  infoLabel: {
-    ...Typography.body,
-    fontSize: 13,
+  appActionLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
   },
-  infoValue: {
-    ...Typography.body,
-    fontSize: 13,
+  appActionText: {
+    ...Typography.uiLabel,
+  },
+  footerContainer: {
+    alignItems: "center",
+    marginTop: Spacing.md,
+  },
+  versionText: {
+    ...Typography.caption,
+    marginBottom: Spacing.sm,
   },
 });

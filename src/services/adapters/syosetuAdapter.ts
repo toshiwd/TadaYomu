@@ -84,6 +84,120 @@ function stripHtml(html: string): string {
         .trim();
 }
 
+function buildIndexUrl(novelId: string, page: number): string {
+    const lowerId = novelId.toLowerCase();
+    return `${NAROU_BASE}/${lowerId}/?p=${page}`;
+}
+
+function parseChapterIndexPage(
+    html: string,
+    novelId: string,
+    initialChapterTitle = '',
+): { chapters: ChapterInfo[]; chapterTitle: string } {
+    const lowerId = novelId.toLowerCase();
+    const chapters: ChapterInfo[] = [];
+    let currentChapterTitle = initialChapterTitle;
+
+    if (html.includes('class="p-eplist"')) {
+        const parts = html.split(/<div\s+class="p-eplist__(chapter-title|sublist)"[^>]*>/i);
+
+        for (let i = 1; i < parts.length; i += 2) {
+            const type = parts[i];
+            const content = parts[i + 1];
+            if (!content) continue;
+
+            if (type.toLowerCase() === 'chapter-title') {
+                const textMatch = content.match(/([\s\S]*?)<\/div>/i);
+                if (textMatch) {
+                    currentChapterTitle = stripHtml(textMatch[1]).trim();
+                }
+            } else if (type.toLowerCase() === 'sublist') {
+                const linkMatch = content.match(/<a\s+href="\/[a-z0-9]+\/(\d+)\/"[^>]*>([\s\S]*?)<\/a>/i);
+                const dateMatch = content.match(/<div class="p-eplist__update">\s*([\d/:\s]+)(?:<span\s+title="([^"]+)"[^>]*>)?/i);
+
+                if (linkMatch) {
+                    const index = parseInt(linkMatch[1], 10);
+                    let title = stripHtml(linkMatch[2]).trim();
+                    if (currentChapterTitle) {
+                        title = `${currentChapterTitle} ${title}`;
+                    }
+
+                    let publishedAt = null;
+                    let revisedAt = null;
+
+                    if (dateMatch && dateMatch[1]) {
+                        publishedAt = new Date(dateMatch[1].trim().replace(/\//g, '-').replace(' ', 'T') + ':00+09:00').toISOString();
+                        revisedAt = publishedAt;
+
+                        if (dateMatch[2]) {
+                            const rvMatch = dateMatch[2].match(/([\d/:\s]+)/);
+                            if (rvMatch) {
+                                revisedAt = new Date(rvMatch[1].trim().replace(/\//g, '-').replace(' ', 'T') + ':00+09:00').toISOString();
+                            }
+                        }
+                    }
+
+                    if (index > 0 && title) {
+                        chapters.push({
+                            index,
+                            title,
+                            url: `${NAROU_BASE}/${lowerId}/${index}/`,
+                            publishedAt,
+                            revisedAt,
+                        });
+                    }
+                }
+            }
+        }
+    } else {
+        const elementRegex = /<div\s+class="chapter_title"[^>]*>([\s\S]*?)<\/div>|<dt\s+class="novel_sublist2">\s*([\d/:\s]+)(?:<span\s+title="([^"]+)"[^>]*>)?[\s\S]*?<\/dt>\s*<dd\s+class="subtitle">\s*<a\s+href="\/[a-z0-9]+\/(\d+)\/"[^>]*>([\s\S]*?)<\/a>\s*<\/dd>/gi;
+        let match: RegExpExecArray | null;
+
+        while ((match = elementRegex.exec(html)) !== null) {
+            if (match[1]) {
+                currentChapterTitle = stripHtml(match[1]).trim();
+                continue;
+            }
+
+            if (!match[4]) continue;
+
+            const rawDate = match[2] ? match[2].trim() : '';
+            const rawRevise = match[3] ? match[3].trim() : null;
+            const index = parseInt(match[4], 10);
+            let title = stripHtml(match[5]).trim();
+            if (currentChapterTitle) {
+                title = `${currentChapterTitle} ${title}`;
+            }
+
+            let publishedAt = null;
+            let revisedAt = null;
+
+            if (rawDate) {
+                publishedAt = new Date(rawDate.replace(/\//g, '-').replace(' ', 'T') + ':00+09:00').toISOString();
+                revisedAt = publishedAt;
+            }
+            if (rawRevise) {
+                const rvMatch = rawRevise.match(/([\d/:\s]+)/);
+                if (rvMatch) {
+                    revisedAt = new Date(rvMatch[1].trim().replace(/\//g, '-').replace(' ', 'T') + ':00+09:00').toISOString();
+                }
+            }
+
+            if (index > 0 && title) {
+                chapters.push({
+                    index,
+                    title,
+                    url: `${NAROU_BASE}/${lowerId}/${index}/`,
+                    publishedAt,
+                    revisedAt,
+                });
+            }
+        }
+    }
+
+    return { chapters, chapterTitle: currentChapterTitle };
+}
+
 /** Preserve ruby tags for the reader, strip everything else */
 function cleanHtmlForReader(html: string): string {
     // Keep <ruby>, <rb>, <rt>, <rp> tags
@@ -179,6 +293,12 @@ export const syosetuAdapter: SiteAdapter = {
                 lastUpdatedAt,
             };
         });
+    },
+
+    async getLatestChapterList(novelId: string, knownTotalEpisodes: number): Promise<ChapterInfo[]> {
+        const latestPage = Math.max(1, Math.ceil(Math.max(knownTotalEpisodes, 1) / 100));
+        const html = await rateLimitedFetch(buildIndexUrl(novelId, latestPage));
+        return parseChapterIndexPage(html, novelId).chapters;
     },
 
     async getChapterList(novelId: string): Promise<ChapterInfo[]> {

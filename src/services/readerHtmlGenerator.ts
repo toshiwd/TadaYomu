@@ -57,6 +57,7 @@ export function generateReaderHtml({
     const paragraphs: string[] = [];
     let currentLines: string[] = [];
     const isDialogue = (str: string) => /^[「『（]/.test(str.trim());
+    const toDisplayLine = (str: string) => isVertical ? str.replace(/^[\s　]+/, '') : str;
     const flushCurrent = () => {
       if (currentLines.length > 0) {
         paragraphs.push(`<p>${currentLines.join('<br>')}</p>`);
@@ -76,7 +77,7 @@ export function generateReaderHtml({
         flushCurrent();
         paragraphs.push(line);
       } else {
-        currentLines.push(line);
+        currentLines.push(toDisplayLine(line));
       }
     }
     flushCurrent();
@@ -184,11 +185,13 @@ ${fontLink}
   #reader::-webkit-scrollbar { display: none; }
 
   ${isVertical ? '#content' : '#reader'} p {
-    text-indent: 1em; margin: 0;
-    ${isVertical ? `margin-left: calc(0.6em * var(--paragraphSpacing));` : `margin-bottom: calc(1.0em * var(--paragraphSpacing));`}
+    margin: 0;
+    ${isVertical
+      ? `text-indent: 0; padding-top: 1em; margin-left: calc(0.6em * var(--paragraphSpacing));`
+      : `text-indent: 1em; margin-bottom: calc(1.0em * var(--paragraphSpacing));`}
   }
   ${isVertical ? '#content' : '#reader'} p:first-child { ${isVertical ? 'margin-right: 0;' : 'margin-top: 0;'} }
-  p.blank { ${isVertical ? `min-width: 1em;` : `min-height: calc(0.3em * var(--paragraphSpacing)); margin-bottom: calc(0.5em * var(--paragraphSpacing));`} }
+  p.blank { ${isVertical ? `padding-top: 0; min-width: 1em;` : `min-height: calc(0.3em * var(--paragraphSpacing)); margin-bottom: calc(0.5em * var(--paragraphSpacing));`} }
   
   /* Ruby spacing */
   ruby { ruby-align: center; ruby-position: over; }
@@ -339,6 +342,14 @@ ${fontLink}
     }));
   }
 
+  window.__tadayomuRestoreProgress = function(progress) {
+    var normalized = Number(progress);
+    if (!Number.isFinite(normalized)) return;
+    normalized = Math.max(0, Math.min(normalized, 1));
+    var restorePage = Math.round(normalized * Math.max(0, totalPages - 1));
+    goToPage(restorePage);
+  };
+
   function goNextPage() {
     if (currentPage < totalPages - 1) goToPage(currentPage + 1);
     else window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'next' }));
@@ -449,8 +460,7 @@ ${fontLink}
       calcPages();
       if (startAtLast) goToPage(Math.max(0, totalPages - 1));
       else if (${initProg} > 0) {
-        var restorePage = Math.round(${initProg} * Math.max(0, totalPages - 1));
-        goToPage(restorePage);
+        window.__tadayomuRestoreProgress(${initProg});
       }
       else goToPage(0);
       

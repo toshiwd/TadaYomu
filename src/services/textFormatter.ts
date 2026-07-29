@@ -58,8 +58,11 @@ export function formatNovelText(raw: string, options?: { showImages?: boolean })
   // 10. Bouten (Emphasis dots)
   text = applyBouten(text);
 
-  // 11. Trim leading/trailing blank lines
-  text = text.trim();
+  // 11. Trim leading/trailing blank lines without removing the full-width
+  // indentation intentionally added to the first content line.
+  text = text
+    .replace(/^(?:[ \t　]*\n)+/, "")
+    .replace(/(?:\n[ \t　]*)+$/, "");
 
   // 12. Restore <img> tags as inline images or link placeholders
   text = text.replace(/__IMG_(\d+)__/g, (match, p1) => {

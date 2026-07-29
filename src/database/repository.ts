@@ -166,8 +166,11 @@ export function upsertChapter(db: SQLiteDatabase, chapter: Omit<Chapter, 'id'>):
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(novel_id, chapter_index) DO UPDATE SET
        title = excluded.title,
-       local_path = excluded.local_path,
-       is_downloaded = excluded.is_downloaded,
+       local_path = COALESCE(excluded.local_path, chapters.local_path),
+       is_downloaded = CASE
+         WHEN excluded.is_downloaded = 1 THEN 1
+         ELSE chapters.is_downloaded
+       END,
        url = excluded.url,
        published_at = excluded.published_at,
        revised_at = excluded.revised_at`,
@@ -250,7 +253,7 @@ export function upsertReadingProgressIfChanged(
 
     const chapterChanged = current.current_chapter !== chapter;
     const progressDelta = Math.abs((current.scroll_percentage ?? 0) - scroll);
-    const elapsed = Date.now() - parseSQLiteDateMs(current.last_read_at);
+    const elapsed = Date.now() - parseReadingTimestampMs(current.last_read_at);
     const intervalPassed = elapsed >= minIntervalMs;
 
     if (chapterChanged || progressDelta >= minProgressDelta || intervalPassed) {
@@ -363,7 +366,7 @@ function safeParseJson<T>(str: string, fallback: T): T {
     try { return JSON.parse(str); } catch { return fallback; }
 }
 
-function parseSQLiteDateMs(raw: string): number {
+export function parseReadingTimestampMs(raw: string | null | undefined): number {
     if (!raw) return 0;
     if (raw.includes('T')) {
         const t = Date.parse(raw);
@@ -372,4 +375,11 @@ function parseSQLiteDateMs(raw: string): number {
     const normalized = raw.replace(' ', 'T') + 'Z';
     const t = Date.parse(normalized);
     return Number.isNaN(t) ? 0 : t;
+}
+
+export function isRemoteReadingProgressNewer(
+    localLastReadAt: string | null | undefined,
+    remoteLastReadAt: string | null | undefined,
+): boolean {
+    return parseReadingTimestampMs(remoteLastReadAt) > parseReadingTimestampMs(localLastReadAt);
 }

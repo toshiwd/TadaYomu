@@ -9,14 +9,13 @@ import type {
 import type { SiteType } from '../../types/novel';
 
 const HAMELN_BASE = 'https://syosetu.org';
-const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+const USER_AGENT = 'Mozilla/5.0 (Linux; Android 15; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Mobile Safari/537.36';
 
 async function fetchHtml(url: string): Promise<string> {
     console.log(`[HamelnAdapter] Fetching: ${url}`);
     const res = await fetch(url, {
         headers: {
             'User-Agent': USER_AGENT,
-            'Cookie': 'over18=off', // Ensure no R-18 block screen is hit if applicable, though Hameln doesn't strictly have a click-through for all, it's good practice.
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Language': 'ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7',
         },
@@ -48,6 +47,20 @@ function stripHtml(html: string): string {
         .trim();
 }
 
+export function extractHamelnAuthor(html: string): string {
+    const itempropMatch = html.match(
+        /<span[^>]*itemprop=["']author["'][^>]*>([\s\S]*?)<\/span>/i,
+    );
+    if (itempropMatch) {
+        return stripHtml(itempropMatch[1]).trim();
+    }
+
+    const labelMatch = html.match(
+        /(?:作者|作)[：:]\s*(?:<span[^>]*>|<a[^>]*>)?([\s\S]*?)(?:<\/span>|<\/a>|<br\s*\/?>|$)/i,
+    );
+    return labelMatch ? stripHtml(labelMatch[1]).trim() : '';
+}
+
 function cleanHtmlForReader(html: string): string {
     let cleaned = html
         .replace(/<br\s*\/?>/gi, '\n')
@@ -64,6 +77,12 @@ function cleanHtmlForReader(html: string): string {
         .replace(/&nbsp;/g, ' ');
 
     return cleaned.trim();
+}
+
+function parseHamelnDate(text: string): string | null {
+    const m = text.match(/(\d{4})[\/年]\s*(\d{1,2})[\/月]\s*(\d{1,2})日?\s+(\d{1,2}):(\d{1,2})/);
+    if (!m) return null;
+    return new Date(`${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}T${m[4].padStart(2, '0')}:${m[5].padStart(2, '0')}:00+09:00`).toISOString();
 }
 
 function htmlToNovelFormat(html: string): string {
@@ -112,8 +131,7 @@ export const hamelnAdapter: SiteAdapter = {
         const title = titleMatch ? stripHtml(titleMatch[1]) : novelId;
 
         // Extract author
-        const authorMatch = html.match(/作者：(?:<span[^>]*>|<a[^>]*>)?(.*?)(?:<\/span>|<\/a>|(?=<))/i);
-        const author = authorMatch ? stripHtml(authorMatch[1]).trim() : '';
+        const author = extractHamelnAuthor(html);
 
         // Extract synopsis
         const synopsisMatch = html.match(/<div\s+class="ss[^"]*">([\s\S]*?)<\/div>\s*<span/i) || html.match(/<div\s+class="ss[^"]*">([\s\S]*?)<\/div>/i);
@@ -184,6 +202,38 @@ export const hamelnAdapter: SiteAdapter = {
                         rvDate = new Date(`${m2[1]}-${m2[2].padStart(2, '0')}-${m2[3].padStart(2, '0')}T${m2[4].padStart(2, '0')}:${m2[5].padStart(2, '0')}:00+09:00`).toISOString();
                     }
                 }
+
+                chapters.push({
+                    index,
+                    title,
+                    url: `${HAMELN_BASE}/novel/${novelId}/${index}.html`,
+                    publishedAt: pbDate,
+                    revisedAt: rvDate,
+                });
+            }
+        }
+
+        if (chapters.length === 0) {
+            const entryMatch = html.match(/<ul\s+class=["'][^"']*\bentry\b[^"']*["'][^>]*>([\s\S]*?)<\/ul>/i);
+            const chapterListHtml = entryMatch ? entryMatch[1] : html;
+            const linkRegex = /<a\s+[^>]*href=["'](?:\.\/|\/novel\/\d+\/)(\d+)\.html["'][^>]*>([\s\S]*?)<\/a>/gi;
+
+            while ((match = linkRegex.exec(chapterListHtml)) !== null) {
+                const index = parseInt(match[1], 10);
+                if (index <= 0 || seenIndexes.has(index)) continue;
+
+                seenIndexes.add(index);
+
+                const anchorHtml = match[2];
+                const dateHtml = anchorHtml.match(/<span\s+class=["']date["'][^>]*>([\s\S]*?)<\/span>/i)?.[1] ?? '';
+                const titleHtml = anchorHtml
+                    .replace(/<span\s+class=["']date["'][^>]*>[\s\S]*?<\/span>/gi, '')
+                    .replace(/<br\s*\/?>[\s\S]*$/i, '');
+                const title = stripHtml(titleHtml).trim() || `第${index}話`;
+                const dateText = stripHtml(dateHtml);
+                const dateMatches = dateText.match(/(\d{4}[\/年]\s*\d{1,2}[\/月]\s*\d{1,2}日?\s+\d{1,2}:\d{1,2})/g) ?? [];
+                const pbDate = dateMatches[0] ? parseHamelnDate(dateMatches[0]) : null;
+                const rvDate = dateMatches[1] ? parseHamelnDate(dateMatches[1]) : pbDate;
 
                 chapters.push({
                     index,

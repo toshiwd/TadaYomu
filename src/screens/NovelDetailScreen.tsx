@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -29,12 +29,13 @@ import {
   updateNovel,
   upsertReadingProgress,
   upsertChapter,
+  isRemoteReadingProgressNewer,
 } from "../database/repository";
 import {
   deleteNovelData,
   downloadSingleChapter,
 } from "../services/downloadManager";
-import { getAdapter } from "../services/siteAdapter";
+import { getAdapter, type ChapterInfo } from "../services/siteAdapter";
 import {
   useBulkDownloadProgress,
   startDownload as startGlobalDownload,
@@ -59,6 +60,7 @@ export default function NovelDetailScreen({
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [isSynopsisExpanded, setIsSynopsisExpanded] = useState(false);
   const [fetchingChapters, setFetchingChapters] = useState(false);
+  const chapterFetchRunRef = useRef(0);
 
   const storeProgress = useBulkDownloadProgress(novelId);
   const bulkState: BulkDownloadState = storeProgress?.state ?? "idle";
@@ -81,18 +83,84 @@ export default function NovelDetailScreen({
     }
   };
 
+  const persistChapterList = useCallback(
+    (n: Novel, chapterList: ChapterInfo[], totalEpisodes: number) => {
+      if (chapterList.length === 0) return;
+
+      const publishedDates = chapterList
+        .map((ch) => ch.publishedAt)
+        .filter((value): value is string => Boolean(value))
+        .sort();
+      const latestPublishedAt = publishedDates[publishedDates.length - 1];
+
+      db.withTransactionSync(() => {
+        for (const ch of chapterList) {
+          upsertChapter(db, {
+            novelId: n.id,
+            index: ch.index,
+            title: ch.title,
+            localPath: null,
+            isDownloaded: false,
+            url: ch.url,
+            publishedAt: ch.publishedAt,
+            revisedAt: ch.revisedAt,
+          });
+        }
+      });
+
+      updateNovel(db, n.id, {
+        totalEpisodes,
+        siteUpdatedAt: latestPublishedAt || n.siteUpdatedAt,
+        lastCheckedAt: new Date().toISOString(),
+      });
+    },
+    [db],
+  );
+
+  const refreshLocalChapterState = useCallback(
+    (id: number) => {
+      setChapters(getChaptersByNovelId(db, id));
+      setNovel(getNovelById(db, id));
+    },
+    [db],
+  );
+
   const fetchChapterList = useCallback(
     async (n: Novel) => {
       const adapter = getAdapter(n.siteType);
       if (!adapter) return;
 
+      const runId = chapterFetchRunRef.current + 1;
+      chapterFetchRunRef.current = runId;
       setFetchingChapters(true);
       try {
-        const chapterList = await adapter.getChapterList(n.siteNovelId);
+        const localCount = getChaptersByNovelId(db, n.id).length;
+        if (adapter.getLatestChapterList && n.totalEpisodes > localCount) {
+          const latestChapters = await adapter.getLatestChapterList(
+            n.siteNovelId,
+            n.totalEpisodes,
+          );
+          if (chapterFetchRunRef.current !== runId) return;
+
+          if (latestChapters.length > 0) {
+            const maxLatestIndex = Math.max(...latestChapters.map((ch) => ch.index));
+            persistChapterList(
+              n,
+              latestChapters,
+              Math.max(n.totalEpisodes, maxLatestIndex),
+            );
+            refreshLocalChapterState(n.id);
+          }
+        }
+
+        const freshNovel = getNovelById(db, n.id) ?? n;
+        const chapterList = await adapter.getChapterList(freshNovel.siteNovelId);
+        if (chapterFetchRunRef.current !== runId) return;
+
         db.withTransactionSync(() => {
           for (const ch of chapterList) {
             upsertChapter(db, {
-              novelId: n.id,
+              novelId: freshNovel.id,
               index: ch.index,
               title: ch.title,
               localPath: null,
@@ -103,12 +171,11 @@ export default function NovelDetailScreen({
             });
           }
         });
-        updateNovel(db, n.id, {
+        updateNovel(db, freshNovel.id, {
           totalEpisodes: chapterList.length,
           lastCheckedAt: new Date().toISOString(),
         });
-        setChapters(getChaptersByNovelId(db, n.id));
-        setNovel(getNovelById(db, n.id));
+        refreshLocalChapterState(freshNovel.id);
       } catch (err: any) {
         console.error("Failed to fetch chapter list", err);
         Alert.alert(
@@ -116,10 +183,12 @@ export default function NovelDetailScreen({
           `作品情報の更新に失敗しました。\n${err?.message || "ネットワークエラー"}`
         );
       } finally {
-        setFetchingChapters(false);
+        if (chapterFetchRunRef.current === runId) {
+          setFetchingChapters(false);
+        }
       }
     },
-    [db],
+    [db, persistChapterList, refreshLocalChapterState],
   );
 
   const loadData = useCallback(() => {
@@ -141,9 +210,12 @@ export default function NovelDetailScreen({
         .downloadProgress(n.siteNovelId, n.siteType)
         .then((remoteProgress) => {
           if (!remoteProgress) return;
-          const localTime = progress ? new Date(progress.lastReadAt).getTime() : 0;
-          const remoteTime = new Date(remoteProgress.lastReadAt).getTime();
-          if (remoteTime > localTime) {
+          if (
+            isRemoteReadingProgressNewer(
+              progress?.lastReadAt,
+              remoteProgress.lastReadAt,
+            )
+          ) {
             setCurrentChapter(remoteProgress.currentChapter);
             upsertReadingProgress(
               db,

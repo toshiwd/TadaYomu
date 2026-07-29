@@ -3,7 +3,15 @@ import * as BackgroundFetch from 'expo-background-fetch';
 import * as Battery from 'expo-battery';
 import * as Network from 'expo-network';
 import { openDatabaseSync } from 'expo-sqlite';
-import { getAllNovels } from '../database/repository';
+import type { SQLiteDatabase } from 'expo-sqlite';
+import {
+    countDownloadedChapters,
+    getAllNovels,
+    getNovelById,
+    getSetting,
+    setSetting,
+} from '../database/repository';
+import { initDatabase } from '../database/schema';
 import { checkNovelUpdates } from './downloadManager';
 import { startBulkDownload } from './bulkDownloadService';
 
@@ -32,6 +40,14 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
     try {
         console.log('[BackgroundTask] Starting background fetch execution...');
 
+        const db = openDatabaseSync('tadayomu.db');
+        initDatabase(db);
+
+        if (getSetting(db, 'background_enabled') === '0') {
+            console.log('[BackgroundTask] Skipped: Background processing is disabled.');
+            return BackgroundFetch.BackgroundFetchResult.NoData;
+        }
+
         // 1. Time Constraint
         if (!isWithinTimeWindow()) {
             console.log('[BackgroundTask] Skipped: Outside of time window (3:00 - 8:00).');
@@ -56,45 +72,60 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
             return BackgroundFetch.BackgroundFetchResult.NoData;
         }
 
-        const db = openDatabaseSync('tadayomu.db');
-
         // Verify if we already ran today to prevent multiple large runs
         const todayStr = getTodayString();
         const novels = getAllNovels(db);
 
-        // Find novels that haven't been checked today
-        const novelsToCheck = novels.filter(n => {
-            if (!n.lastCheckedAt) return true;
-            return !n.lastCheckedAt.startsWith(todayStr);
-        });
-
-        if (novelsToCheck.length === 0) {
-            console.log('[BackgroundTask] Skipped: All novels already checked today.');
+        if (novels.length === 0) {
+            console.log('[BackgroundTask] Skipped: No novels in library.');
             return BackgroundFetch.BackgroundFetchResult.NoData;
+        }
+
+        // Find novels that haven't been checked today. Pending pre-downloads are still
+        // handled for every novel below, even if the metadata check was already done.
+        const shouldCheckToday = new Set<number>();
+        for (const novel of novels) {
+            if (!novel.lastCheckedAt || !novel.lastCheckedAt.startsWith(todayStr)) {
+                shouldCheckToday.add(novel.id);
+            }
         }
 
         let newDataFound = false;
 
         // Process sequentially to be safe with DB/Network
-        for (const novel of novelsToCheck) {
-            console.log(`[BackgroundTask] Checking updates for novel: ${novel.title}`);
-            const newChaptersCount = await checkNovelUpdates(db, novel);
-
-            if (newChaptersCount > 0) {
-                newDataFound = true;
-                console.log(`[BackgroundTask] Found ${newChaptersCount} new chapters. Starting bulk download.`);
-
-                // We need to wait for startBulkDownload to finish before moving to the next.
-                // startBulkDownload takes a callback, so we wrap it in a Promise.
-                await new Promise<void>((resolve) => {
-                    startBulkDownload(db, novel, (progress) => {
-                        if (progress.state === 'idle' || progress.state === 'error' || progress.state === 'paused') {
-                            resolve();
-                        }
-                    });
-                });
+        for (const novel of novels) {
+            let newChaptersCount = 0;
+            if (shouldCheckToday.has(novel.id)) {
+                console.log(`[BackgroundTask] Checking updates for novel: ${novel.title}`);
+                newChaptersCount = await checkNovelUpdates(db, novel);
+                if (newChaptersCount > 0) {
+                    newDataFound = true;
+                    console.log(`[BackgroundTask] Found ${newChaptersCount} new chapters.`);
+                } else {
+                    console.log(`[BackgroundTask] No new chapters for novel: ${novel.title}`);
+                }
             } else {
-                console.log(`[BackgroundTask] No new chapters for novel: ${novel.title}`);
+                console.log(`[BackgroundTask] Skipping update check already done today: ${novel.title}`);
+            }
+
+            const downloadNovel = getNovelById(db, novel.id) ?? novel;
+            const beforeDownloaded = countDownloadedChapters(db, novel.id);
+            let bulkError: string | undefined;
+
+            await startBulkDownload(db, downloadNovel, (progress) => {
+                if (progress.state === 'error') {
+                    bulkError = progress.errorMessage || 'unknown error';
+                }
+            });
+
+            const afterDownloaded = countDownloadedChapters(db, novel.id);
+            const downloadedNow = Math.max(0, afterDownloaded - beforeDownloaded);
+            if (downloadedNow > 0) {
+                newDataFound = true;
+                console.log(`[BackgroundTask] Downloaded ${downloadedNow} chapters for novel: ${novel.title}`);
+            }
+            if (bulkError) {
+                console.warn(`[BackgroundTask] Bulk download failed for ${novel.title}: ${bulkError}`);
             }
         }
 
@@ -109,7 +140,7 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
 /**
  * Register the task with the OS explicitly.
  */
-export async function registerBackgroundTask() {
+export async function registerBackgroundTask(): Promise<boolean> {
     try {
         const isRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_FETCH_TASK);
         if (!isRegistered) {
@@ -122,7 +153,41 @@ export async function registerBackgroundTask() {
         } else {
             console.log('[BackgroundTask] Task already registered.');
         }
+        return true;
     } catch (err) {
         console.error('[BackgroundTask] Registration failed:', err);
+        return false;
     }
+}
+
+/**
+ * Unregister the background task from the OS.
+ */
+export async function unregisterBackgroundTask(): Promise<boolean> {
+    try {
+        const isRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_FETCH_TASK);
+        if (isRegistered) {
+            await BackgroundFetch.unregisterTaskAsync(BACKGROUND_FETCH_TASK);
+            console.log('[BackgroundTask] Unregistered successfully.');
+        }
+        return true;
+    } catch (err) {
+        console.error('[BackgroundTask] Unregistration failed:', err);
+        return false;
+    }
+}
+
+/**
+ * Toggle background task on/off and persist the setting.
+ */
+export async function toggleBackgroundTask(db: SQLiteDatabase, enabled: boolean): Promise<boolean> {
+    const changed = enabled
+        ? await registerBackgroundTask()
+        : await unregisterBackgroundTask();
+
+    if (changed) {
+        setSetting(db, 'background_enabled', enabled ? '1' : '0');
+    }
+
+    return changed;
 }

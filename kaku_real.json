@@ -1,0 +1,3080 @@
+{
+  "ROOT_QUERY": {
+    "__typename": "Query",
+    "visitor": null,
+    "canShowFeatures({\"names\":[\"kakuyomu-contest-selection\",\"payment-maintenance\",\"user-mute-web\",\"notification-complete-work-of-following-user\",\"notification-complete-work-of-following-work\",\"notification-publish-reserved-episode\",\"search_condition_read\",\"react_login\",\"image-optimizer\",\"3d_secure\",\"kakuyomu_next_episode_image\",\"natsugatari_contest\",\"debug-itsudemo-natsugatari\",\"adjust_custom_link\",\"kakuyomu-qrcode\",\"recaptcha\",\"payments-paypay\",\"ranking-separation\",\"subscription-page-v2\",\"publication-migration\",\"10th-anniversary-logo\",\"typo_reports\",\"publication2nd-index-genre\",\"publication2nd-index-hero\",\"publication2nd-index-latest\",\"publication2nd-index-movie\",\"publication-official-notice\",\"payment-only-gift-user\",\"publication-related-work\",\"work-toc-v2\"]})": [
+      {
+        "__ref": "FeatureFlag:kakuyomu-contest-selection"
+      },
+      {
+        "__ref": "FeatureFlag:payment-maintenance"
+      },
+      {
+        "__ref": "FeatureFlag:user-mute-web"
+      },
+      {
+        "__ref": "FeatureFlag:notification-complete-work-of-following-user"
+      },
+      {
+        "__ref": "FeatureFlag:notification-complete-work-of-following-work"
+      },
+      {
+        "__ref": "FeatureFlag:notification-publish-reserved-episode"
+      },
+      {
+        "__ref": "FeatureFlag:search_condition_read"
+      },
+      {
+        "__ref": "FeatureFlag:react_login"
+      },
+      {
+        "__ref": "FeatureFlag:image-optimizer"
+      },
+      {
+        "__ref": "FeatureFlag:3d_secure"
+      },
+      {
+        "__ref": "FeatureFlag:kakuyomu_next_episode_image"
+      },
+      {
+        "__ref": "FeatureFlag:natsugatari_contest"
+      },
+      {
+        "__ref": "FeatureFlag:debug-itsudemo-natsugatari"
+      },
+      {
+        "__ref": "FeatureFlag:adjust_custom_link"
+      },
+      {
+        "__ref": "FeatureFlag:kakuyomu-qrcode"
+      },
+      {
+        "__ref": "FeatureFlag:recaptcha"
+      },
+      {
+        "__ref": "FeatureFlag:payments-paypay"
+      },
+      {
+        "__ref": "FeatureFlag:ranking-separation"
+      },
+      {
+        "__ref": "FeatureFlag:subscription-page-v2"
+      },
+      {
+        "__ref": "FeatureFlag:publication-migration"
+      },
+      {
+        "__ref": "FeatureFlag:10th-anniversary-logo"
+      },
+      {
+        "__ref": "FeatureFlag:typo_reports"
+      },
+      {
+        "__ref": "FeatureFlag:publication2nd-index-genre"
+      },
+      {
+        "__ref": "FeatureFlag:publication2nd-index-hero"
+      },
+      {
+        "__ref": "FeatureFlag:publication2nd-index-latest"
+      },
+      {
+        "__ref": "FeatureFlag:publication2nd-index-movie"
+      },
+      {
+        "__ref": "FeatureFlag:publication-official-notice"
+      },
+      {
+        "__ref": "FeatureFlag:payment-only-gift-user"
+      },
+      {
+        "__ref": "FeatureFlag:publication-related-work"
+      },
+      {
+        "__ref": "FeatureFlag:work-toc-v2"
+      }
+    ],
+    "work({\"id\":\"1177354054935149052\"})": {
+      "__ref": "Work:1177354054935149052"
+    },
+    "giftItems({\"itemKind\":\"SUBSCRIPTION\"})": [
+      {
+        "__ref": "GiftItem:16816927859240802446"
+      },
+      {
+        "__ref": "GiftItem:16816927859240802447"
+      },
+      {
+        "__ref": "GiftItem:16816927859240802448"
+      },
+      {
+        "__ref": "GiftItem:16818093073489369044"
+      },
+      {
+        "__ref": "GiftItem:16818093073489369100"
+      },
+      {
+        "__ref": "GiftItem:16818093073489369124"
+      },
+      {
+        "__ref": "GiftItem:16818093073489369161"
+      }
+    ]
+  },
+  "FeatureFlag:kakuyomu-contest-selection": {
+    "__typename": "FeatureFlag",
+    "id": "kakuyomu-contest-selection",
+    "name": "kakuyomu-contest-selection",
+    "released": true
+  },
+  "FeatureFlag:payment-maintenance": {
+    "__typename": "FeatureFlag",
+    "id": "payment-maintenance",
+    "name": "payment-maintenance",
+    "released": false
+  },
+  "FeatureFlag:user-mute-web": {
+    "__typename": "FeatureFlag",
+    "id": "user-mute-web",
+    "name": "user-mute-web",
+    "released": false
+  },
+  "FeatureFlag:notification-complete-work-of-following-user": {
+    "__typename": "FeatureFlag",
+    "id": "notification-complete-work-of-following-user",
+    "name": "notification-complete-work-of-following-user",
+    "released": true
+  },
+  "FeatureFlag:notification-complete-work-of-following-work": {
+    "__typename": "FeatureFlag",
+    "id": "notification-complete-work-of-following-work",
+    "name": "notification-complete-work-of-following-work",
+    "released": true
+  },
+  "FeatureFlag:notification-publish-reserved-episode": {
+    "__typename": "FeatureFlag",
+    "id": "notification-publish-reserved-episode",
+    "name": "notification-publish-reserved-episode",
+    "released": true
+  },
+  "FeatureFlag:search_condition_read": {
+    "__typename": "FeatureFlag",
+    "id": "search_condition_read",
+    "name": "search_condition_read",
+    "released": false
+  },
+  "FeatureFlag:react_login": {
+    "__typename": "FeatureFlag",
+    "id": "react_login",
+    "name": "react_login",
+    "released": false
+  },
+  "FeatureFlag:image-optimizer": {
+    "__typename": "FeatureFlag",
+    "id": "image-optimizer",
+    "name": "image-optimizer",
+    "released": true
+  },
+  "FeatureFlag:3d_secure": {
+    "__typename": "FeatureFlag",
+    "id": "3d_secure",
+    "name": "3d_secure",
+    "released": true
+  },
+  "FeatureFlag:kakuyomu_next_episode_image": {
+    "__typename": "FeatureFlag",
+    "id": "kakuyomu_next_episode_image",
+    "name": "kakuyomu_next_episode_image",
+    "released": true
+  },
+  "FeatureFlag:natsugatari_contest": {
+    "__typename": "FeatureFlag",
+    "id": "natsugatari_contest",
+    "name": "natsugatari_contest",
+    "released": false
+  },
+  "FeatureFlag:debug-itsudemo-natsugatari": {
+    "__typename": "FeatureFlag",
+    "id": "debug-itsudemo-natsugatari",
+    "name": "debug-itsudemo-natsugatari",
+    "released": false
+  },
+  "FeatureFlag:adjust_custom_link": {
+    "__typename": "FeatureFlag",
+    "id": "adjust_custom_link",
+    "name": "adjust_custom_link",
+    "released": true
+  },
+  "FeatureFlag:kakuyomu-qrcode": {
+    "__typename": "FeatureFlag",
+    "id": "kakuyomu-qrcode",
+    "name": "kakuyomu-qrcode",
+    "released": true
+  },
+  "FeatureFlag:recaptcha": {
+    "__typename": "FeatureFlag",
+    "id": "recaptcha",
+    "name": "recaptcha",
+    "released": true
+  },
+  "FeatureFlag:payments-paypay": {
+    "__typename": "FeatureFlag",
+    "id": "payments-paypay",
+    "name": "payments-paypay",
+    "released": true
+  },
+  "FeatureFlag:ranking-separation": {
+    "__typename": "FeatureFlag",
+    "id": "ranking-separation",
+    "name": "ranking-separation",
+    "released": true
+  },
+  "FeatureFlag:subscription-page-v2": {
+    "__typename": "FeatureFlag",
+    "id": "subscription-page-v2",
+    "name": "subscription-page-v2",
+    "released": true
+  },
+  "FeatureFlag:publication-migration": {
+    "__typename": "FeatureFlag",
+    "id": "publication-migration",
+    "name": "publication-migration",
+    "released": true
+  },
+  "FeatureFlag:10th-anniversary-logo": {
+    "__typename": "FeatureFlag",
+    "id": "10th-anniversary-logo",
+    "name": "10th-anniversary-logo",
+    "released": true
+  },
+  "FeatureFlag:typo_reports": {
+    "__typename": "FeatureFlag",
+    "id": "typo_reports",
+    "name": "typo_reports",
+    "released": true
+  },
+  "FeatureFlag:publication2nd-index-genre": {
+    "__typename": "FeatureFlag",
+    "id": "publication2nd-index-genre",
+    "name": "publication2nd-index-genre",
+    "released": false
+  },
+  "FeatureFlag:publication2nd-index-hero": {
+    "__typename": "FeatureFlag",
+    "id": "publication2nd-index-hero",
+    "name": "publication2nd-index-hero",
+    "released": false
+  },
+  "FeatureFlag:publication2nd-index-latest": {
+    "__typename": "FeatureFlag",
+    "id": "publication2nd-index-latest",
+    "name": "publication2nd-index-latest",
+    "released": false
+  },
+  "FeatureFlag:publication2nd-index-movie": {
+    "__typename": "FeatureFlag",
+    "id": "publication2nd-index-movie",
+    "name": "publication2nd-index-movie",
+    "released": false
+  },
+  "FeatureFlag:publication-official-notice": {
+    "__typename": "FeatureFlag",
+    "id": "publication-official-notice",
+    "name": "publication-official-notice",
+    "released": false
+  },
+  "FeatureFlag:payment-only-gift-user": {
+    "__typename": "FeatureFlag",
+    "id": "payment-only-gift-user",
+    "name": "payment-only-gift-user",
+    "released": false
+  },
+  "FeatureFlag:publication-related-work": {
+    "__typename": "FeatureFlag",
+    "id": "publication-related-work",
+    "name": "publication-related-work",
+    "released": false
+  },
+  "FeatureFlag:work-toc-v2": {
+    "__typename": "FeatureFlag",
+    "id": "work-toc-v2",
+    "name": "work-toc-v2",
+    "released": true
+  },
+  "UserAccount:4852201425154963466": {
+    "__typename": "UserAccount",
+    "id": "4852201425154963466",
+    "name": "rocket_syoukai",
+    "activityName": "ロケット商会",
+    "isOfficialUser": false,
+    "visitorIsBlocking": false,
+    "visitorIsBlocked": false,
+    "screenName": "@rocket_syoukai",
+    "loyaltyUser": {
+      "__ref": "LoyaltyUser:4852201425154963466"
+    },
+    "visitorIsSponsor": false,
+    "sponsorByVisitor": null,
+    "publicationLabel": null,
+    "visitorIsFollowing": false
+  },
+  "Episode:1177354054935149092": {
+    "__typename": "Episode",
+    "id": "1177354054935149092",
+    "title": "序",
+    "publishedAt": "2020-10-28T13:46:35.000Z"
+  },
+  "UserAccount:16818093083290064185": {
+    "__typename": "UserAccount",
+    "id": "16818093083290064185",
+    "totalWorkReviews": 16,
+    "name": "leekk",
+    "activityName": "可不可",
+    "isOfficialUser": false
+  },
+  "TextualWorkReview:2912051596768728660": {
+    "__typename": "TextualWorkReview",
+    "id": "2912051596768728660",
+    "reviewerUser": {
+      "__ref": "UserAccount:16818093083290064185"
+    },
+    "title": "最高でした。",
+    "body": "最高の作品ありがとうございます。\nザイロの反骨精神。\nテオリッタの可愛さで癒されました。\n\nもっと早くこの作品に出会いたかった!",
+    "textualCreatedAt": "2026-04-02T08:45:50Z",
+    "isSpoiler": true,
+    "point": 3,
+    "likeCount": 1,
+    "visitorHasLiked": false
+  },
+  "UserAccount:822139845932550347": {
+    "__typename": "UserAccount",
+    "id": "822139845932550347",
+    "totalWorkReviews": 22,
+    "name": "Himakaisland",
+    "activityName": "モメミム",
+    "isOfficialUser": false
+  },
+  "TextualWorkReview:822139845963401560": {
+    "__typename": "TextualWorkReview",
+    "id": "822139845963401560",
+    "reviewerUser": {
+      "__ref": "UserAccount:822139845932550347"
+    },
+    "title": "アニメと両方見てます",
+    "body": "アニメでは描写できなかった部分だったりも見れて最高です。しかし、問題は、すごい面白い見せ場が多いことでしょう。実際アニメ１期のラストは最高です。アニメから見るか小説から見るか、それが問題だ。",
+    "textualCreatedAt": "2026-03-29T08:54:22Z",
+    "isSpoiler": false,
+    "point": 3,
+    "likeCount": 1,
+    "visitorHasLiked": false
+  },
+  "UserAccount:16818093086494137784": {
+    "__typename": "UserAccount",
+    "id": "16818093086494137784",
+    "totalWorkReviews": 3,
+    "name": "revival21",
+    "activityName": "re",
+    "isOfficialUser": false
+  },
+  "TextualWorkReview:2912051595515680394": {
+    "__typename": "TextualWorkReview",
+    "id": "2912051595515680394",
+    "reviewerUser": {
+      "__ref": "UserAccount:16818093086494137784"
+    },
+    "title": "アニメから来ました",
+    "body": "アニメから来ました。続きが気になって原作まで追っかけ始めたのは久々です。",
+    "textualCreatedAt": "2026-03-15T07:58:11Z",
+    "isSpoiler": false,
+    "point": 3,
+    "likeCount": 1,
+    "visitorHasLiked": false
+  },
+  "UserAccount:16818093075912975009": {
+    "__typename": "UserAccount",
+    "id": "16818093075912975009",
+    "totalWorkReviews": 4,
+    "name": "tokiyomi_there",
+    "activityName": "縁側×野良猫",
+    "isOfficialUser": false
+  },
+  "TextualWorkReview:822139842695808157": {
+    "__typename": "TextualWorkReview",
+    "id": "822139842695808157",
+    "reviewerUser": {
+      "__ref": "UserAccount:16818093075912975009"
+    },
+    "title": "アニメから入りました。",
+    "body": "言葉短いですが一言　　　　　ほんといい",
+    "textualCreatedAt": "2026-02-09T22:56:23Z",
+    "isSpoiler": false,
+    "point": 3,
+    "likeCount": 4,
+    "visitorHasLiked": false
+  },
+  "UserAccount:1177354054918476360": {
+    "__typename": "UserAccount",
+    "id": "1177354054918476360",
+    "totalWorkReviews": 20,
+    "name": "tennnennboy",
+    "activityName": "@tennnennboy",
+    "isOfficialUser": false
+  },
+  "TextualWorkReview:822139844152389180": {
+    "__typename": "TextualWorkReview",
+    "id": "822139844152389180",
+    "reviewerUser": {
+      "__ref": "UserAccount:1177354054918476360"
+    },
+    "title": "読めばタイトルの意味が分かる",
+    "body": "RPGの勇者は英雄や希望って感じで描かれているけど、実際は死と再生をループしてるんですよね、それを勇者刑と表現してるのが良い感じに皮肉ってて面白い。",
+    "textualCreatedAt": "2026-01-29T10:58:53Z",
+    "isSpoiler": true,
+    "point": 3,
+    "likeCount": 4,
+    "visitorHasLiked": false
+  },
+  "UserAccount:16816452219228623545": {
+    "__typename": "UserAccount",
+    "id": "16816452219228623545",
+    "totalWorkReviews": 66,
+    "name": "arisu1967",
+    "activityName": "エデン",
+    "isOfficialUser": false
+  },
+  "TextualWorkReview:822139843995962308": {
+    "__typename": "TextualWorkReview",
+    "id": "822139843995962308",
+    "reviewerUser": {
+      "__ref": "UserAccount:16816452219228623545"
+    },
+    "title": "ザイロの正直さと反骨精神",
+    "body": "１話から毎回欠かさずアニメ見てます。\n\n次回の放送も楽しみにしています。",
+    "textualCreatedAt": "2026-01-27T02:31:54Z",
+    "isSpoiler": false,
+    "point": 3,
+    "likeCount": 0,
+    "visitorHasLiked": false
+  },
+  "UserAccount:822139840412503376": {
+    "__typename": "UserAccount",
+    "id": "822139840412503376",
+    "totalWorkReviews": 5,
+    "name": "koduck2432",
+    "activityName": "@koduck2432",
+    "isOfficialUser": false
+  },
+  "TextualWorkReview:822139843924728559": {
+    "__typename": "TextualWorkReview",
+    "id": "822139843924728559",
+    "reviewerUser": {
+      "__ref": "UserAccount:822139840412503376"
+    },
+    "title": "テオリッタ最高！テオリッタ最高！",
+    "body": "勇者がかっけぇんですわ",
+    "textualCreatedAt": "2026-01-26T00:12:14Z",
+    "isSpoiler": false,
+    "point": 3,
+    "likeCount": 4,
+    "visitorHasLiked": false
+  },
+  "UserAccount:822139840647289442": {
+    "__typename": "UserAccount",
+    "id": "822139840647289442",
+    "totalWorkReviews": 11,
+    "name": "LucaVerce",
+    "activityName": "LucaVerce",
+    "isOfficialUser": false
+  },
+  "TextualWorkReview:822139842676542156": {
+    "__typename": "TextualWorkReview",
+    "id": "822139842676542156",
+    "reviewerUser": {
+      "__ref": "UserAccount:822139840647289442"
+    },
+    "title": "なんだこれ？圧倒的すぎないか？",
+    "body": "ブーンがアルファベットを武器に戦うようです。\n\nのように\n\nアルファベットを武器にしたら面白そうという設定に肉付けをする\n\n勇者という職業？を刑罰にしたら面白そう、という設定に肉付けをする。\n\nをしたらめっちゃおもろいやん…って感じの作品…\n\nフックもそうだし、中身もやばい。1話のつかみもそうだし、てゆーかあらすじとタイトルも超いい。洗練されすぎ\n\n本当に、ブーンアルファに初めて出会ったときのようなワクワク感がありますわ…\n\nてゆーか、今はこのレベルで書けないとだめなの？ラノベっていうか、小説ってゆーか…なんだ？説明しづらいけどハリー・ポッターとかと同じ棚にある様な文体と世界観の厚さじゃないですか？たとえ難しいけど\n\nアニメは見てないんですけど、タイトルだけ見て気になって来たら…プロの人ってゆーか神が書いてるんじゃないの？って感じの作品です…すごすぎまじで\n星3じゃ足りねーよこれ",
+    "textualCreatedAt": "2026-01-06T11:48:33Z",
+    "isSpoiler": false,
+    "point": 3,
+    "likeCount": 10,
+    "visitorHasLiked": false
+  },
+  "UserAccount:16818093073606621293": {
+    "__typename": "UserAccount",
+    "id": "16818093073606621293",
+    "totalWorkReviews": 9,
+    "name": "agoo0ton",
+    "activityName": "@agoo0ton",
+    "isOfficialUser": false
+  },
+  "TextualWorkReview:822139842550835668": {
+    "__typename": "TextualWorkReview",
+    "id": "822139842550835668",
+    "reviewerUser": {
+      "__ref": "UserAccount:16818093073606621293"
+    },
+    "title": "アニメ化の作画が大当たりのやつは原作が気になる",
+    "body": "アニメ化の作画が良すぎてこれから原作追っかけます",
+    "textualCreatedAt": "2026-01-04T11:45:40Z",
+    "isSpoiler": false,
+    "point": 3,
+    "likeCount": 10,
+    "visitorHasLiked": false
+  },
+  "UserAccount:16817330658137944390": {
+    "__typename": "UserAccount",
+    "id": "16817330658137944390",
+    "totalWorkReviews": 11,
+    "name": "pontaro-san",
+    "activityName": "ね子だるま",
+    "isOfficialUser": false
+  },
+  "TextualWorkReview:16818622171400440123": {
+    "__typename": "TextualWorkReview",
+    "id": "16818622171400440123",
+    "reviewerUser": {
+      "__ref": "UserAccount:16817330658137944390"
+    },
+    "title": "カロリーの高い面白さ",
+    "body": "重い、命が軽い、汚い、良作ファンタジー。\n単行本で大分可愛い絵が付いていて驚きました。アニメ楽しみです。",
+    "textualCreatedAt": "2025-03-19T14:51:34Z",
+    "isSpoiler": false,
+    "point": 3,
+    "likeCount": 5,
+    "visitorHasLiked": false
+  },
+  "WorkTopWorkReviews:1177354054935149052": {
+    "__typename": "WorkTopWorkReviews",
+    "id": "1177354054935149052",
+    "newTextualWorkReviews": [
+      {
+        "__ref": "TextualWorkReview:2912051596768728660"
+      },
+      {
+        "__ref": "TextualWorkReview:822139845963401560"
+      },
+      {
+        "__ref": "TextualWorkReview:2912051595515680394"
+      },
+      {
+        "__ref": "TextualWorkReview:822139842695808157"
+      },
+      {
+        "__ref": "TextualWorkReview:822139844152389180"
+      },
+      {
+        "__ref": "TextualWorkReview:822139843995962308"
+      },
+      {
+        "__ref": "TextualWorkReview:822139843924728559"
+      },
+      {
+        "__ref": "TextualWorkReview:822139842676542156"
+      },
+      {
+        "__ref": "TextualWorkReview:822139842550835668"
+      },
+      {
+        "__ref": "TextualWorkReview:16818622171400440123"
+      }
+    ]
+  },
+  "UserAccount:1177354054880688333": {
+    "__typename": "UserAccount",
+    "id": "1177354054880688333",
+    "name": "kloli",
+    "activityName": "ぶんころり",
+    "isOfficialUser": false
+  },
+  "Work:1177354054887710622": {
+    "__typename": "Work",
+    "id": "1177354054887710622",
+    "catchphrase": "異世界、異能バトル、魔法少女、全部欲しい贅沢な人へ……",
+    "baseColor": "#D9BF0C",
+    "author": {
+      "__ref": "UserAccount:1177354054880688333"
+    },
+    "title": "佐々木とピーちゃん　異世界でスローライフを楽しもうとしたら、現代で異能バトルに巻き込まれた件　～魔法少女がアップを始めたようです～",
+    "alternateTitle": null,
+    "isFreshWork": false,
+    "hasFreshEpisode": false,
+    "publishedAt": "2018-12-04T09:23:41Z",
+    "lastEpisodePublishedAt": "2020-12-26T12:18:18Z",
+    "alternateAuthorName": null,
+    "totalReviewPoint": 14370,
+    "fanFictionSource": null,
+    "genre": "FANTASY",
+    "serialStatus": "RUNNING",
+    "publicEpisodeCount": 100,
+    "totalCharacterCount": 319510,
+    "kakuyomuNextWork": null
+  },
+  "UserAccount:1177354054880267002": {
+    "__typename": "UserAccount",
+    "id": "1177354054880267002",
+    "name": "keiso_silicon14",
+    "activityName": "珪素",
+    "isOfficialUser": false
+  },
+  "Work:1177354054882641261": {
+    "__typename": "Work",
+    "id": "1177354054882641261",
+    "catchphrase": "全員が最強。全員が無双。全員が英雄。全員がチート。一人だけが、勇者。",
+    "baseColor": "#76690D",
+    "author": {
+      "__ref": "UserAccount:1177354054880267002"
+    },
+    "title": "異修羅",
+    "alternateTitle": null,
+    "isFreshWork": false,
+    "hasFreshEpisode": false,
+    "publishedAt": "2017-06-30T12:03:46Z",
+    "lastEpisodePublishedAt": "2019-02-08T10:57:43Z",
+    "alternateAuthorName": null,
+    "totalReviewPoint": 2795,
+    "fanFictionSource": null,
+    "genre": "FANTASY",
+    "serialStatus": "RUNNING",
+    "publicEpisodeCount": 113,
+    "totalCharacterCount": 648749,
+    "kakuyomuNextWork": null
+  },
+  "Work:4852201425154963487": {
+    "__typename": "Work",
+    "id": "4852201425154963487",
+    "catchphrase": "女子高生勇者の家庭教師をやるハメになった件とビールとピザ【アニメ化】",
+    "baseColor": "#E33954",
+    "author": {
+      "__ref": "UserAccount:4852201425154963466"
+    },
+    "title": "勇者のクズ",
+    "alternateTitle": null,
+    "isFreshWork": false,
+    "hasFreshEpisode": false,
+    "publishedAt": "2016-02-13T04:58:13Z",
+    "lastEpisodePublishedAt": "2020-09-14T11:17:57Z",
+    "alternateAuthorName": null,
+    "totalReviewPoint": 4785,
+    "fanFictionSource": null,
+    "genre": "ACTION",
+    "serialStatus": "RUNNING",
+    "publicEpisodeCount": 144,
+    "totalCharacterCount": 577387,
+    "kakuyomuNextWork": null
+  },
+  "Work:1177354054881674432": {
+    "__typename": "Work",
+    "id": "1177354054881674432",
+    "catchphrase": "期限は３日！　商店街の草野球チームがドラゴン殺しのために立ち上がる！",
+    "baseColor": "#FF9D00",
+    "author": {
+      "__ref": "UserAccount:4852201425154963466"
+    },
+    "title": "ドラゴンキラー商店街",
+    "alternateTitle": null,
+    "isFreshWork": false,
+    "hasFreshEpisode": false,
+    "publishedAt": "2016-09-01T14:50:10Z",
+    "lastEpisodePublishedAt": "2016-10-17T11:46:08Z",
+    "alternateAuthorName": null,
+    "totalReviewPoint": 1245,
+    "fanFictionSource": null,
+    "genre": "ACTION",
+    "serialStatus": "COMPLETED",
+    "publicEpisodeCount": 32,
+    "totalCharacterCount": 115377,
+    "kakuyomuNextWork": null
+  },
+  "UserAccount:16817330647786123803": {
+    "__typename": "UserAccount",
+    "id": "16817330647786123803",
+    "name": "1201843",
+    "activityName": "nkmr",
+    "isOfficialUser": false
+  },
+  "Work:16817330647786853400": {
+    "__typename": "Work",
+    "id": "16817330647786853400",
+    "catchphrase": "「世界最強のドラゴン？……やれやれ、俺の出番か」──ただの中二病、参戦",
+    "baseColor": "#8F478D",
+    "author": {
+      "__ref": "UserAccount:16817330647786123803"
+    },
+    "title": "【1/25③巻発売】自分をSSS級だと思い込んでいるC級魔術学生",
+    "alternateTitle": null,
+    "isFreshWork": false,
+    "hasFreshEpisode": false,
+    "publishedAt": "2023-06-22T07:30:39Z",
+    "lastEpisodePublishedAt": "2026-01-25T13:42:52Z",
+    "alternateAuthorName": null,
+    "totalReviewPoint": 1368,
+    "fanFictionSource": null,
+    "genre": "FANTASY",
+    "serialStatus": "RUNNING",
+    "publicEpisodeCount": 70,
+    "totalCharacterCount": 377569,
+    "kakuyomuNextWork": null
+  },
+  "UserAccount:1177354054917809766": {
+    "__typename": "UserAccount",
+    "id": "1177354054917809766",
+    "name": "sazanek",
+    "activityName": "細音啓＠アニメ化『神は遊戯に飢えている』",
+    "isOfficialUser": false
+  },
+  "Work:1177354054919146074": {
+    "__typename": "Work",
+    "id": "1177354054919146074",
+    "catchphrase": "【アニメ化決定】人類vs神々の頭脳戦。神にゲームで勝利せよ！",
+    "baseColor": "#F459B9",
+    "author": {
+      "__ref": "UserAccount:1177354054917809766"
+    },
+    "title": "神は遊戯(ゲーム)に飢えている。",
+    "alternateTitle": null,
+    "isFreshWork": false,
+    "hasFreshEpisode": false,
+    "publishedAt": "2020-09-01T03:00:02Z",
+    "lastEpisodePublishedAt": "2021-08-21T03:00:49Z",
+    "alternateAuthorName": null,
+    "totalReviewPoint": 1398,
+    "fanFictionSource": null,
+    "genre": "FANTASY",
+    "serialStatus": "RUNNING",
+    "publicEpisodeCount": 86,
+    "totalCharacterCount": 215458,
+    "kakuyomuNextWork": null
+  },
+  "Work:1177354054894696181": {
+    "__typename": "Work",
+    "id": "1177354054894696181",
+    "catchphrase": "無敵で最強の転生者　VS　人類＆ダンジョン",
+    "baseColor": "#FF5E23",
+    "author": {
+      "__ref": "UserAccount:4852201425154963466"
+    },
+    "title": "魔王戦線",
+    "alternateTitle": null,
+    "isFreshWork": false,
+    "hasFreshEpisode": false,
+    "publishedAt": "2020-03-11T15:06:09Z",
+    "lastEpisodePublishedAt": "2020-05-11T14:50:27Z",
+    "alternateAuthorName": null,
+    "totalReviewPoint": 741,
+    "fanFictionSource": null,
+    "genre": "FANTASY",
+    "serialStatus": "RUNNING",
+    "publicEpisodeCount": 50,
+    "totalCharacterCount": 164327,
+    "kakuyomuNextWork": null
+  },
+  "UserAccount:1177354054882529248": {
+    "__typename": "UserAccount",
+    "id": "1177354054882529248",
+    "name": "hikoukai",
+    "activityName": "非公開",
+    "isOfficialUser": false
+  },
+  "Work:1177354054882530555": {
+    "__typename": "Work",
+    "id": "1177354054882530555",
+    "catchphrase": "科学文明崩壊後再構築世界　少年ハンターと奇妙な美女の東部ハンター稼業録",
+    "baseColor": "#000000",
+    "author": {
+      "__ref": "UserAccount:1177354054882529248"
+    },
+    "title": "リビルドワールド",
+    "alternateTitle": null,
+    "isFreshWork": false,
+    "hasFreshEpisode": false,
+    "publishedAt": "2017-02-02T13:00:03Z",
+    "lastEpisodePublishedAt": "2021-08-16T15:00:03Z",
+    "alternateAuthorName": null,
+    "totalReviewPoint": 9646,
+    "fanFictionSource": null,
+    "genre": "SF",
+    "serialStatus": "RUNNING",
+    "publicEpisodeCount": 296,
+    "totalCharacterCount": 2980108,
+    "kakuyomuNextWork": null
+  },
+  "UserAccount:16818093085577139099": {
+    "__typename": "UserAccount",
+    "id": "16818093085577139099",
+    "name": "fac",
+    "activityName": "不悪院",
+    "isOfficialUser": false
+  },
+  "Work:16818093085577306972": {
+    "__typename": "Work",
+    "id": "16818093085577306972",
+    "catchphrase": "ある日、サキュバスが餓死した。男だらけの密室で",
+    "baseColor": "#FF5E23",
+    "author": {
+      "__ref": "UserAccount:16818093085577139099"
+    },
+    "title": "セックス家の殺人",
+    "alternateTitle": null,
+    "isFreshWork": false,
+    "hasFreshEpisode": true,
+    "publishedAt": "2024-10-01T14:07:21Z",
+    "lastEpisodePublishedAt": "2026-04-10T13:40:24Z",
+    "alternateAuthorName": null,
+    "totalReviewPoint": 470,
+    "fanFictionSource": null,
+    "genre": "MYSTERY",
+    "serialStatus": "RUNNING",
+    "publicEpisodeCount": 84,
+    "totalCharacterCount": 323855,
+    "kakuyomuNextWork": null
+  },
+  "UserAccount:1177354054884881662": {
+    "__typename": "UserAccount",
+    "id": "1177354054884881662",
+    "name": "gunslily",
+    "activityName": "kiki",
+    "isOfficialUser": false
+  },
+  "Work:1177354054884881679": {
+    "__typename": "Work",
+    "id": "1177354054884881679",
+    "catchphrase": "最弱少女よ、呪いの装備で地獄から這い上がれ",
+    "baseColor": "#000000",
+    "author": {
+      "__ref": "UserAccount:1177354054884881662"
+    },
+    "title": "「お前ごときが魔王に勝てると思うな」とガチ勢に勇者パーティを追放されたので、王都で気ままに暮らしたい",
+    "alternateTitle": null,
+    "isFreshWork": false,
+    "hasFreshEpisode": false,
+    "publishedAt": "2018-01-08T16:28:55Z",
+    "lastEpisodePublishedAt": "2026-04-10T08:00:46Z",
+    "alternateAuthorName": null,
+    "totalReviewPoint": 1470,
+    "fanFictionSource": null,
+    "genre": "FANTASY",
+    "serialStatus": "RUNNING",
+    "publicEpisodeCount": 221,
+    "totalCharacterCount": 2489646,
+    "kakuyomuNextWork": null
+  },
+  "UserAccount:1177354054881220486": {
+    "__typename": "UserAccount",
+    "id": "1177354054881220486",
+    "name": "Quantum44",
+    "activityName": "クオンタム",
+    "isOfficialUser": false
+  },
+  "Work:1177354054882385011": {
+    "__typename": "Work",
+    "id": "1177354054882385011",
+    "catchphrase": "「愚かな人間どもを滅ぼすべく、魔王軍への入団を希望する！」",
+    "baseColor": "#E33954",
+    "author": {
+      "__ref": "UserAccount:1177354054881220486"
+    },
+    "title": "勇者、辞めます　～次の職場は魔王城～",
+    "alternateTitle": null,
+    "isFreshWork": false,
+    "hasFreshEpisode": false,
+    "publishedAt": "2017-01-12T12:50:10Z",
+    "lastEpisodePublishedAt": "2018-05-06T10:46:37Z",
+    "alternateAuthorName": null,
+    "totalReviewPoint": 3876,
+    "fanFictionSource": null,
+    "genre": "FANTASY",
+    "serialStatus": "RUNNING",
+    "publicEpisodeCount": 36,
+    "totalCharacterCount": 135268,
+    "kakuyomuNextWork": null
+  },
+  "UserAccount:1177354054888042967": {
+    "__typename": "UserAccount",
+    "id": "1177354054888042967",
+    "name": "sat_marunaka",
+    "activityName": "さっと／sat_Buttoimars",
+    "isOfficialUser": false
+  },
+  "Work:1177354054889870452": {
+    "__typename": "Work",
+    "id": "1177354054889870452",
+    "catchphrase": "戦争狂が異世界で繰り広げる仮借なき血塗れの、戦争に次ぐ戦争",
+    "baseColor": "#000000",
+    "author": {
+      "__ref": "UserAccount:1177354054888042967"
+    },
+    "title": "ベルリク戦記 ー 戦争の生涯 ー",
+    "alternateTitle": null,
+    "isFreshWork": false,
+    "hasFreshEpisode": false,
+    "publishedAt": "2019-06-04T20:00:14Z",
+    "lastEpisodePublishedAt": "2026-04-07T08:06:55Z",
+    "alternateAuthorName": null,
+    "totalReviewPoint": 317,
+    "fanFictionSource": null,
+    "genre": "FANTASY",
+    "serialStatus": "RUNNING",
+    "publicEpisodeCount": 573,
+    "totalCharacterCount": 6060448,
+    "kakuyomuNextWork": null
+  },
+  "UserAccount:1177354054881454379": {
+    "__typename": "UserAccount",
+    "id": "1177354054881454379",
+    "name": "nagatsuki_tohka",
+    "activityName": "長月東葭",
+    "isOfficialUser": false
+  },
+  "Work:1177354054881454400": {
+    "__typename": "Work",
+    "id": "1177354054881454400",
+    "catchphrase": "人類対、4体の化け物【第2巻、発売中！】",
+    "baseColor": "#A31F74",
+    "author": {
+      "__ref": "UserAccount:1177354054881454379"
+    },
+    "title": "宵の国戦記（■旧題：最強の暗黒騎士は定時で帰りたい！ ）",
+    "alternateTitle": null,
+    "isFreshWork": false,
+    "hasFreshEpisode": false,
+    "publishedAt": "2016-07-24T10:12:33Z",
+    "lastEpisodePublishedAt": "2019-12-28T02:00:02Z",
+    "alternateAuthorName": null,
+    "totalReviewPoint": 1468,
+    "fanFictionSource": null,
+    "genre": "FANTASY",
+    "serialStatus": "COMPLETED",
+    "publicEpisodeCount": 327,
+    "totalCharacterCount": 986725,
+    "kakuyomuNextWork": null
+  },
+  "UserAccount:1177354055000183094": {
+    "__typename": "UserAccount",
+    "id": "1177354055000183094",
+    "name": "mysuto",
+    "activityName": "都神樹",
+    "isOfficialUser": false
+  },
+  "Work:16816927862983239368": {
+    "__typename": "Work",
+    "id": "16816927862983239368",
+    "catchphrase": "二度と器用貧乏なんてバカにされないように、目指すは万に通ずる万能者！",
+    "baseColor": "#11579A",
+    "author": {
+      "__ref": "UserAccount:1177354055000183094"
+    },
+    "title": "勇者パーティを追い出された器用貧乏～パーティ事情で付与術士をやっていた剣士、万能へと至る～",
+    "alternateTitle": null,
+    "isFreshWork": false,
+    "hasFreshEpisode": false,
+    "publishedAt": "2022-04-30T10:34:51Z",
+    "lastEpisodePublishedAt": "2026-04-10T09:17:23Z",
+    "alternateAuthorName": null,
+    "totalReviewPoint": 1198,
+    "fanFictionSource": null,
+    "genre": "FANTASY",
+    "serialStatus": "RUNNING",
+    "publicEpisodeCount": 330,
+    "totalCharacterCount": 1215324,
+    "kakuyomuNextWork": null
+  },
+  "UserAccount:16816700426008299214": {
+    "__typename": "UserAccount",
+    "id": "16816700426008299214",
+    "name": "futura",
+    "activityName": "フーツラ",
+    "isOfficialUser": false
+  },
+  "Work:16818792435604412372": {
+    "__typename": "Work",
+    "id": "16818792435604412372",
+    "catchphrase": "何でこの男は、私の好きなモノを全部知っているの……！？",
+    "baseColor": "#E0005E",
+    "author": {
+      "__ref": "UserAccount:16816700426008299214"
+    },
+    "title": "隣の部屋に住む長命種は、俺が300年前に一緒にいた男の転生体であることを知らない",
+    "alternateTitle": null,
+    "isFreshWork": false,
+    "hasFreshEpisode": false,
+    "publishedAt": "2026-01-03T00:32:16Z",
+    "lastEpisodePublishedAt": "2026-02-07T00:40:37Z",
+    "alternateAuthorName": null,
+    "totalReviewPoint": 1796,
+    "fanFictionSource": null,
+    "genre": "FANTASY",
+    "serialStatus": "RUNNING",
+    "publicEpisodeCount": 11,
+    "totalCharacterCount": 38031,
+    "kakuyomuNextWork": null
+  },
+  "UserAccount:16817139558993388865": {
+    "__typename": "UserAccount",
+    "id": "16817139558993388865",
+    "name": "9stack_99",
+    "activityName": "九重ツクモ",
+    "isOfficialUser": false
+  },
+  "Work:16817330669141480100": {
+    "__typename": "Work",
+    "id": "16817330669141480100",
+    "catchphrase": "婚約者に不倫されたから運河作ることにした",
+    "baseColor": "#E0005E",
+    "author": {
+      "__ref": "UserAccount:16817139558993388865"
+    },
+    "title": "【書籍1/5発売！】拝啓、婚約者様。私は怪物伯爵と仲良くやっていくので貴方はもういりません",
+    "alternateTitle": null,
+    "isFreshWork": false,
+    "hasFreshEpisode": false,
+    "publishedAt": "2023-12-30T07:33:56Z",
+    "lastEpisodePublishedAt": "2026-01-07T09:04:08Z",
+    "alternateAuthorName": null,
+    "totalReviewPoint": 599,
+    "fanFictionSource": null,
+    "genre": "LOVE_STORY",
+    "serialStatus": "COMPLETED",
+    "publicEpisodeCount": 70,
+    "totalCharacterCount": 253895,
+    "kakuyomuNextWork": null
+  },
+  "UserAccount:1177354054894526902": {
+    "__typename": "UserAccount",
+    "id": "1177354054894526902",
+    "name": "necoco0531",
+    "activityName": "猫子",
+    "isOfficialUser": false
+  },
+  "Work:16816927861064709259": {
+    "__typename": "Work",
+    "id": "16816927861064709259",
+    "catchphrase": "ドラゴンに転生して進化＆成り上がり！",
+    "baseColor": "#3189D3",
+    "author": {
+      "__ref": "UserAccount:1177354054894526902"
+    },
+    "title": "転生したらドラゴンの卵だった～最強以外目指さねぇ～",
+    "alternateTitle": null,
+    "isFreshWork": false,
+    "hasFreshEpisode": false,
+    "publishedAt": "2022-02-23T22:37:25Z",
+    "lastEpisodePublishedAt": "2026-02-11T12:08:33Z",
+    "alternateAuthorName": null,
+    "totalReviewPoint": 2700,
+    "fanFictionSource": null,
+    "genre": "FANTASY",
+    "serialStatus": "RUNNING",
+    "publicEpisodeCount": 781,
+    "totalCharacterCount": 2288327,
+    "kakuyomuNextWork": null
+  },
+  "UserAccount:4852201425154872698": {
+    "__typename": "UserAccount",
+    "id": "4852201425154872698",
+    "name": "yubais",
+    "activityName": "柞刈湯葉",
+    "isOfficialUser": false
+  },
+  "Work:4852201425154905871": {
+    "__typename": "Work",
+    "id": "4852201425154905871",
+    "catchphrase": "横浜駅が自己増殖して日本列島を覆い尽くす未来小説。",
+    "baseColor": "#000000",
+    "author": {
+      "__ref": "UserAccount:4852201425154872698"
+    },
+    "title": "横浜駅SF",
+    "alternateTitle": null,
+    "isFreshWork": false,
+    "hasFreshEpisode": false,
+    "publishedAt": "2016-01-11T11:02:48Z",
+    "lastEpisodePublishedAt": "2018-12-24T12:31:19Z",
+    "alternateAuthorName": null,
+    "totalReviewPoint": 3983,
+    "fanFictionSource": null,
+    "genre": "SF",
+    "serialStatus": "RUNNING",
+    "publicEpisodeCount": 47,
+    "totalCharacterCount": 156320,
+    "kakuyomuNextWork": null
+  },
+  "UserAccount:1177354054897675307": {
+    "__typename": "UserAccount",
+    "id": "1177354054897675307",
+    "name": "fjam",
+    "activityName": "しげ・フォン・ニーダーサイタマ",
+    "isOfficialUser": false
+  },
+  "Work:16816452218431067194": {
+    "__typename": "Work",
+    "id": "16816452218431067194",
+    "catchphrase": "【書籍発売中】中近世ドイツ風の世界で鍋を振るう（物理攻撃）",
+    "baseColor": "#11579A",
+    "author": {
+      "__ref": "UserAccount:1177354054897675307"
+    },
+    "title": "鍋で殴る異世界転生",
+    "alternateTitle": null,
+    "isFreshWork": false,
+    "hasFreshEpisode": false,
+    "publishedAt": "2021-03-17T11:24:49Z",
+    "lastEpisodePublishedAt": "2023-03-23T03:13:51Z",
+    "alternateAuthorName": null,
+    "totalReviewPoint": 6242,
+    "fanFictionSource": null,
+    "genre": "FANTASY",
+    "serialStatus": "RUNNING",
+    "publicEpisodeCount": 246,
+    "totalCharacterCount": 923493,
+    "kakuyomuNextWork": null
+  },
+  "UserAccount:1177354054880618856": {
+    "__typename": "UserAccount",
+    "id": "1177354054880618856",
+    "name": "tuchihilight",
+    "activityName": "土日　月",
+    "isOfficialUser": false
+  },
+  "Work:1177354054881165840": {
+    "__typename": "Work",
+    "id": "1177354054881165840",
+    "catchphrase": "鎧を三つ貰おう。着る用。スペア。そしてスペアが無くなった時のスペアだ",
+    "baseColor": "#0033C4",
+    "author": {
+      "__ref": "UserAccount:1177354054880618856"
+    },
+    "title": "慎重勇者　~この勇者が俺ＴＵＥＥＥくせに慎重すぎる~",
+    "alternateTitle": null,
+    "isFreshWork": false,
+    "hasFreshEpisode": false,
+    "publishedAt": "2016-06-04T04:14:52Z",
+    "lastEpisodePublishedAt": "2026-03-15T00:40:21Z",
+    "alternateAuthorName": null,
+    "totalReviewPoint": 14437,
+    "fanFictionSource": null,
+    "genre": "FANTASY",
+    "serialStatus": "RUNNING",
+    "publicEpisodeCount": 205,
+    "totalCharacterCount": 1129190,
+    "kakuyomuNextWork": null
+  },
+  "UserAccount:1177354054941808333": {
+    "__typename": "UserAccount",
+    "id": "1177354054941808333",
+    "name": "nisinohatenopero",
+    "activityName": "西の果てのぺろ。",
+    "isOfficialUser": false
+  },
+  "KakuyomuNextWork:16818622173326709793": {
+    "__typename": "KakuyomuNextWork",
+    "id": "16818622173326709793",
+    "annotationMessage": "20話分無料"
+  },
+  "Work:16818622173326709793": {
+    "__typename": "Work",
+    "id": "16818622173326709793",
+    "catchphrase": "戦場跡を漁って生きる掃除屋「ルーク」と魔導機「英雄王」の物語",
+    "baseColor": "#11579A",
+    "author": {
+      "__ref": "UserAccount:1177354054941808333"
+    },
+    "title": "掃除屋ルークと魔導機の王",
+    "alternateTitle": null,
+    "isFreshWork": false,
+    "hasFreshEpisode": true,
+    "publishedAt": "2025-11-20T09:29:26Z",
+    "lastEpisodePublishedAt": "2026-04-10T15:00:08Z",
+    "alternateAuthorName": null,
+    "totalReviewPoint": 438,
+    "fanFictionSource": null,
+    "genre": "FANTASY",
+    "serialStatus": "RUNNING",
+    "publicEpisodeCount": 101,
+    "totalCharacterCount": 267637,
+    "kakuyomuNextWork": {
+      "__ref": "KakuyomuNextWork:16818622173326709793"
+    }
+  },
+  "UserAccount:1177354055108604855": {
+    "__typename": "UserAccount",
+    "id": "1177354055108604855",
+    "name": "uosakiichiko",
+    "activityName": "魚崎 依知子",
+    "isOfficialUser": false
+  },
+  "Work:16817330665671539901": {
+    "__typename": "Work",
+    "id": "16817330665671539901",
+    "catchphrase": "まるで邪悪なものから生まれてきたみたいだ。",
+    "baseColor": "#371F6A",
+    "author": {
+      "__ref": "UserAccount:1177354055108604855"
+    },
+    "title": "猿の器【3/10書籍版『この子のために死んでくれ。』発売】",
+    "alternateTitle": null,
+    "isFreshWork": false,
+    "hasFreshEpisode": false,
+    "publishedAt": "2023-12-01T09:00:11Z",
+    "lastEpisodePublishedAt": "2024-01-16T09:00:31Z",
+    "alternateAuthorName": null,
+    "totalReviewPoint": 628,
+    "fanFictionSource": null,
+    "genre": "HORROR",
+    "serialStatus": "COMPLETED",
+    "publicEpisodeCount": 47,
+    "totalCharacterCount": 127868,
+    "kakuyomuNextWork": null
+  },
+  "Work:1177354054882934927": {
+    "__typename": "Work",
+    "id": "1177354054882934927",
+    "catchphrase": "世界最後の少年ドラゴンスレイヤー、魔女の学園（女子校）へ入学する",
+    "baseColor": "#634F94",
+    "author": {
+      "__ref": "UserAccount:4852201425154963466"
+    },
+    "title": "ウィッチ殺竜ゼミナール",
+    "alternateTitle": null,
+    "isFreshWork": false,
+    "hasFreshEpisode": false,
+    "publishedAt": "2017-04-10T14:22:44Z",
+    "lastEpisodePublishedAt": "2017-08-01T11:44:42Z",
+    "alternateAuthorName": null,
+    "totalReviewPoint": 547,
+    "fanFictionSource": null,
+    "genre": "FANTASY",
+    "serialStatus": "RUNNING",
+    "publicEpisodeCount": 34,
+    "totalCharacterCount": 141002,
+    "kakuyomuNextWork": null
+  },
+  "UserAccount:4852201425154878119": {
+    "__typename": "UserAccount",
+    "id": "4852201425154878119",
+    "name": "lolybirth",
+    "activityName": "ロリバス",
+    "isOfficialUser": false
+  },
+  "Work:1177354054882072437": {
+    "__typename": "Work",
+    "id": "1177354054882072437",
+    "catchphrase": "「異」がかけなくても知力で無双はできるんだ！",
+    "baseColor": "#E33954",
+    "author": {
+      "__ref": "UserAccount:4852201425154878119"
+    },
+    "title": "偏差値10の俺がい世界で知恵の勇者になれたワケ",
+    "alternateTitle": null,
+    "isFreshWork": false,
+    "hasFreshEpisode": false,
+    "publishedAt": "2016-11-21T13:56:22Z",
+    "lastEpisodePublishedAt": "2018-03-20T11:00:38Z",
+    "alternateAuthorName": null,
+    "totalReviewPoint": 1684,
+    "fanFictionSource": null,
+    "genre": "FANTASY",
+    "serialStatus": "COMPLETED",
+    "publicEpisodeCount": 8,
+    "totalCharacterCount": 55381,
+    "kakuyomuNextWork": null
+  },
+  "UserAccount:1177354054889279106": {
+    "__typename": "UserAccount",
+    "id": "1177354054889279106",
+    "name": "pandapandapanda",
+    "activityName": "けーぷ",
+    "isOfficialUser": false
+  },
+  "Work:822139842041120869": {
+    "__typename": "Work",
+    "id": "822139842041120869",
+    "catchphrase": "「金がないなら、その聖剣（未払い）を返してもらおうか？」",
+    "baseColor": "#EE2323",
+    "author": {
+      "__ref": "UserAccount:1177354054889279106"
+    },
+    "title": "勇者様、装備のローンが残っていますが？ 〜踏み倒そうとしたので、国中の店で取引停止にしました。素っ裸で魔王と戦ってください〜",
+    "alternateTitle": null,
+    "isFreshWork": false,
+    "hasFreshEpisode": false,
+    "publishedAt": "2025-12-27T04:45:22Z",
+    "lastEpisodePublishedAt": "2026-02-01T01:00:35Z",
+    "alternateAuthorName": null,
+    "totalReviewPoint": 1960,
+    "fanFictionSource": null,
+    "genre": "FANTASY",
+    "serialStatus": "COMPLETED",
+    "publicEpisodeCount": 37,
+    "totalCharacterCount": 106722,
+    "kakuyomuNextWork": null
+  },
+  "UserAccount:1177354054881809308": {
+    "__typename": "UserAccount",
+    "id": "1177354054881809308",
+    "name": "Yuriheidi",
+    "activityName": "由利 唯氏",
+    "isOfficialUser": false
+  },
+  "Work:16818093090131233042": {
+    "__typename": "Work",
+    "id": "16818093090131233042",
+    "catchphrase": "堅実に歩む異世界ストーリー",
+    "baseColor": "#000000",
+    "author": {
+      "__ref": "UserAccount:1177354054881809308"
+    },
+    "title": "転生者が珍しくない異世界でどう生きろと？",
+    "alternateTitle": null,
+    "isFreshWork": false,
+    "hasFreshEpisode": false,
+    "publishedAt": "2024-12-11T01:11:09Z",
+    "lastEpisodePublishedAt": "2026-04-10T01:18:20Z",
+    "alternateAuthorName": null,
+    "totalReviewPoint": 2995,
+    "fanFictionSource": null,
+    "genre": "FANTASY",
+    "serialStatus": "RUNNING",
+    "publicEpisodeCount": 292,
+    "totalCharacterCount": 687484,
+    "kakuyomuNextWork": null
+  },
+  "UserAccount:16817330665942784220": {
+    "__typename": "UserAccount",
+    "id": "16817330665942784220",
+    "name": "cuckoo-clock",
+    "activityName": "時枝 小鳩",
+    "isOfficialUser": false
+  },
+  "Work:16818093073245103562": {
+    "__typename": "Work",
+    "id": "16818093073245103562",
+    "catchphrase": "旧題：僕にはやんごとなき御身分のストーカーがいます。しかも増えてます。",
+    "baseColor": "#FF5E23",
+    "author": {
+      "__ref": "UserAccount:16817330665942784220"
+    },
+    "title": "《書籍1/15発売！》高貴な方々は平凡令息をお求めのようです　みんなが僕にだけ厄介な秘密を打ち明けてくるのですが",
+    "alternateTitle": null,
+    "isFreshWork": false,
+    "hasFreshEpisode": false,
+    "publishedAt": "2024-03-30T07:04:05Z",
+    "lastEpisodePublishedAt": "2026-01-25T22:07:28Z",
+    "alternateAuthorName": null,
+    "totalReviewPoint": 1346,
+    "fanFictionSource": null,
+    "genre": "FANTASY",
+    "serialStatus": "COMPLETED",
+    "publicEpisodeCount": 50,
+    "totalCharacterCount": 108527,
+    "kakuyomuNextWork": null
+  },
+  "UserAccount:1177354055592920232": {
+    "__typename": "UserAccount",
+    "id": "1177354055592920232",
+    "name": "ieis",
+    "activityName": "くーねるでぶる（戒め）",
+    "isOfficialUser": false
+  },
+  "Work:822139841782864677": {
+    "__typename": "Work",
+    "id": "822139841782864677",
+    "catchphrase": "しかし、主人公はどうやってオレを倒すんだろう？",
+    "baseColor": "#000000",
+    "author": {
+      "__ref": "UserAccount:1177354055592920232"
+    },
+    "title": "【世界最強の影魔法使い悪役】～大好きなゲームの未発売の続編の世界に転生したオレ、みんなに嫌われる悪役っぽいけど最強なんだが？～",
+    "alternateTitle": null,
+    "isFreshWork": false,
+    "hasFreshEpisode": false,
+    "publishedAt": "2025-12-30T03:08:12Z",
+    "lastEpisodePublishedAt": "2026-02-07T03:10:14Z",
+    "alternateAuthorName": null,
+    "totalReviewPoint": 6403,
+    "fanFictionSource": null,
+    "genre": "FANTASY",
+    "serialStatus": "RUNNING",
+    "publicEpisodeCount": 47,
+    "totalCharacterCount": 98949,
+    "kakuyomuNextWork": null
+  },
+  "UserAccount:16818622172126077992": {
+    "__typename": "UserAccount",
+    "id": "16818622172126077992",
+    "name": "daikon_onion",
+    "activityName": "だいこん",
+    "isOfficialUser": false
+  },
+  "Work:822139844738400507": {
+    "__typename": "Work",
+    "id": "822139844738400507",
+    "catchphrase": "人間を溺愛する上位存在むちむち魔族の掲示板まとめ",
+    "baseColor": "#F459B9",
+    "author": {
+      "__ref": "UserAccount:16818622172126077992"
+    },
+    "title": "出張版　淫魔ちゃんねる",
+    "alternateTitle": null,
+    "isFreshWork": false,
+    "hasFreshEpisode": false,
+    "publishedAt": "2026-02-10T10:00:28Z",
+    "lastEpisodePublishedAt": "2026-04-10T10:00:07Z",
+    "alternateAuthorName": null,
+    "totalReviewPoint": 585,
+    "fanFictionSource": null,
+    "genre": "ACTION",
+    "serialStatus": "RUNNING",
+    "publicEpisodeCount": 59,
+    "totalCharacterCount": 211945,
+    "kakuyomuNextWork": null
+  },
+  "UserAccount:16817330662215423901": {
+    "__typename": "UserAccount",
+    "id": "16817330662215423901",
+    "name": "hinotama",
+    "activityName": "火乃玉",
+    "isOfficialUser": false
+  },
+  "Work:16817330663874866572": {
+    "__typename": "Work",
+    "id": "16817330663874866572",
+    "catchphrase": "公主様（美少女）が勝手にハーレムを作ろうとするので困っている",
+    "baseColor": "#E0005E",
+    "author": {
+      "__ref": "UserAccount:16817330662215423901"
+    },
+    "title": "俺の愛しの公主様　～無能と呼ばれた少年は、剣一本と公主様の献身で成り上がる～",
+    "alternateTitle": null,
+    "isFreshWork": false,
+    "hasFreshEpisode": false,
+    "publishedAt": "2024-02-14T21:46:48Z",
+    "lastEpisodePublishedAt": "2026-01-17T21:33:38Z",
+    "alternateAuthorName": null,
+    "totalReviewPoint": 3634,
+    "fanFictionSource": null,
+    "genre": "FANTASY",
+    "serialStatus": "RUNNING",
+    "publicEpisodeCount": 138,
+    "totalCharacterCount": 671182,
+    "kakuyomuNextWork": null
+  },
+  "Episode:1177354054935149367": {
+    "__typename": "Episode",
+    "id": "1177354054935149367",
+    "title": "刑罰：クヴンジ森林撤退支援　１",
+    "publishedAt": "2020-10-28T13:51:55.000Z"
+  },
+  "Episode:1177354054935185333": {
+    "__typename": "Episode",
+    "id": "1177354054935185333",
+    "title": "刑罰：クヴンジ森林撤退支援　２",
+    "publishedAt": "2020-10-29T08:50:32.000Z"
+  },
+  "Episode:1177354054935237500": {
+    "__typename": "Episode",
+    "id": "1177354054935237500",
+    "title": "刑罰：クヴンジ森林撤退支援　３",
+    "publishedAt": "2020-10-30T09:36:21.000Z"
+  },
+  "Episode:1177354054935338786": {
+    "__typename": "Episode",
+    "id": "1177354054935338786",
+    "title": "刑罰：クヴンジ森林撤退支援　４",
+    "publishedAt": "2020-11-01T08:08:10.000Z"
+  },
+  "Episode:1177354054935414425": {
+    "__typename": "Episode",
+    "id": "1177354054935414425",
+    "title": "刑罰：クヴンジ森林撤退支援　５",
+    "publishedAt": "2020-11-02T16:10:28.000Z"
+  },
+  "Episode:1177354054935500453": {
+    "__typename": "Episode",
+    "id": "1177354054935500453",
+    "title": "刑罰：クヴンジ森林撤退支援　６",
+    "publishedAt": "2020-11-04T06:28:40.000Z"
+  },
+  "Episode:1177354054935557968": {
+    "__typename": "Episode",
+    "id": "1177354054935557968",
+    "title": "刑罰：クヴンジ森林撤退支援　顛末",
+    "publishedAt": "2020-11-05T09:03:55.000Z"
+  },
+  "Episode:1177354054935609028": {
+    "__typename": "Episode",
+    "id": "1177354054935609028",
+    "title": "王国裁判記録　ザイロ・フォルバーツ",
+    "publishedAt": "2020-11-06T08:20:52.000Z"
+  },
+  "Episode:1177354054935738501": {
+    "__typename": "Episode",
+    "id": "1177354054935738501",
+    "title": "刑罰：ゼワン＝ガン坑道制圧先導　１",
+    "publishedAt": "2020-11-08T09:54:53.000Z"
+  },
+  "Episode:1177354054935842358": {
+    "__typename": "Episode",
+    "id": "1177354054935842358",
+    "title": "刑罰：ゼワン＝ガン坑道制圧先導　２",
+    "publishedAt": "2020-11-10T09:32:20.000Z"
+  },
+  "Episode:1177354054935911099": {
+    "__typename": "Episode",
+    "id": "1177354054935911099",
+    "title": "刑罰：ゼワン＝ガン坑道制圧先導　３",
+    "publishedAt": "2020-11-11T15:57:34.000Z"
+  },
+  "Episode:1177354054936597685": {
+    "__typename": "Episode",
+    "id": "1177354054936597685",
+    "title": "刑罰：ゼワン＝ガン坑道制圧先導　４",
+    "publishedAt": "2020-11-12T10:22:45.000Z"
+  },
+  "Episode:1177354054944719411": {
+    "__typename": "Episode",
+    "id": "1177354054944719411",
+    "title": "刑罰：ゼワン＝ガン坑道制圧先導　５",
+    "publishedAt": "2020-11-14T16:11:41.000Z"
+  },
+  "Episode:1177354054948408760": {
+    "__typename": "Episode",
+    "id": "1177354054948408760",
+    "title": "刑罰：ゼワン＝ガン坑道制圧先導　６",
+    "publishedAt": "2020-11-15T14:29:16.000Z"
+  },
+  "Episode:1177354054951182001": {
+    "__typename": "Episode",
+    "id": "1177354054951182001",
+    "title": "刑罰：ゼワン＝ガン坑道制圧先導　７",
+    "publishedAt": "2020-11-16T10:09:54.000Z"
+  },
+  "Episode:1177354054954393730": {
+    "__typename": "Episode",
+    "id": "1177354054954393730",
+    "title": "刑罰：ゼワン＝ガン坑道制圧先導　顛末",
+    "publishedAt": "2020-11-17T08:57:01.000Z"
+  },
+  "Episode:1177354054954442946": {
+    "__typename": "Episode",
+    "id": "1177354054954442946",
+    "title": "待機指令：ミューリッド要塞　１",
+    "publishedAt": "2020-11-18T08:21:56.000Z"
+  },
+  "Episode:1177354054955542383": {
+    "__typename": "Episode",
+    "id": "1177354054955542383",
+    "title": "待機指令：ミューリッド要塞　２",
+    "publishedAt": "2020-11-19T09:22:25.000Z"
+  },
+  "Episode:1177354054965832111": {
+    "__typename": "Episode",
+    "id": "1177354054965832111",
+    "title": "王国裁判記録　ベネティム・レオプール",
+    "publishedAt": "2020-11-20T11:14:26.000Z"
+  },
+  "Episode:1177354054971407069": {
+    "__typename": "Episode",
+    "id": "1177354054971407069",
+    "title": "刑罰：ミューリッド要塞防衛汚染　１",
+    "publishedAt": "2020-11-21T02:30:21.000Z"
+  },
+  "Episode:1177354054982014094": {
+    "__typename": "Episode",
+    "id": "1177354054982014094",
+    "title": "刑罰：ミューリッド要塞防衛汚染　２",
+    "publishedAt": "2020-11-22T03:25:45.000Z"
+  },
+  "Episode:1177354054989848347": {
+    "__typename": "Episode",
+    "id": "1177354054989848347",
+    "title": "刑罰：ミューリッド要塞防衛汚染　３",
+    "publishedAt": "2020-11-22T18:09:18.000Z"
+  },
+  "Episode:1177354055009464869": {
+    "__typename": "Episode",
+    "id": "1177354055009464869",
+    "title": "刑罰：ミューリッド要塞防衛汚染　４",
+    "publishedAt": "2020-11-24T13:42:23.000Z"
+  },
+  "Episode:1177354055041687936": {
+    "__typename": "Episode",
+    "id": "1177354055041687936",
+    "title": "刑罰：ミューリッド要塞防衛汚染　５",
+    "publishedAt": "2020-11-27T16:07:42.000Z"
+  },
+  "Episode:1177354055052194866": {
+    "__typename": "Episode",
+    "id": "1177354055052194866",
+    "title": "刑罰：ミューリッド要塞防衛汚染　６",
+    "publishedAt": "2020-11-28T14:41:04.000Z"
+  },
+  "Episode:1177354055071134957": {
+    "__typename": "Episode",
+    "id": "1177354055071134957",
+    "title": "刑罰：ミューリッド要塞防衛汚染　７",
+    "publishedAt": "2020-11-30T06:25:29.000Z"
+  },
+  "Episode:1177354055086504266": {
+    "__typename": "Episode",
+    "id": "1177354055086504266",
+    "title": "刑罰：ミューリッド要塞防衛汚染　８",
+    "publishedAt": "2020-12-01T10:05:51.000Z"
+  },
+  "Episode:1177354055099679604": {
+    "__typename": "Episode",
+    "id": "1177354055099679604",
+    "title": "刑罰：ミューリッド要塞防衛汚染　顛末",
+    "publishedAt": "2020-12-02T09:41:52.000Z"
+  },
+  "Episode:1177354055114632761": {
+    "__typename": "Episode",
+    "id": "1177354055114632761",
+    "title": "待機指令：港湾都市　ヨーフ",
+    "publishedAt": "2020-12-03T11:58:17.000Z"
+  },
+  "Episode:1177354055125955211": {
+    "__typename": "Episode",
+    "id": "1177354055125955211",
+    "title": "王国裁判記録　ドッタ・ルズラス",
+    "publishedAt": "2020-12-04T09:29:40.000Z"
+  },
+  "Episode:1177354055143006191": {
+    "__typename": "Episode",
+    "id": "1177354055143006191",
+    "title": "刑罰：港湾都市ヨーフ休暇偽装　１",
+    "publishedAt": "2020-12-05T13:55:43.000Z"
+  },
+  "Episode:1177354055165733513": {
+    "__typename": "Episode",
+    "id": "1177354055165733513",
+    "title": "刑罰：港湾都市ヨーフ休暇偽装　２",
+    "publishedAt": "2020-12-07T05:27:00.000Z"
+  },
+  "Episode:1177354055179751789": {
+    "__typename": "Episode",
+    "id": "1177354055179751789",
+    "title": "刑罰：港湾都市ヨーフ休暇偽装　３",
+    "publishedAt": "2020-12-08T06:45:58.000Z"
+  },
+  "Episode:1177354055192673113": {
+    "__typename": "Episode",
+    "id": "1177354055192673113",
+    "title": "刑罰：港湾都市ヨーフ休暇偽装　４",
+    "publishedAt": "2020-12-09T05:49:25.000Z"
+  },
+  "Episode:1177354055205839659": {
+    "__typename": "Episode",
+    "id": "1177354055205839659",
+    "title": "刑罰：港湾都市ヨーフ休暇偽装　５",
+    "publishedAt": "2020-12-10T06:10:03.000Z"
+  },
+  "Episode:1177354055218575773": {
+    "__typename": "Episode",
+    "id": "1177354055218575773",
+    "title": "刑罰：港湾都市ヨーフ休暇偽装　６",
+    "publishedAt": "2020-12-11T06:11:46.000Z"
+  },
+  "Episode:1177354055239217892": {
+    "__typename": "Episode",
+    "id": "1177354055239217892",
+    "title": "刑罰：港湾都市ヨーフ休暇偽装　顛末",
+    "publishedAt": "2020-12-12T17:29:53.000Z"
+  },
+  "Episode:1177354055247960832": {
+    "__typename": "Episode",
+    "id": "1177354055247960832",
+    "title": "犯罪経歴証明　リデオ・ソドリック",
+    "publishedAt": "2020-12-13T09:07:36.000Z"
+  },
+  "Episode:1177354055261356707": {
+    "__typename": "Episode",
+    "id": "1177354055261356707",
+    "title": "刑罰：ソドリック街区潜入調査　１",
+    "publishedAt": "2020-12-14T09:05:07.000Z"
+  },
+  "Episode:1177354055274110490": {
+    "__typename": "Episode",
+    "id": "1177354055274110490",
+    "title": "刑罰：ソドリック街区潜入調査　２",
+    "publishedAt": "2020-12-15T09:19:27.000Z"
+  },
+  "Episode:1177354055284445958": {
+    "__typename": "Episode",
+    "id": "1177354055284445958",
+    "title": "刑罰：ソドリック街区潜入調査　３",
+    "publishedAt": "2020-12-16T05:40:12.000Z"
+  },
+  "Episode:1177354055299453642": {
+    "__typename": "Episode",
+    "id": "1177354055299453642",
+    "title": "刑罰：ソドリック街区潜入調査　４",
+    "publishedAt": "2020-12-17T10:31:34.000Z"
+  },
+  "Episode:1177354055308540346": {
+    "__typename": "Episode",
+    "id": "1177354055308540346",
+    "title": "刑罰：ソドリック街区潜入調査　５",
+    "publishedAt": "2020-12-18T05:37:48.000Z"
+  },
+  "Episode:1177354055327818185": {
+    "__typename": "Episode",
+    "id": "1177354055327818185",
+    "title": "刑罰：ソドリック街区潜入調査　顛末",
+    "publishedAt": "2020-12-19T16:20:17.000Z"
+  },
+  "Episode:1177354055341741035": {
+    "__typename": "Episode",
+    "id": "1177354055341741035",
+    "title": "王国裁判記録　ツァーヴ",
+    "publishedAt": "2020-12-20T16:18:26.000Z"
+  },
+  "Episode:1177354055347968961": {
+    "__typename": "Episode",
+    "id": "1177354055347968961",
+    "title": "刑罰：ヨーフ・チェグ港湾避難救助　１",
+    "publishedAt": "2020-12-21T06:41:22.000Z"
+  },
+  "Episode:1177354055359817036": {
+    "__typename": "Episode",
+    "id": "1177354055359817036",
+    "title": "刑罰：ヨーフ・チェグ港湾避難救助　２",
+    "publishedAt": "2020-12-22T05:53:37.000Z"
+  },
+  "Episode:1177354055371612008": {
+    "__typename": "Episode",
+    "id": "1177354055371612008",
+    "title": "刑罰：ヨーフ・チェグ港湾避難救助　３",
+    "publishedAt": "2020-12-23T05:22:07.000Z"
+  },
+  "Episode:1177354055381916474": {
+    "__typename": "Episode",
+    "id": "1177354055381916474",
+    "title": "刑罰：ヨーフ・チェグ港湾避難救助　４",
+    "publishedAt": "2020-12-24T03:03:50.000Z"
+  },
+  "Episode:1177354055392907032": {
+    "__typename": "Episode",
+    "id": "1177354055392907032",
+    "title": "刑罰：ヨーフ・チェグ港湾避難救助　５",
+    "publishedAt": "2020-12-25T02:30:26.000Z"
+  },
+  "Episode:1177354055404512112": {
+    "__typename": "Episode",
+    "id": "1177354055404512112",
+    "title": "刑罰：ヨーフ・チェグ港湾避難救助　６",
+    "publishedAt": "2020-12-26T02:00:32.000Z"
+  },
+  "Episode:1177354055412903863": {
+    "__typename": "Episode",
+    "id": "1177354055412903863",
+    "title": "刑罰：ヨーフ・チェグ港湾避難救助　７",
+    "publishedAt": "2020-12-26T15:51:55.000Z"
+  },
+  "Episode:1177354055431203217": {
+    "__typename": "Episode",
+    "id": "1177354055431203217",
+    "title": "刑罰：ヨーフ・チェグ港湾避難救助　顛末",
+    "publishedAt": "2020-12-28T02:40:49.000Z"
+  },
+  "Episode:1177354055439963042": {
+    "__typename": "Episode",
+    "id": "1177354055439963042",
+    "title": "王国裁判記録　パトーシェ・キヴィア",
+    "publishedAt": "2020-12-28T22:59:47.000Z"
+  },
+  "Episode:1177354055458804555": {
+    "__typename": "Episode",
+    "id": "1177354055458804555",
+    "title": "刑罰：トゥジン・トゥーガ丘陵進撃陽動　１",
+    "publishedAt": "2020-12-30T05:19:31.000Z"
+  },
+  "Episode:1177354055465816407": {
+    "__typename": "Episode",
+    "id": "1177354055465816407",
+    "title": "刑罰：トゥジン・トゥーガ丘陵進撃陽動　２",
+    "publishedAt": "2020-12-30T15:40:02.000Z"
+  },
+  "Episode:1177354055482004078": {
+    "__typename": "Episode",
+    "id": "1177354055482004078",
+    "title": "刑罰：トゥジン・トゥーガ丘陵進撃陽動　３",
+    "publishedAt": "2021-01-01T01:09:38.000Z"
+  },
+  "Episode:1177354055491348219": {
+    "__typename": "Episode",
+    "id": "1177354055491348219",
+    "title": "刑罰：トゥジン・トゥーガ丘陵進撃陽動　４",
+    "publishedAt": "2021-01-01T15:46:57.000Z"
+  },
+  "Episode:1177354055501198438": {
+    "__typename": "Episode",
+    "id": "1177354055501198438",
+    "title": "刑罰：トゥジン・トゥーガ丘陵進撃陽動　５",
+    "publishedAt": "2021-01-02T10:03:05.000Z"
+  },
+  "Episode:1177354055513257640": {
+    "__typename": "Episode",
+    "id": "1177354055513257640",
+    "title": "刑罰：トゥジン・トゥーガ丘陵進撃陽動　顛末",
+    "publishedAt": "2021-01-03T06:26:26.000Z"
+  },
+  "Episode:1177354055533335171": {
+    "__typename": "Episode",
+    "id": "1177354055533335171",
+    "title": "刑罰：トゥジン・トゥーガ最前線陣地防衛　１",
+    "publishedAt": "2021-01-04T13:36:19.000Z"
+  },
+  "Episode:1177354055543963019": {
+    "__typename": "Episode",
+    "id": "1177354055543963019",
+    "title": "刑罰：トゥジン・トゥーガ最前線陣地防衛　２",
+    "publishedAt": "2021-01-05T09:14:22.000Z"
+  },
+  "Episode:1177354055557792412": {
+    "__typename": "Episode",
+    "id": "1177354055557792412",
+    "title": "刑罰：トゥジン・トゥーガ最前線陣地防衛　３",
+    "publishedAt": "2021-01-06T09:19:20.000Z"
+  },
+  "Episode:1177354055582448318": {
+    "__typename": "Episode",
+    "id": "1177354055582448318",
+    "title": "刑罰：トゥジン・トゥーガ最前線陣地防衛　４",
+    "publishedAt": "2021-01-08T06:54:18.000Z"
+  },
+  "Episode:1177354055594535729": {
+    "__typename": "Episode",
+    "id": "1177354055594535729",
+    "title": "刑罰：トゥジン・トゥーガ最前線陣地防衛　顛末",
+    "publishedAt": "2021-01-09T05:16:23.000Z"
+  },
+  "Episode:1177354055602969082": {
+    "__typename": "Episode",
+    "id": "1177354055602969082",
+    "title": "王国裁判記録　ロウツィル・ゼフ＝ゼイアル・メト・キーオ",
+    "publishedAt": "2021-01-09T17:33:37.000Z"
+  },
+  "Episode:1177354055618267413": {
+    "__typename": "Episode",
+    "id": "1177354055618267413",
+    "title": "刑罰：トゥジン山奪取進軍援護　１",
+    "publishedAt": "2021-01-10T17:54:45.000Z"
+  },
+  "Episode:1177354055632611498": {
+    "__typename": "Episode",
+    "id": "1177354055632611498",
+    "title": "刑罰：トゥジン山奪取進軍援護　２",
+    "publishedAt": "2021-01-11T15:19:26.000Z"
+  },
+  "Episode:1177354055646434272": {
+    "__typename": "Episode",
+    "id": "1177354055646434272",
+    "title": "刑罰：トゥジン山奪取進軍援護　３",
+    "publishedAt": "2021-01-12T15:11:45.000Z"
+  },
+  "Episode:16816410413879979416": {
+    "__typename": "Episode",
+    "id": "16816410413879979416",
+    "title": "刑罰：トゥジン山奪取進軍援護　４",
+    "publishedAt": "2021-01-13T15:08:20.000Z"
+  },
+  "Episode:16816410413892474572": {
+    "__typename": "Episode",
+    "id": "16816410413892474572",
+    "title": "刑罰：トゥジン山奪取進軍援護　５",
+    "publishedAt": "2021-01-14T15:09:27.000Z"
+  },
+  "Episode:16816410413913941286": {
+    "__typename": "Episode",
+    "id": "16816410413913941286",
+    "title": "刑罰：トゥジン山奪取進軍援護　６",
+    "publishedAt": "2021-01-16T04:15:39.000Z"
+  },
+  "Episode:16816410413924082670": {
+    "__typename": "Episode",
+    "id": "16816410413924082670",
+    "title": "刑罰：トゥジン山奪取進軍援護　顛末",
+    "publishedAt": "2021-01-16T17:31:21.000Z"
+  },
+  "Episode:16816410413940343252": {
+    "__typename": "Episode",
+    "id": "16816410413940343252",
+    "title": "待機指令：臨時要塞　トゥジン・バハーク",
+    "publishedAt": "2021-01-17T16:19:48.000Z"
+  },
+  "Episode:16816410413954449343": {
+    "__typename": "Episode",
+    "id": "16816410413954449343",
+    "title": "犯罪経歴証明：トヴィッツ・ヒューカー",
+    "publishedAt": "2021-01-18T15:33:11.000Z"
+  },
+  "Episode:16816410413965116215": {
+    "__typename": "Episode",
+    "id": "16816410413965116215",
+    "title": "聖女運用記録：第二王都ゼイアレンテ奪還作戦",
+    "publishedAt": "2021-01-19T11:07:43.000Z"
+  },
+  "Episode:16816410413982769429": {
+    "__typename": "Episode",
+    "id": "16816410413982769429",
+    "title": "刑罰：ゼイアレンテ潜行偵察　１",
+    "publishedAt": "2021-01-20T15:09:51.000Z"
+  },
+  "Episode:16816410413996217212": {
+    "__typename": "Episode",
+    "id": "16816410413996217212",
+    "title": "刑罰：ゼイアレンテ潜行偵察　２",
+    "publishedAt": "2021-01-21T14:55:41.000Z"
+  },
+  "Episode:16816452218258100672": {
+    "__typename": "Episode",
+    "id": "16816452218258100672",
+    "title": "刑罰：ゼイアレンテ潜行偵察　３",
+    "publishedAt": "2021-01-22T16:19:29.000Z"
+  },
+  "Episode:16816452218273426328": {
+    "__typename": "Episode",
+    "id": "16816452218273426328",
+    "title": "刑罰：ゼイアレンテ潜行偵察　４",
+    "publishedAt": "2021-01-23T15:19:56.000Z"
+  },
+  "Episode:16816452218290940517": {
+    "__typename": "Episode",
+    "id": "16816452218290940517",
+    "title": "刑罰：ゼイアレンテ潜行偵察　５",
+    "publishedAt": "2021-01-24T15:05:22.000Z"
+  },
+  "Episode:16816452218306327295": {
+    "__typename": "Episode",
+    "id": "16816452218306327295",
+    "title": "刑罰：ゼイアレンテ潜行偵察　顛末",
+    "publishedAt": "2021-01-25T15:05:11.000Z"
+  },
+  "Episode:16816452218321847389": {
+    "__typename": "Episode",
+    "id": "16816452218321847389",
+    "title": "王国裁判記録　ジェイス・パーチラクト",
+    "publishedAt": "2021-01-26T15:03:21.000Z"
+  },
+  "Episode:16816452218348139719": {
+    "__typename": "Episode",
+    "id": "16816452218348139719",
+    "title": "刑罰：白銀公道アスガーシャ攻防戦　１",
+    "publishedAt": "2021-01-28T09:11:14.000Z"
+  },
+  "Episode:16816452218368835673": {
+    "__typename": "Episode",
+    "id": "16816452218368835673",
+    "title": "刑罰：白銀公道アスガーシャ攻防戦　２",
+    "publishedAt": "2021-01-29T16:13:19.000Z"
+  },
+  "Episode:16816452218380606647": {
+    "__typename": "Episode",
+    "id": "16816452218380606647",
+    "title": "刑罰：白銀公道アスガーシャ攻防戦　３",
+    "publishedAt": "2021-01-30T10:54:38.000Z"
+  },
+  "Episode:16816452218400088465": {
+    "__typename": "Episode",
+    "id": "16816452218400088465",
+    "title": "刑罰：白銀公道アスガーシャ攻防戦　４",
+    "publishedAt": "2021-01-31T12:40:36.000Z"
+  },
+  "Episode:16816452218422716349": {
+    "__typename": "Episode",
+    "id": "16816452218422716349",
+    "title": "刑罰：白銀公道アスガーシャ攻防戦　５",
+    "publishedAt": "2021-02-02T02:40:23.000Z"
+  },
+  "Episode:16816452218453347841": {
+    "__typename": "Episode",
+    "id": "16816452218453347841",
+    "title": "刑罰：白銀公道アスガーシャ攻防戦　顛末",
+    "publishedAt": "2021-02-04T02:30:04.000Z"
+  },
+  "Episode:16816452218478903125": {
+    "__typename": "Episode",
+    "id": "16816452218478903125",
+    "title": "刑罰：第二王都ゼイアレンテ奪還作戦　１",
+    "publishedAt": "2021-02-05T16:54:43.000Z"
+  },
+  "Episode:16816452218494504722": {
+    "__typename": "Episode",
+    "id": "16816452218494504722",
+    "title": "刑罰：第二王都ゼイアレンテ奪還作戦　２",
+    "publishedAt": "2021-02-06T15:43:36.000Z"
+  },
+  "Episode:16816452218521938877": {
+    "__typename": "Episode",
+    "id": "16816452218521938877",
+    "title": "刑罰：第二王都ゼイアレンテ奪還作戦　３",
+    "publishedAt": "2021-02-08T08:39:23.000Z"
+  },
+  "Episode:16816452218543335574": {
+    "__typename": "Episode",
+    "id": "16816452218543335574",
+    "title": "刑罰：第二王都ゼイアレンテ奪還作戦　４",
+    "publishedAt": "2021-02-09T15:03:37.000Z"
+  },
+  "Episode:16816452218590900609": {
+    "__typename": "Episode",
+    "id": "16816452218590900609",
+    "title": "刑罰：第二王都ゼイアレンテ奪還作戦　５",
+    "publishedAt": "2021-02-12T13:40:05.000Z"
+  },
+  "Episode:16816452218621625440": {
+    "__typename": "Episode",
+    "id": "16816452218621625440",
+    "title": "刑罰：第二王都ゼイアレンテ奪還作戦　６",
+    "publishedAt": "2021-02-14T08:47:48.000Z"
+  },
+  "Episode:16816452218656387368": {
+    "__typename": "Episode",
+    "id": "16816452218656387368",
+    "title": "刑罰：第二王都ゼイアレンテ奪還作戦　顛末",
+    "publishedAt": "2021-02-16T10:08:06.000Z"
+  },
+  "Episode:16816452218677320549": {
+    "__typename": "Episode",
+    "id": "16816452218677320549",
+    "title": "聖女運用記録：ケイル・ヴォーク攻勢計画準備",
+    "publishedAt": "2021-02-17T15:00:10.000Z"
+  },
+  "Episode:16816452218721432062": {
+    "__typename": "Episode",
+    "id": "16816452218721432062",
+    "title": "待機指令：ガルトゥイル深部修理場",
+    "publishedAt": "2021-02-20T09:58:14.000Z"
+  },
+  "Episode:16816452218752035088": {
+    "__typename": "Episode",
+    "id": "16816452218752035088",
+    "title": "勇者兵志願調書　ライノー・モルチェト",
+    "publishedAt": "2021-02-22T02:37:50.000Z"
+  },
+  "Episode:16816452218799983668": {
+    "__typename": "Episode",
+    "id": "16816452218799983668",
+    "title": "休暇行動管理簿：ホード・クリヴィオス　１",
+    "publishedAt": "2021-02-24T16:04:48.000Z"
+  },
+  "Episode:16816452218831844396": {
+    "__typename": "Episode",
+    "id": "16816452218831844396",
+    "title": "休暇行動管理簿：ホード・クリヴィオス　２",
+    "publishedAt": "2021-02-26T17:08:07.000Z"
+  },
+  "Episode:16816452218866560598": {
+    "__typename": "Episode",
+    "id": "16816452218866560598",
+    "title": "休暇行動管理簿：ドッタの剣　１",
+    "publishedAt": "2021-02-28T15:33:31.000Z"
+  },
+  "Episode:16816452218895800315": {
+    "__typename": "Episode",
+    "id": "16816452218895800315",
+    "title": "休暇行動管理簿：ドッタの剣　２",
+    "publishedAt": "2021-03-02T11:41:38.000Z"
+  },
+  "Episode:16816452218946479047": {
+    "__typename": "Episode",
+    "id": "16816452218946479047",
+    "title": "休暇行動管理簿：ドッタの剣　３",
+    "publishedAt": "2021-03-05T13:13:03.000Z"
+  },
+  "Episode:16816452219002053282": {
+    "__typename": "Episode",
+    "id": "16816452219002053282",
+    "title": "休暇行動管理簿：ドッタの剣　４",
+    "publishedAt": "2021-03-08T11:44:26.000Z"
+  },
+  "Episode:16816452219057996102": {
+    "__typename": "Episode",
+    "id": "16816452219057996102",
+    "title": "休暇行動管理簿：ノルガユ・センリッジの高貴なる休日　１",
+    "publishedAt": "2021-03-11T14:33:00.000Z"
+  },
+  "Episode:16816452219109130303": {
+    "__typename": "Episode",
+    "id": "16816452219109130303",
+    "title": "休暇行動管理簿：ノルガユ・センリッジの高貴なる休日　２",
+    "publishedAt": "2021-03-14T10:06:08.000Z"
+  },
+  "Episode:16816452219146674873": {
+    "__typename": "Episode",
+    "id": "16816452219146674873",
+    "title": "休暇行動管理簿：ノルガユ・センリッジの高貴なる休日　３",
+    "publishedAt": "2021-03-16T11:08:34.000Z"
+  },
+  "Episode:16816452219203157095": {
+    "__typename": "Episode",
+    "id": "16816452219203157095",
+    "title": "休暇行動管理簿：ジェイスの憂鬱な禁猟　１",
+    "publishedAt": "2021-03-19T14:56:57.000Z"
+  },
+  "Episode:16816452219254223563": {
+    "__typename": "Episode",
+    "id": "16816452219254223563",
+    "title": "休暇行動管理簿：ジェイスの憂鬱な禁猟　２",
+    "publishedAt": "2021-03-22T07:12:38.000Z"
+  },
+  "Episode:16816452219330803162": {
+    "__typename": "Episode",
+    "id": "16816452219330803162",
+    "title": "休暇行動管理簿：ジェイスの憂鬱な禁猟　３",
+    "publishedAt": "2021-03-26T15:34:51.000Z"
+  },
+  "Episode:16816452219403134051": {
+    "__typename": "Episode",
+    "id": "16816452219403134051",
+    "title": "休暇行動管理簿：ジェイスの憂鬱な禁猟　４",
+    "publishedAt": "2021-03-30T14:09:15.000Z"
+  },
+  "Episode:16816452219553610773": {
+    "__typename": "Episode",
+    "id": "16816452219553610773",
+    "title": "休暇行動管理簿：ベネティムの大いなる奇跡　１",
+    "publishedAt": "2021-04-08T01:38:41.000Z"
+  },
+  "Episode:16816452219684726807": {
+    "__typename": "Episode",
+    "id": "16816452219684726807",
+    "title": "休暇行動管理簿：ベネティムの大いなる奇跡　２",
+    "publishedAt": "2021-04-15T01:03:31.000Z"
+  },
+  "Episode:16816452219795263537": {
+    "__typename": "Episode",
+    "id": "16816452219795263537",
+    "title": "休暇行動管理簿：ベネティムの大いなる奇跡　３",
+    "publishedAt": "2021-04-20T13:35:35.000Z"
+  },
+  "Episode:16816452219914950785": {
+    "__typename": "Episode",
+    "id": "16816452219914950785",
+    "title": "休暇行動管理簿：探偵女神テオリッタの事件簿　１",
+    "publishedAt": "2021-04-26T14:29:17.000Z"
+  },
+  "Episode:16816452219973176347": {
+    "__typename": "Episode",
+    "id": "16816452219973176347",
+    "title": "休暇行動管理簿：探偵女神テオリッタの事件簿　２",
+    "publishedAt": "2021-04-29T14:05:18.000Z"
+  },
+  "Episode:16816452220035145129": {
+    "__typename": "Episode",
+    "id": "16816452220035145129",
+    "title": "休暇行動管理簿：探偵女神テオリッタの事件簿　３",
+    "publishedAt": "2021-05-02T15:16:16.000Z"
+  },
+  "Episode:16816452220170430676": {
+    "__typename": "Episode",
+    "id": "16816452220170430676",
+    "title": "休暇行動管理簿：探偵女神テオリッタの事件簿　４",
+    "publishedAt": "2021-05-08T15:43:03.000Z"
+  },
+  "Episode:16816452220326841948": {
+    "__typename": "Episode",
+    "id": "16816452220326841948",
+    "title": "休暇行動管理簿：探偵女神テオリッタの事件簿　５",
+    "publishedAt": "2021-05-16T03:13:12.000Z"
+  },
+  "Episode:16816452220491895395": {
+    "__typename": "Episode",
+    "id": "16816452220491895395",
+    "title": "聖女運用記録：ヴァリガーヒ塩境突破",
+    "publishedAt": "2021-05-23T14:39:54.000Z"
+  },
+  "Episode:16816452220617917716": {
+    "__typename": "Episode",
+    "id": "16816452220617917716",
+    "title": "待機指令：鎮東軍港ビアッコ　１",
+    "publishedAt": "2021-05-29T16:19:44.000Z"
+  },
+  "Episode:16816452220660820333": {
+    "__typename": "Episode",
+    "id": "16816452220660820333",
+    "title": "待機指令：鎮東軍港ビアッコ　２",
+    "publishedAt": "2021-05-31T14:25:02.000Z"
+  },
+  "Episode:16816452220754064387": {
+    "__typename": "Episode",
+    "id": "16816452220754064387",
+    "title": "刑罰：ヴァリガーヒ海峡北進突破　１",
+    "publishedAt": "2021-06-05T04:37:38.000Z"
+  },
+  "Episode:16816452220970671860": {
+    "__typename": "Episode",
+    "id": "16816452220970671860",
+    "title": "刑罰：ヴァリガーヒ海峡北進突破　２",
+    "publishedAt": "2021-06-15T08:36:25.000Z"
+  },
+  "Episode:16816452221117625331": {
+    "__typename": "Episode",
+    "id": "16816452221117625331",
+    "title": "刑罰：ヴァリガーヒ海峡北進突破　３",
+    "publishedAt": "2021-06-22T10:59:06.000Z"
+  },
+  "Episode:16816452221263969734": {
+    "__typename": "Episode",
+    "id": "16816452221263969734",
+    "title": "刑罰：ヴァリガーヒ海峡北進突破　４",
+    "publishedAt": "2021-06-29T13:09:52.000Z"
+  },
+  "Episode:16816452221340727836": {
+    "__typename": "Episode",
+    "id": "16816452221340727836",
+    "title": "刑罰：ヴァリガーヒ海峡北進突破　顛末",
+    "publishedAt": "2021-07-03T11:21:57.000Z"
+  },
+  "Episode:16816452221368788604": {
+    "__typename": "Episode",
+    "id": "16816452221368788604",
+    "title": "刑罰：リッセカート山塊北進突破　顛末",
+    "publishedAt": "2021-07-04T15:12:15.000Z"
+  },
+  "Episode:16816700425947046349": {
+    "__typename": "Episode",
+    "id": "16816700425947046349",
+    "title": "刑罰：ゼハイ・ダーエ岩礁城砦脱出　１",
+    "publishedAt": "2021-07-13T14:19:16.000Z"
+  },
+  "Episode:16816700426207794280": {
+    "__typename": "Episode",
+    "id": "16816700426207794280",
+    "title": "刑罰：ゼハイ・ダーエ岩礁城砦脱出　２",
+    "publishedAt": "2021-07-25T14:00:55.000Z"
+  },
+  "Episode:16816700426305119491": {
+    "__typename": "Episode",
+    "id": "16816700426305119491",
+    "title": "刑罰：ゼハイ・ダーエ岩礁城砦脱出　３",
+    "publishedAt": "2021-07-30T07:24:15.000Z"
+  },
+  "Episode:16816700426533392802": {
+    "__typename": "Episode",
+    "id": "16816700426533392802",
+    "title": "刑罰：ゼハイ・ダーエ岩礁城砦脱出　４",
+    "publishedAt": "2021-08-09T14:02:20.000Z"
+  },
+  "Episode:16816700426814493551": {
+    "__typename": "Episode",
+    "id": "16816700426814493551",
+    "title": "刑罰：ゼハイ・ダーエ岩礁城砦脱出　５",
+    "publishedAt": "2021-08-21T11:52:28.000Z"
+  },
+  "Episode:16816700426966224953": {
+    "__typename": "Episode",
+    "id": "16816700426966224953",
+    "title": "刑罰：ゼハイ・ダーエ岩礁城砦脱出　顛末",
+    "publishedAt": "2021-08-28T04:46:19.000Z"
+  },
+  "Episode:16816700427463612801": {
+    "__typename": "Episode",
+    "id": "16816700427463612801",
+    "title": "刑罰：ヴァリガーヒ海岸隠密偵察　顛末",
+    "publishedAt": "2021-09-18T14:22:54.000Z"
+  },
+  "Episode:16816700427578911734": {
+    "__typename": "Episode",
+    "id": "16816700427578911734",
+    "title": "刑罰：ブロック・ヌメア要塞破壊工作　１",
+    "publishedAt": "2021-09-23T07:49:38.000Z"
+  },
+  "Episode:16816700428313189646": {
+    "__typename": "Episode",
+    "id": "16816700428313189646",
+    "title": "刑罰：ブロック・ヌメア要塞破壊工作　２",
+    "publishedAt": "2021-10-22T15:40:20.000Z"
+  },
+  "Episode:16816700428484016210": {
+    "__typename": "Episode",
+    "id": "16816700428484016210",
+    "title": "刑罰：ブロック・ヌメア要塞破壊工作　３",
+    "publishedAt": "2021-10-29T16:45:03.000Z"
+  },
+  "Episode:16816700429357551681": {
+    "__typename": "Episode",
+    "id": "16816700429357551681",
+    "title": "刑罰：ブロック・ヌメア要塞破壊工作　４",
+    "publishedAt": "2021-12-04T08:07:57.000Z"
+  },
+  "Episode:16816927859361641243": {
+    "__typename": "Episode",
+    "id": "16816927859361641243",
+    "title": "刑罰：ブロック・ヌメア要塞破壊工作　５",
+    "publishedAt": "2021-12-28T05:59:06.000Z"
+  },
+  "Episode:16816927859534442292": {
+    "__typename": "Episode",
+    "id": "16816927859534442292",
+    "title": "刑罰：ブロック・ヌメア要塞破壊工作　６",
+    "publishedAt": "2022-01-03T14:11:47.000Z"
+  },
+  "Episode:16816927859988008270": {
+    "__typename": "Episode",
+    "id": "16816927859988008270",
+    "title": "刑罰：ブロック・ヌメア要塞破壊工作　７",
+    "publishedAt": "2022-01-19T10:08:17.000Z"
+  },
+  "Episode:16816927860226195342": {
+    "__typename": "Episode",
+    "id": "16816927860226195342",
+    "title": "刑罰：ブロック・ヌメア要塞破壊工作　顛末",
+    "publishedAt": "2022-01-27T14:35:20.000Z"
+  },
+  "Episode:16816927860255860251": {
+    "__typename": "Episode",
+    "id": "16816927860255860251",
+    "title": "犯罪経歴証明：トヴィッツ・ヒューカー　２",
+    "publishedAt": "2022-01-28T16:44:46.000Z"
+  },
+  "Episode:16816927860515445486": {
+    "__typename": "Episode",
+    "id": "16816927860515445486",
+    "title": "刑罰：ライノー・モルチェト封鎖監禁指令",
+    "publishedAt": "2022-02-06T07:58:48.000Z"
+  },
+  "Episode:16816927860680361158": {
+    "__typename": "Episode",
+    "id": "16816927860680361158",
+    "title": "聖女運用記録：砲撃都市ノーファン攻防　１",
+    "publishedAt": "2022-02-11T15:10:43.000Z"
+  },
+  "Episode:16816927860715021155": {
+    "__typename": "Episode",
+    "id": "16816927860715021155",
+    "title": "刑罰：カジット連山殲滅掃討　１",
+    "publishedAt": "2022-02-12T15:54:03.000Z"
+  },
+  "Episode:16816927860931182765": {
+    "__typename": "Episode",
+    "id": "16816927860931182765",
+    "title": "刑罰：カジット連山殲滅掃討　２",
+    "publishedAt": "2022-02-19T16:13:54.000Z"
+  },
+  "Episode:16816927861874819007": {
+    "__typename": "Episode",
+    "id": "16816927861874819007",
+    "title": "刑罰：カジット連山殲滅掃討　３",
+    "publishedAt": "2022-03-24T11:48:44.000Z"
+  },
+  "Episode:16816927862590198914": {
+    "__typename": "Episode",
+    "id": "16816927862590198914",
+    "title": "刑罰：カジット連山殲滅掃討　４",
+    "publishedAt": "2022-04-17T13:13:52.000Z"
+  },
+  "Episode:16817139555269383647": {
+    "__typename": "Episode",
+    "id": "16817139555269383647",
+    "title": "刑罰：カジット連山殲滅掃討　５",
+    "publishedAt": "2022-06-03T15:34:13.000Z"
+  },
+  "Episode:16817330657663156378": {
+    "__typename": "Episode",
+    "id": "16817330657663156378",
+    "title": "刑罰：カジット連山殲滅掃討　顛末　１",
+    "publishedAt": "2023-05-21T16:15:43.000Z"
+  },
+  "TableOfContentsChapter:": {
+    "__typename": "TableOfContentsChapter",
+    "id": "",
+    "episodeUnions": [
+      {
+        "__ref": "Episode:1177354054935149092"
+      },
+      {
+        "__ref": "Episode:1177354054935149367"
+      },
+      {
+        "__ref": "Episode:1177354054935185333"
+      },
+      {
+        "__ref": "Episode:1177354054935237500"
+      },
+      {
+        "__ref": "Episode:1177354054935338786"
+      },
+      {
+        "__ref": "Episode:1177354054935414425"
+      },
+      {
+        "__ref": "Episode:1177354054935500453"
+      },
+      {
+        "__ref": "Episode:1177354054935557968"
+      },
+      {
+        "__ref": "Episode:1177354054935609028"
+      },
+      {
+        "__ref": "Episode:1177354054935738501"
+      },
+      {
+        "__ref": "Episode:1177354054935842358"
+      },
+      {
+        "__ref": "Episode:1177354054935911099"
+      },
+      {
+        "__ref": "Episode:1177354054936597685"
+      },
+      {
+        "__ref": "Episode:1177354054944719411"
+      },
+      {
+        "__ref": "Episode:1177354054948408760"
+      },
+      {
+        "__ref": "Episode:1177354054951182001"
+      },
+      {
+        "__ref": "Episode:1177354054954393730"
+      },
+      {
+        "__ref": "Episode:1177354054954442946"
+      },
+      {
+        "__ref": "Episode:1177354054955542383"
+      },
+      {
+        "__ref": "Episode:1177354054965832111"
+      },
+      {
+        "__ref": "Episode:1177354054971407069"
+      },
+      {
+        "__ref": "Episode:1177354054982014094"
+      },
+      {
+        "__ref": "Episode:1177354054989848347"
+      },
+      {
+        "__ref": "Episode:1177354055009464869"
+      },
+      {
+        "__ref": "Episode:1177354055041687936"
+      },
+      {
+        "__ref": "Episode:1177354055052194866"
+      },
+      {
+        "__ref": "Episode:1177354055071134957"
+      },
+      {
+        "__ref": "Episode:1177354055086504266"
+      },
+      {
+        "__ref": "Episode:1177354055099679604"
+      },
+      {
+        "__ref": "Episode:1177354055114632761"
+      },
+      {
+        "__ref": "Episode:1177354055125955211"
+      },
+      {
+        "__ref": "Episode:1177354055143006191"
+      },
+      {
+        "__ref": "Episode:1177354055165733513"
+      },
+      {
+        "__ref": "Episode:1177354055179751789"
+      },
+      {
+        "__ref": "Episode:1177354055192673113"
+      },
+      {
+        "__ref": "Episode:1177354055205839659"
+      },
+      {
+        "__ref": "Episode:1177354055218575773"
+      },
+      {
+        "__ref": "Episode:1177354055239217892"
+      },
+      {
+        "__ref": "Episode:1177354055247960832"
+      },
+      {
+        "__ref": "Episode:1177354055261356707"
+      },
+      {
+        "__ref": "Episode:1177354055274110490"
+      },
+      {
+        "__ref": "Episode:1177354055284445958"
+      },
+      {
+        "__ref": "Episode:1177354055299453642"
+      },
+      {
+        "__ref": "Episode:1177354055308540346"
+      },
+      {
+        "__ref": "Episode:1177354055327818185"
+      },
+      {
+        "__ref": "Episode:1177354055341741035"
+      },
+      {
+        "__ref": "Episode:1177354055347968961"
+      },
+      {
+        "__ref": "Episode:1177354055359817036"
+      },
+      {
+        "__ref": "Episode:1177354055371612008"
+      },
+      {
+        "__ref": "Episode:1177354055381916474"
+      },
+      {
+        "__ref": "Episode:1177354055392907032"
+      },
+      {
+        "__ref": "Episode:1177354055404512112"
+      },
+      {
+        "__ref": "Episode:1177354055412903863"
+      },
+      {
+        "__ref": "Episode:1177354055431203217"
+      },
+      {
+        "__ref": "Episode:1177354055439963042"
+      },
+      {
+        "__ref": "Episode:1177354055458804555"
+      },
+      {
+        "__ref": "Episode:1177354055465816407"
+      },
+      {
+        "__ref": "Episode:1177354055482004078"
+      },
+      {
+        "__ref": "Episode:1177354055491348219"
+      },
+      {
+        "__ref": "Episode:1177354055501198438"
+      },
+      {
+        "__ref": "Episode:1177354055513257640"
+      },
+      {
+        "__ref": "Episode:1177354055533335171"
+      },
+      {
+        "__ref": "Episode:1177354055543963019"
+      },
+      {
+        "__ref": "Episode:1177354055557792412"
+      },
+      {
+        "__ref": "Episode:1177354055582448318"
+      },
+      {
+        "__ref": "Episode:1177354055594535729"
+      },
+      {
+        "__ref": "Episode:1177354055602969082"
+      },
+      {
+        "__ref": "Episode:1177354055618267413"
+      },
+      {
+        "__ref": "Episode:1177354055632611498"
+      },
+      {
+        "__ref": "Episode:1177354055646434272"
+      },
+      {
+        "__ref": "Episode:16816410413879979416"
+      },
+      {
+        "__ref": "Episode:16816410413892474572"
+      },
+      {
+        "__ref": "Episode:16816410413913941286"
+      },
+      {
+        "__ref": "Episode:16816410413924082670"
+      },
+      {
+        "__ref": "Episode:16816410413940343252"
+      },
+      {
+        "__ref": "Episode:16816410413954449343"
+      },
+      {
+        "__ref": "Episode:16816410413965116215"
+      },
+      {
+        "__ref": "Episode:16816410413982769429"
+      },
+      {
+        "__ref": "Episode:16816410413996217212"
+      },
+      {
+        "__ref": "Episode:16816452218258100672"
+      },
+      {
+        "__ref": "Episode:16816452218273426328"
+      },
+      {
+        "__ref": "Episode:16816452218290940517"
+      },
+      {
+        "__ref": "Episode:16816452218306327295"
+      },
+      {
+        "__ref": "Episode:16816452218321847389"
+      },
+      {
+        "__ref": "Episode:16816452218348139719"
+      },
+      {
+        "__ref": "Episode:16816452218368835673"
+      },
+      {
+        "__ref": "Episode:16816452218380606647"
+      },
+      {
+        "__ref": "Episode:16816452218400088465"
+      },
+      {
+        "__ref": "Episode:16816452218422716349"
+      },
+      {
+        "__ref": "Episode:16816452218453347841"
+      },
+      {
+        "__ref": "Episode:16816452218478903125"
+      },
+      {
+        "__ref": "Episode:16816452218494504722"
+      },
+      {
+        "__ref": "Episode:16816452218521938877"
+      },
+      {
+        "__ref": "Episode:16816452218543335574"
+      },
+      {
+        "__ref": "Episode:16816452218590900609"
+      },
+      {
+        "__ref": "Episode:16816452218621625440"
+      },
+      {
+        "__ref": "Episode:16816452218656387368"
+      },
+      {
+        "__ref": "Episode:16816452218677320549"
+      },
+      {
+        "__ref": "Episode:16816452218721432062"
+      },
+      {
+        "__ref": "Episode:16816452218752035088"
+      },
+      {
+        "__ref": "Episode:16816452218799983668"
+      },
+      {
+        "__ref": "Episode:16816452218831844396"
+      },
+      {
+        "__ref": "Episode:16816452218866560598"
+      },
+      {
+        "__ref": "Episode:16816452218895800315"
+      },
+      {
+        "__ref": "Episode:16816452218946479047"
+      },
+      {
+        "__ref": "Episode:16816452219002053282"
+      },
+      {
+        "__ref": "Episode:16816452219057996102"
+      },
+      {
+        "__ref": "Episode:16816452219109130303"
+      },
+      {
+        "__ref": "Episode:16816452219146674873"
+      },
+      {
+        "__ref": "Episode:16816452219203157095"
+      },
+      {
+        "__ref": "Episode:16816452219254223563"
+      },
+      {
+        "__ref": "Episode:16816452219330803162"
+      },
+      {
+        "__ref": "Episode:16816452219403134051"
+      },
+      {
+        "__ref": "Episode:16816452219553610773"
+      },
+      {
+        "__ref": "Episode:16816452219684726807"
+      },
+      {
+        "__ref": "Episode:16816452219795263537"
+      },
+      {
+        "__ref": "Episode:16816452219914950785"
+      },
+      {
+        "__ref": "Episode:16816452219973176347"
+      },
+      {
+        "__ref": "Episode:16816452220035145129"
+      },
+      {
+        "__ref": "Episode:16816452220170430676"
+      },
+      {
+        "__ref": "Episode:16816452220326841948"
+      },
+      {
+        "__ref": "Episode:16816452220491895395"
+      },
+      {
+        "__ref": "Episode:16816452220617917716"
+      },
+      {
+        "__ref": "Episode:16816452220660820333"
+      },
+      {
+        "__ref": "Episode:16816452220754064387"
+      },
+      {
+        "__ref": "Episode:16816452220970671860"
+      },
+      {
+        "__ref": "Episode:16816452221117625331"
+      },
+      {
+        "__ref": "Episode:16816452221263969734"
+      },
+      {
+        "__ref": "Episode:16816452221340727836"
+      },
+      {
+        "__ref": "Episode:16816452221368788604"
+      },
+      {
+        "__ref": "Episode:16816700425947046349"
+      },
+      {
+        "__ref": "Episode:16816700426207794280"
+      },
+      {
+        "__ref": "Episode:16816700426305119491"
+      },
+      {
+        "__ref": "Episode:16816700426533392802"
+      },
+      {
+        "__ref": "Episode:16816700426814493551"
+      },
+      {
+        "__ref": "Episode:16816700426966224953"
+      },
+      {
+        "__ref": "Episode:16816700427463612801"
+      },
+      {
+        "__ref": "Episode:16816700427578911734"
+      },
+      {
+        "__ref": "Episode:16816700428313189646"
+      },
+      {
+        "__ref": "Episode:16816700428484016210"
+      },
+      {
+        "__ref": "Episode:16816700429357551681"
+      },
+      {
+        "__ref": "Episode:16816927859361641243"
+      },
+      {
+        "__ref": "Episode:16816927859534442292"
+      },
+      {
+        "__ref": "Episode:16816927859988008270"
+      },
+      {
+        "__ref": "Episode:16816927860226195342"
+      },
+      {
+        "__ref": "Episode:16816927860255860251"
+      },
+      {
+        "__ref": "Episode:16816927860515445486"
+      },
+      {
+        "__ref": "Episode:16816927860680361158"
+      },
+      {
+        "__ref": "Episode:16816927860715021155"
+      },
+      {
+        "__ref": "Episode:16816927860931182765"
+      },
+      {
+        "__ref": "Episode:16816927861874819007"
+      },
+      {
+        "__ref": "Episode:16816927862590198914"
+      },
+      {
+        "__ref": "Episode:16817139555269383647"
+      },
+      {
+        "__ref": "Episode:16817330657663156378"
+      }
+    ],
+    "chapter": null
+  },
+  "LoyaltyUser:4852201425154963466": {
+    "__typename": "LoyaltyUser",
+    "id": "4852201425154963466",
+    "giftPromotionMessage": "いつもお世話になっております。\n豆知識：カップラーメンにも出汁を使うと味がだいぶ変わります。",
+    "receiveGift": true,
+    "giftThanksMessage": "恐縮です、ありがとうございます。\n豆知識：だいたいの食べ物は冷凍すると長持ちする"
+  },
+  "Work:1177354054935149052": {
+    "__typename": "Work",
+    "id": "1177354054935149052",
+    "title": "勇者刑に処す　懲罰勇者９００４隊刑務記録",
+    "alternateTitle": null,
+    "adminCoverImageUrl": "https://cdn.kdkw.jp/cover_1000/322503/322503000770.webp",
+    "promotionalImageUrl": null,
+    "adminSquareImageUrl": null,
+    "baseColor": "#634F94",
+    "author": {
+      "__ref": "UserAccount:4852201425154963466"
+    },
+    "kakuyomuNextWork": null,
+    "publicationLabelName": null,
+    "publicationLabelImageUrl": null,
+    "genre": "FANTASY",
+    "isFreshWork": false,
+    "hasFreshEpisode": false,
+    "publishedAt": "2020-10-28T13:46:35Z",
+    "lastEpisodePublishedAt": "2023-05-21T16:15:43Z",
+    "alternateAuthorName": null,
+    "visitorWorkFollowing": null,
+    "adminBookInformationUrl": "https://kakuyomu.jp/publication/entry/9784049165500",
+    "visitorReadingHistory": null,
+    "firstPublicEpisodeUnion": {
+      "__ref": "Episode:1177354054935149092"
+    },
+    "adminHorizontalImageUrl": null,
+    "totalReviewPoint": 6530,
+    "totalPublicEpisodeCommentCount": 1844,
+    "totalFollowers": 25444,
+    "catchphrase": "勇者とは最大の刑罰である。全員が性格破綻者の懲罰部隊。【アニメ化決定】",
+    "introduction": "全員が性格破綻者で構成される、懲罰勇者部隊の刑務記録。【2026年1月よりアニメ開始】\n世界史上最悪のコソ泥、詐欺師の政治犯、自称・国王のテロリスト、成功率ゼロの暗殺者――\n\n彼らを率いる《女神殺し》の重犯罪者、ザイロ・フォルバーツは、今日も無茶な作戦に投入される。\nその任務の最中、深刻な盗癖を持つ仲間が、一つの死体が入った棺桶を盗んでくる。\n\n……だが、その棺桶の中に入っていたのは死体ではなく、《女神》であった。\n\nいかにして彼らが魔王現象と戦い、また恩赦を勝ち取ったか。\n\n【2026/1/17 アニメ化と同時に書籍8巻発売しました。こちらを更新できず申し訳ありません。\n　書籍ではこちらでWEB連載しているお話のさらに先を書かせていただいています。\n　もしご興味あれば手に取っていただけると嬉しいです。】\n\n　　　　　　◆\n\n勇者刑とは、もっとも重大な刑罰の名前である。\n少なくとも、連合行政室はそう定めている。\n最悪の罰とも称されることがある。\n\n魔王現象との戦いの最前線に立ち、死ぬことすら許されず戦い続ける。\nこの罰に刑期はない。\nたとえ百年間戦い続けようが、許されることはない。\n唯一、魔王根絶時の恩赦が規定されているのみだ。\n\n――そして、すべての魔王の根絶というのは夢物語でしかない。\n\n　　　　　　◆\n\n【登場人物について】\n＞懲罰勇者９００４隊\nザイロ……主人公の雷撃兵。元・聖騎士だったが追放された。罪状は『女神殺し』。\nドッタ……偵察兵。天才的なコソ泥。罪状は『窃盗』。\nベネティム……指揮官。詐欺師の政治犯。罪状は『国家への反逆』。\nノルガユ……工兵。自分のことを国王だと思い込んでいる。罪状は『大量殺戮』。\nタツヤ……重歩兵。自我がないので詳細不明。罪状不明。\nツァーヴ……狙撃兵。成功率ゼロの暗殺者。罪状は『殺人』。",
+    "tagLabels": [
+      "戦記",
+      "魔法",
+      "勇者",
+      "魔王"
+    ],
+    "workTopWorkReviews": {
+      "__ref": "WorkTopWorkReviews:1177354054935149052"
+    },
+    "fanFictionSource": null,
+    "serialStatus": "RUNNING",
+    "publicEpisodeCount": 154,
+    "totalCharacterCount": 771494,
+    "isCruel": true,
+    "isViolent": true,
+    "isSexual": false,
+    "relatedWorks({\"limit\":30})": [
+      {
+        "__ref": "Work:1177354054887710622"
+      },
+      {
+        "__ref": "Work:1177354054882641261"
+      },
+      {
+        "__ref": "Work:4852201425154963487"
+      },
+      {
+        "__ref": "Work:1177354054881674432"
+      },
+      {
+        "__ref": "Work:16817330647786853400"
+      },
+      {
+        "__ref": "Work:1177354054919146074"
+      },
+      {
+        "__ref": "Work:1177354054894696181"
+      },
+      {
+        "__ref": "Work:1177354054882530555"
+      },
+      {
+        "__ref": "Work:16818093085577306972"
+      },
+      {
+        "__ref": "Work:1177354054884881679"
+      },
+      {
+        "__ref": "Work:1177354054882385011"
+      },
+      {
+        "__ref": "Work:1177354054889870452"
+      },
+      {
+        "__ref": "Work:1177354054881454400"
+      },
+      {
+        "__ref": "Work:16816927862983239368"
+      },
+      {
+        "__ref": "Work:16818792435604412372"
+      },
+      {
+        "__ref": "Work:16817330669141480100"
+      },
+      {
+        "__ref": "Work:16816927861064709259"
+      },
+      {
+        "__ref": "Work:4852201425154905871"
+      },
+      {
+        "__ref": "Work:16816452218431067194"
+      },
+      {
+        "__ref": "Work:1177354054881165840"
+      },
+      {
+        "__ref": "Work:16818622173326709793"
+      },
+      {
+        "__ref": "Work:16817330665671539901"
+      },
+      {
+        "__ref": "Work:1177354054882934927"
+      },
+      {
+        "__ref": "Work:1177354054882072437"
+      },
+      {
+        "__ref": "Work:822139842041120869"
+      },
+      {
+        "__ref": "Work:16818093090131233042"
+      },
+      {
+        "__ref": "Work:16818093073245103562"
+      },
+      {
+        "__ref": "Work:822139841782864677"
+      },
+      {
+        "__ref": "Work:822139844738400507"
+      },
+      {
+        "__ref": "Work:16817330663874866572"
+      }
+    ],
+    "reviewCount": 2233,
+    "workReviewByVisitor": null,
+    "totalReadCount": 6743047,
+    "totalWorkContestCount": 0,
+    "totalUserEventCount": 0,
+    "editedAt": "2026-01-27T15:45:22Z",
+    "publicWorkCollections": [],
+    "mediaMix": null,
+    "tableOfContentsV2": [
+      {
+        "__ref": "TableOfContentsChapter:"
+      }
+    ],
+    "hasPublication": true,
+    "activeWorkContest": null,
+    "enteringUserEvents({\"first\":50,\"status\":\"OPEN\"})": {
+      "__typename": "UserEventConnection",
+      "nodes": []
+    },
+    "ogImageUrl": "https://cdn-static.kakuyomu.jp/works/1177354054935149052/ogimage.png?NNu4jwPahzrc1iontUQLRZKlmWU",
+    "waitingEpisodeReservations": [],
+    "schedule": null,
+    "adBypass": false,
+    "adUnsafe": true,
+    "canShowAdForVisitor": true,
+    "canShowAsBlogInHatenaBookmark": false
+  },
+  "GiftItem:16816927859240802446": {
+    "__typename": "GiftItem",
+    "id": "16816927859240802446",
+    "plan": "light",
+    "nextOptionIncluded": false,
+    "price": 437,
+    "tax": 43
+  },
+  "GiftItem:16816927859240802447": {
+    "__typename": "GiftItem",
+    "id": "16816927859240802447",
+    "plan": "standard",
+    "nextOptionIncluded": false,
+    "price": 673,
+    "tax": 67
+  },
+  "GiftItem:16816927859240802448": {
+    "__typename": "GiftItem",
+    "id": "16816927859240802448",
+    "plan": "deluxe",
+    "nextOptionIncluded": false,
+    "price": 1546,
+    "tax": 154
+  },
+  "GiftItem:16818093073489369044": {
+    "__typename": "GiftItem",
+    "id": "16818093073489369044",
+    "plan": "no_gift",
+    "nextOptionIncluded": true,
+    "price": 980,
+    "tax": 0
+  },
+  "GiftItem:16818093073489369100": {
+    "__typename": "GiftItem",
+    "id": "16818093073489369100",
+    "plan": "light",
+    "nextOptionIncluded": true,
+    "price": 1120,
+    "tax": 0
+  },
+  "GiftItem:16818093073489369124": {
+    "__typename": "GiftItem",
+    "id": "16818093073489369124",
+    "plan": "standard",
+    "nextOptionIncluded": true,
+    "price": 1380,
+    "tax": 0
+  },
+  "GiftItem:16818093073489369161": {
+    "__typename": "GiftItem",
+    "id": "16818093073489369161",
+    "plan": "deluxe",
+    "nextOptionIncluded": true,
+    "price": 2340,
+    "tax": 0
+  }
+}

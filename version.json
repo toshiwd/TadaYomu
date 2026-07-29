@@ -1,5 +1,5 @@
 ﻿{
-    "version":  "1.3.50",
-    "apkUrl":  "https://github.com/toshiwd/TadaYomu/releases/download/v1.3.50/TadaYomu-1.3.50.apk",
-    "releaseNotes":  "Version 1.3.50"
+    "version":  "1.3.64",
+    "apkUrl":  "https://github.com/toshiwd/TadaYomu/releases/download/v1.3.64/TadaYomu-1.3.64.apk",
+    "releaseNotes":  "読んでいる話数のリアルタイム保存とクラウド進捗の時刻比較を修正"
 }

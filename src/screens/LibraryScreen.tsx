@@ -170,19 +170,31 @@ export default function LibraryScreen({
 
   const [novels, setNovels] = useState<Novel[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [showArchived, setShowArchived] = useState(false);
+  const [activeTab, setActiveTab] = useState<'連載' | '完結' | '短編' | 'アーカイブ'>('連載');
   const [sortBy, setSortBy] = useState<LibrarySortBy>(() => {
     const saved = getSetting(db, "library_sort");
     return saved === "updatedAt" || saved === "lastRead" ? saved : "updatedAt";
   });
+
+  const isArchivedTab = activeTab === 'アーカイブ';
+
+  const filteredNovels = React.useMemo(() => {
+    if (isArchivedTab) return novels;
+    return novels.filter(n => {
+      if (activeTab === '短編') return n.totalEpisodes === 1;
+      if (activeTab === '完結') return n.totalEpisodes !== 1 && n.isComplete;
+      if (activeTab === '連載') return n.totalEpisodes !== 1 && !n.isComplete;
+      return true;
+    });
+  }, [novels, activeTab, isArchivedTab]);
 
   const mountedRef = useRef(true);
   const refreshRunningRef = useRef(false);
   const refreshRunIdRef = useRef(0);
 
   const loadNovels = useCallback(() => {
-    setNovels(getAllNovels(db, sortBy, showArchived));
-  }, [db, sortBy, showArchived]);
+    setNovels(getAllNovels(db, sortBy, isArchivedTab));
+  }, [db, sortBy, isArchivedTab]);
 
   useFocusEffect(
     useCallback(() => {
@@ -299,7 +311,7 @@ export default function LibraryScreen({
       }
 
       let updatedCount = 0;
-      const localNovels = getAllNovels(db, sortBy, showArchived);
+      const localNovels = getAllNovels(db, sortBy, isArchivedTab);
       const novelsBySite: Record<string, typeof localNovels> = {};
       for (const novel of localNovels) {
         if (!novelsBySite[novel.siteType]) novelsBySite[novel.siteType] = [];
@@ -443,7 +455,7 @@ export default function LibraryScreen({
       }
       refreshRunningRef.current = false;
     }
-  }, [db, sortBy, showArchived, loadNovels, isRefreshRunActive]);
+  }, [db, sortBy, isArchivedTab, loadNovels, isRefreshRunActive]);
 
   useEffect(() => {
     const unsubscribe = auth().onAuthStateChanged((user) => {
@@ -497,41 +509,28 @@ export default function LibraryScreen({
       >
         <View style={styles.headerLeft}>
           <View style={[styles.tabContainer, { backgroundColor: colors.surfaceAlt }]}>
-            <TouchableOpacity
-              style={[styles.tabButton, !showArchived && [styles.tabButtonActive, { backgroundColor: colors.surface }]]}
-              onPress={() => setShowArchived(false)}
-              activeOpacity={0.8}
-            >
-              <Text
-                style={[
-                  styles.tabText,
-                  !showArchived
-                    ? { color: colors.text.primary, fontWeight: "700" }
-                    : { color: colors.text.disabled },
-                ]}
+            {(['連載', '完結', '短編', 'アーカイブ'] as const).map(tab => (
+              <TouchableOpacity
+                key={tab}
+                style={[styles.tabButton, activeTab === tab && [styles.tabButtonActive, { backgroundColor: colors.surface }]]}
+                onPress={() => setActiveTab(tab)}
+                activeOpacity={0.8}
               >
-                本棚
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tabButton, showArchived && [styles.tabButtonActive, { backgroundColor: colors.surface }]]}
-              onPress={() => setShowArchived(true)}
-              activeOpacity={0.8}
-            >
-              <Text
-                style={[
-                  styles.tabText,
-                  showArchived
-                    ? { color: colors.text.primary, fontWeight: "700" }
-                    : { color: colors.text.disabled },
-                ]}
-              >
-                アーカイブ
-              </Text>
-            </TouchableOpacity>
+                <Text
+                  style={[
+                    styles.tabText,
+                    activeTab === tab
+                      ? { color: colors.text.primary, fontWeight: "700" }
+                      : { color: colors.text.disabled },
+                  ]}
+                >
+                  {tab}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
           <Text style={[styles.headerCount, { color: colors.text.secondary }]}>
-            {novels.length}件
+            {filteredNovels.length}件
           </Text>
         </View>
         <TouchableOpacity
@@ -554,7 +553,7 @@ export default function LibraryScreen({
         </TouchableOpacity>
       </View>
 
-      {novels.length === 0 ? (
+      {filteredNovels.length === 0 ? (
         <View style={styles.emptyState}>
           <Ionicons
             name="book-outline"
@@ -577,7 +576,7 @@ export default function LibraryScreen({
         </View>
       ) : (
         <FlatList
-          data={novels}
+          data={filteredNovels}
           keyExtractor={(item) => String(item.id)}
           renderItem={renderNovel}
           contentContainerStyle={styles.list}
