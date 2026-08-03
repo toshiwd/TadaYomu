@@ -1,8 +1,12 @@
 import React from "react";
-import { NavigationContainer } from "@react-navigation/native";
+import {
+  NavigationContainer,
+  createNavigationContainerRef,
+} from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
+import { Linking } from "react-native";
 
 import { useTheme } from "../theme/ThemeContext";
 import { Colors } from "../theme/colors";
@@ -15,9 +19,14 @@ import ReaderScreen from "../screens/ReaderScreen";
 import AddNovelScreen from "../screens/AddNovelScreen";
 import NovelDetailScreen from "../screens/NovelDetailScreen";
 import SiteBrowserScreen from "../screens/SiteBrowserScreen";
+import {
+  getExternalSiteBrowserParams,
+  type ExternalSiteBrowserParams,
+} from "../services/externalSiteLinks";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
+const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 /** Tab icon mapping */
 const TAB_ICONS: Record<
@@ -74,9 +83,43 @@ function MainTabs() {
 
 export default function AppNavigator() {
   const { colors } = useTheme();
+  const pendingExternalLinkRef = React.useRef<ExternalSiteBrowserParams | null>(null);
+
+  const openExternalLink = React.useCallback((url: string) => {
+    const params = getExternalSiteBrowserParams(url);
+    if (!params) return;
+
+    if (navigationRef.isReady()) {
+      navigationRef.navigate("SiteBrowser", params);
+      return;
+    }
+    pendingExternalLinkRef.current = params;
+  }, []);
+
+  React.useEffect(() => {
+    void Linking.getInitialURL()
+      .then((url) => {
+        if (url) openExternalLink(url);
+      })
+      .catch((error) => {
+        console.warn("[ExternalLink] Failed to read initial URL", error);
+      });
+
+    const subscription = Linking.addEventListener("url", ({ url }) => {
+      openExternalLink(url);
+    });
+    return () => subscription.remove();
+  }, [openExternalLink]);
+
+  const handleNavigationReady = React.useCallback(() => {
+    const pendingLink = pendingExternalLinkRef.current;
+    if (!pendingLink) return;
+    pendingExternalLinkRef.current = null;
+    navigationRef.navigate("SiteBrowser", pendingLink);
+  }, []);
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef} onReady={handleNavigationReady}>
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
