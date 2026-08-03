@@ -41,6 +41,7 @@ import { getAdapter } from "../services/siteAdapter";
 import { rubyTextToHtml } from "../services/textFormatter";
 import { syncService } from "../services/syncService";
 import { generateReaderHtml } from "../services/readerHtmlGenerator";
+import { normalizeReaderChapterIndex } from "../services/readerEntry";
 export default function ReaderScreen({
   navigation,
   route,
@@ -51,7 +52,7 @@ export default function ReaderScreen({
   const insets = useSafeAreaInsets();
 
   const novelId = route.params.novelId;
-  const initialChapter = route.params.chapterIndex ?? 1;
+  const initialChapter = normalizeReaderChapterIndex(route.params.chapterIndex);
 
   const [chapterIndex, setChapterIndex] = useState(initialChapter);
   const [chapterTitle, setChapterTitle] = useState("");
@@ -135,7 +136,7 @@ export default function ReaderScreen({
     setLoading(true);
     setLoadError(false);
 
-    (async () => {
+    void (async () => {
       let ch = getChapter(db, novelId, chapterIndex);
 
       // チャプターがDBに存在しない場合（同期済みだが未取得）
@@ -222,7 +223,16 @@ export default function ReaderScreen({
         }
         setLoading(false);
       }
-    })();
+    })().catch((err: any) => {
+      console.error("[Reader] Failed to initialize chapter:", err);
+      if (!cancelled) {
+        setChapterText(
+          `テキストの読み込みに失敗しました\n${err?.message || ""}`,
+        );
+        setLoadError(true);
+        setLoading(false);
+      }
+    });
 
     return () => {
       cancelled = true;

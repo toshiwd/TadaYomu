@@ -15,7 +15,7 @@ echo  TadaYomu Release Build
 echo ========================================
 echo.
 
-set VERSION=1.3.66
+set VERSION=1.3.67
 echo Version: %VERSION%
 echo.
 

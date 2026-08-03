@@ -12,6 +12,7 @@ import {
   isRemoteReadingProgressNewer,
   parseReadingTimestampMs,
 } from "../src/database/repository";
+import { normalizeReaderChapterIndex } from "../src/services/readerEntry";
 
 let failed = 0;
 
@@ -115,5 +116,10 @@ check(
   ),
   true,
 );
+check("reader entry defaults missing progress", normalizeReaderChapterIndex(undefined), 1);
+check("reader entry rejects NaN progress", normalizeReaderChapterIndex(Number.NaN), 1);
+check("reader entry rejects zero progress", normalizeReaderChapterIndex(0), 1);
+check("reader entry accepts numeric cloud progress", normalizeReaderChapterIndex("134"), 134);
+check("reader entry floors fractional progress", normalizeReaderChapterIndex(12.9), 12);
 
 process.exit(failed > 0 ? 1 : 0);
