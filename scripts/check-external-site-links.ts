@@ -1,9 +1,14 @@
-import { getExternalSiteBrowserParams } from '../src/services/externalSiteLinks';
+import {
+  extractHttpUrls,
+  getExternalSiteBrowserParams,
+  getSharedExternalSiteBrowserParams,
+  isTrustedXShortUrl,
+} from '../src/services/externalSiteLinks';
 
 let failed = 0;
 
 function check(label: string, actual: unknown, expected: unknown): void {
-  if (actual === expected) {
+  if (JSON.stringify(actual) === JSON.stringify(expected)) {
     console.log(`PASS: ${label}`);
     return;
   }
@@ -37,4 +42,51 @@ for (const url of [
   check(`${url} is rejected`, getExternalSiteBrowserParams(url), null);
 }
 
-process.exit(failed > 0 ? 1 : 0);
+async function checkSharedLinks(): Promise<void> {
+  check(
+    'extracts URL from browser share text',
+    extractHttpUrls('作品タイトル https://syosetu.org/novel/417038/'),
+    ['https://syosetu.org/novel/417038/'],
+  );
+  check(
+    'trims Japanese punctuation around a shared URL',
+    extractHttpUrls('「https://ncode.syosetu.com/n6316bn/」'),
+    ['https://ncode.syosetu.com/n6316bn/'],
+  );
+  check('accepts HTTPS t.co', isTrustedXShortUrl('https://t.co/AbCd1234'), true);
+  check('rejects HTTP t.co', isTrustedXShortUrl('http://t.co/AbCd1234'), false);
+  check('rejects a t.co lookalike', isTrustedXShortUrl('https://t.co.example.com/AbCd1234'), false);
+
+  let resolverCalls = 0;
+  const direct = await getSharedExternalSiteBrowserParams(
+    'https://syosetu.org/novel/417038/ https://t.co/ignored',
+    async () => {
+      resolverCalls += 1;
+      return 'https://example.com/';
+    },
+  );
+  check('direct supported URL wins', direct?.url, 'https://syosetu.org/novel/417038/');
+  check('direct supported URL avoids network resolution', resolverCalls, 0);
+
+  const redirected = await getSharedExternalSiteBrowserParams(
+    'Xから共有 https://t.co/AbCd1234',
+    async () => 'https://syosetu.org/novel/417038/',
+  );
+  check('accepts supported t.co destination', redirected?.url, 'https://syosetu.org/novel/417038/');
+
+  const rejectedRedirect = await getSharedExternalSiteBrowserParams(
+    'https://t.co/AbCd1234',
+    async () => 'https://example.com/',
+  );
+  check('rejects unsupported t.co destination', rejectedRedirect, null);
+
+  const untrustedWasNotResolved = await getSharedExternalSiteBrowserParams(
+    'https://example.com/redirect',
+    async () => 'https://syosetu.org/novel/417038/',
+  );
+  check('does not resolve non-t.co links', untrustedWasNotResolved, null);
+}
+
+void checkSharedLinks().then(() => {
+  process.exit(failed > 0 ? 1 : 0);
+});
