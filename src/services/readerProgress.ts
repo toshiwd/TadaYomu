@@ -18,6 +18,11 @@ export function normalizeReaderProgress(value: unknown): number {
     : 0;
 }
 
+/** Ignore transient WebView page notifications while Android is not interactive. */
+export function shouldProcessReaderPageInfo(appState: unknown): boolean {
+  return appState === "active";
+}
+
 export function createReaderProgressSnapshot(
   novelId: number,
   chapterIndex: number,

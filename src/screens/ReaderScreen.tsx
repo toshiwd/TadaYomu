@@ -47,6 +47,7 @@ import {
   isReaderProgressForChapter,
   normalizeReaderProgress,
   normalizeReaderPositionAnchor,
+  shouldProcessReaderPageInfo,
   type ReaderPositionAnchor,
   type ReaderProgressSnapshot,
 } from "../services/readerProgress";
@@ -110,10 +111,21 @@ export default function ReaderScreen({
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const settingsSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const progressSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const appResumeRestoreTimeoutsRef = useRef<NodeJS.Timeout[]>([]);
+  const appStateRef = useRef(AppState.currentState);
   const latestProgressRef = useRef<ReaderProgressSnapshot | null>(null);
+  const latestTotalPagesRef = useRef(1);
+  const backgroundRestorePositionRef = useRef<{
+    progress: number;
+    positionAnchor: ReaderPositionAnchor | null;
+    resumePage?: number;
+    resumeTotalPages?: number;
+  } | null>(null);
   const pendingRestoreRef = useRef<{
     progress: number;
     positionAnchor: ReaderPositionAnchor | null;
+    resumePage?: number;
+    resumeTotalPages?: number;
   } | null>(null);
   const lastSyncedProgressRef = useRef<{
     novelId: number;
@@ -448,12 +460,14 @@ export default function ReaderScreen({
         const data = JSON.parse(event.nativeEvent.data);
         if (data.documentId !== readerDocumentId) return;
         if (data.type === "page-info") {
+          if (!shouldProcessReaderPageInfo(appStateRef.current)) return;
           const nextPage =
             typeof data.currentPage === "number" ? data.currentPage : 1;
           const nextTotalPages =
             typeof data.totalPages === "number" ? data.totalPages : 1;
           const nextProgress = normalizeReaderProgress(data.progress);
           const nextPositionAnchor = normalizeReaderPositionAnchor(data.positionAnchor);
+          latestTotalPagesRef.current = nextTotalPages;
 
           const pendingRestore = pendingRestoreRef.current;
           if (pendingRestore !== null) {
@@ -466,17 +480,22 @@ export default function ReaderScreen({
               pendingRestore.positionAnchor !== null &&
               data.restoreSource === "anchor" &&
               data.restoredAnchorHash === pendingRestore.positionAnchor.contextHash;
+            const exactResumePageRestored =
+              data.restoreSource === "resume-page" &&
+              pendingRestore.resumePage === nextPage &&
+              pendingRestore.resumeTotalPages === nextTotalPages;
 
-            if (!anchorRestored && nextPage !== expectedPage) {
+            if (!anchorRestored && !exactResumePageRestored && nextPage !== expectedPage) {
               webViewRef.current?.injectJavaScript(`
-                if (window.__tadayomuRestorePosition) {
-                  window.__tadayomuRestorePosition(${JSON.stringify(pendingRestore.positionAnchor)}, ${pendingRestore.progress});
+                if (window.__tadayomuRestorePositionForResume) {
+                  window.__tadayomuRestorePositionForResume(${JSON.stringify(pendingRestore.positionAnchor)}, ${pendingRestore.progress}, ${JSON.stringify(pendingRestore.resumePage)}, ${JSON.stringify(pendingRestore.resumeTotalPages)});
                 }
                 true;
               `);
               return;
             }
             pendingRestoreRef.current = null;
+            backgroundRestorePositionRef.current = null;
           }
 
           setCurrentPage((prev) => (prev === nextPage ? prev : nextPage));
@@ -620,16 +639,20 @@ export default function ReaderScreen({
   const restoreWebViewPosition = useCallback((position: {
     progress: number;
     positionAnchor: ReaderPositionAnchor | null;
+    resumePage?: number;
+    resumeTotalPages?: number;
   }) => {
     const normalizedProgress = normalizeReaderProgress(position.progress);
     const normalizedAnchor = normalizeReaderPositionAnchor(position.positionAnchor);
     pendingRestoreRef.current = {
       progress: normalizedProgress,
       positionAnchor: normalizedAnchor,
+      resumePage: position.resumePage,
+      resumeTotalPages: position.resumeTotalPages,
     };
     webViewRef.current?.injectJavaScript(`
-      if (window.__tadayomuRestorePosition) {
-        window.__tadayomuRestorePosition(${JSON.stringify(normalizedAnchor)}, ${normalizedProgress});
+      if (window.__tadayomuRestorePositionForResume) {
+        window.__tadayomuRestorePositionForResume(${JSON.stringify(normalizedAnchor)}, ${normalizedProgress}, ${JSON.stringify(position.resumePage)}, ${JSON.stringify(position.resumeTotalPages)});
       }
       true;
     `);
@@ -638,11 +661,43 @@ export default function ReaderScreen({
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => {
       if (nextState !== "active") {
-        flushLatestProgress();
+        if (appStateRef.current === "active") {
+          const positionBeforeScreenOff = getLatestRestorablePosition();
+          const latest = latestProgressRef.current;
+          const positionForResume = isReaderProgressForChapter(
+            latest,
+            novelId,
+            chapterIndex,
+          )
+            ? {
+                ...positionBeforeScreenOff,
+                resumePage: latest.page,
+                resumeTotalPages: latestTotalPagesRef.current,
+              }
+            : positionBeforeScreenOff;
+          backgroundRestorePositionRef.current = positionForResume;
+          pendingRestoreRef.current = positionForResume;
+          flushLatestProgress();
+        }
+        appStateRef.current = nextState;
         return;
       }
 
-      restoreWebViewPosition(getLatestRestorablePosition());
+      appStateRef.current = nextState;
+      const positionToRestore =
+        backgroundRestorePositionRef.current ?? getLatestRestorablePosition();
+      backgroundRestorePositionRef.current = positionToRestore;
+      restoreWebViewPosition(positionToRestore);
+
+      for (const timeout of appResumeRestoreTimeoutsRef.current) {
+        clearTimeout(timeout);
+      }
+      appResumeRestoreTimeoutsRef.current = [150, 500].map((delay) =>
+        setTimeout(() => {
+          const pendingPosition = backgroundRestorePositionRef.current;
+          if (pendingPosition) restoreWebViewPosition(pendingPosition);
+        }, delay),
+      );
     });
 
     return () => {
@@ -657,10 +712,16 @@ export default function ReaderScreen({
       if (progressSaveTimeoutRef.current) {
         clearTimeout(progressSaveTimeoutRef.current);
       }
+      for (const timeout of appResumeRestoreTimeoutsRef.current) {
+        clearTimeout(timeout);
+      }
+      appResumeRestoreTimeoutsRef.current = [];
     };
   }, [
+    chapterIndex,
     flushLatestProgress,
     getLatestRestorablePosition,
+    novelId,
     restoreWebViewPosition,
   ]);
 

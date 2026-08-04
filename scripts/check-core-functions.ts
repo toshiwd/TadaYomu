@@ -18,6 +18,7 @@ import {
   isReaderProgressForChapter,
   normalizeReaderProgress,
   normalizeReaderPositionAnchor,
+  shouldProcessReaderPageInfo,
 } from "../src/services/readerProgress";
 import { generateReaderHtml } from "../src/services/readerHtmlGenerator";
 import { DEFAULT_READER_SETTINGS } from "../src/types/novel";
@@ -132,6 +133,21 @@ check("reader entry floors fractional progress", normalizeReaderChapterIndex(12.
 check("reader entry clamps stale chapter to available range", normalizeReaderChapterIndex(195, 194), 194);
 check("reader progress clamps below zero", normalizeReaderProgress(-0.2), 0);
 check("reader progress clamps above one", normalizeReaderProgress(1.2), 1);
+check(
+  "reader accepts page info while interactive",
+  shouldProcessReaderPageInfo("active"),
+  true,
+);
+check(
+  "reader rejects transient page info while screen is off",
+  shouldProcessReaderPageInfo("background"),
+  false,
+);
+check(
+  "reader rejects transient page info while becoming inactive",
+  shouldProcessReaderPageInfo("inactive"),
+  false,
+);
 
 const chapter134Progress = createReaderProgressSnapshot(7, 134, 0.456789, 57);
 check(
@@ -189,6 +205,12 @@ check(
 check(
   "reader HTML restores a content anchor before percentage fallback",
   readerHtml.includes('restorePosition(initialPositionAnchor'),
+  true,
+);
+check(
+  "reader resumes the exact page when pagination is unchanged",
+  readerHtml.includes("resumeTotalPages === totalPages") &&
+    readerHtml.includes("goToPage(resumePage - 1, progress, 'resume-page')"),
   true,
 );
 const readerScript = readerHtml.match(/<script>([\s\S]*?)<\/script>/)?.[1] ?? "";

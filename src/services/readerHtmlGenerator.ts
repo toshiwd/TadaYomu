@@ -602,6 +602,19 @@ ${fontLink}
   window.__tadayomuRestorePosition = function(anchor, progress) {
     restorePosition(anchor, progress);
   };
+  window.__tadayomuRestorePositionForResume = function(anchor, progress, resumePage, resumeTotalPages) {
+    if (
+      Number.isInteger(resumePage) &&
+      Number.isInteger(resumeTotalPages) &&
+      resumeTotalPages === totalPages &&
+      resumePage >= 1 &&
+      resumePage <= totalPages
+    ) {
+      goToPage(resumePage - 1, progress, 'resume-page');
+      return true;
+    }
+    return restorePosition(anchor, progress);
+  };
 
   function goNextPage() {
     if (currentPage < totalPages - 1) goToPage(currentPage + 1);
