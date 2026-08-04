@@ -1,5 +1,5 @@
 ﻿{
-    "version":  "1.3.67",
-    "apkUrl":  "https://github.com/toshiwd/TadaYomu/releases/download/v1.3.67/TadaYomu-1.3.67.apk",
-    "releaseNotes":  "本棚の本アイコンから続きへ開く際のクラッシュ対策を行いました"
+    "version":  "1.3.68",
+    "apkUrl":  "https://github.com/toshiwd/TadaYomu/releases/download/v1.3.68/TadaYomu-1.3.68.apk",
+    "releaseNotes":  "画面サイズが変わっても本文位置を基準に読書を再開できるよう改善しました"
 }

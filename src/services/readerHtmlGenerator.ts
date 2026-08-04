@@ -1,4 +1,5 @@
 import type { ReaderSettings } from '../types/novel';
+import type { ReaderPositionAnchor } from './readerProgress';
 
 export interface GenerateHtmlParams {
   chapterText: string;
@@ -6,8 +7,10 @@ export interface GenerateHtmlParams {
   containerLayout: { width: number; height: number };
   insets: { top: number; right: number; bottom: number; left: number };
   readerTheme: { bg: string; fg: string; selection: string };
+  documentId: string;
   startAtLastPage: boolean;
   initialProgress?: number;
+  initialPositionAnchor?: ReaderPositionAnchor | null;
   rubyTextToHtml: (text: string) => string;
 }
 
@@ -21,8 +24,10 @@ export function generateReaderHtml({
   containerLayout,
   insets,
   readerTheme,
+  documentId,
   startAtLastPage,
   initialProgress,
+  initialPositionAnchor,
   rubyTextToHtml,
 }: GenerateHtmlParams): string {
   const isVertical = settings.writingMode === 'vertical';
@@ -81,7 +86,9 @@ export function generateReaderHtml({
       }
     }
     flushCurrent();
-    return paragraphs.join('\n');
+    return paragraphs.map((paragraph, blockIndex) =>
+      paragraph.replace(/^<(p|div)/, `<$1 data-reader-block="${blockIndex}"`)
+    ).join('\n');
   })() : '<div style="display:flex;justify-content:center;align-items:center;height:60vh;opacity:0.5;font-size:16px;"><p>テキストが見つかりませんでした。<br>小説を削除して再ダウンロードしてください。</p></div>';
 
   // Geometry
@@ -221,6 +228,7 @@ ${fontLink}
 (function() {
   var reader = document.getElementById('reader');
   var content = document.getElementById('content');
+  var documentId = ${JSON.stringify(documentId)};
   var isVertical = ${isVertical};
   var reverseDirection = ${settings.reversePageDirection ? 'true' : 'false'};
   var pageTurnAnimation = ${settings.pageTurnAnimation ? 'true' : 'false'};
@@ -231,8 +239,18 @@ ${fontLink}
   var currentPage = 0;
   var totalPages = 1;
   var currentVisualOffset = 0;
+  var stablePageInfoTimer = null;
+  var lastKnownProgress = ${Math.max(0, Math.min(initialProgress ?? 0, 1))};
+  var initialPositionAnchor = ${JSON.stringify(initialPositionAnchor ?? null)};
+  var lastRestoreSource = 'initial';
+  var lastRestoredAnchorHash = null;
 
-  function log(msg) { window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'log', message: msg })); }
+  function postToNative(payload) {
+    payload.documentId = documentId;
+    window.ReactNativeWebView.postMessage(JSON.stringify(payload));
+  }
+
+  function log(msg) { postToNative({ type: 'log', message: msg }); }
 
   var pageBoundaries = [0];
 
@@ -312,7 +330,7 @@ ${fontLink}
     }
   }
 
-  function goToPage(page) {
+  function goToPage(page, progressHint, restoreSource) {
     page = Math.max(0, Math.min(page, totalPages - 1));
     currentPage = page;
     if (isVertical && content) {
@@ -332,32 +350,267 @@ ${fontLink}
         reader.scrollLeft = offset;
       }
     }
+    if (typeof progressHint === 'number' && Number.isFinite(progressHint)) {
+      lastKnownProgress = Math.max(0, Math.min(progressHint, 1));
+    } else if (totalPages > 1) {
+      lastKnownProgress = currentPage / (totalPages - 1);
+    }
+    lastRestoreSource = restoreSource || 'navigation';
+    if (lastRestoreSource !== 'anchor') lastRestoredAnchorHash = null;
     sendPageInfo();
+    if (stablePageInfoTimer) clearTimeout(stablePageInfoTimer);
+    if (pageTurnAnimation) {
+      stablePageInfoTimer = setTimeout(function() {
+        stablePageInfoTimer = null;
+        sendPageInfo();
+      }, 450);
+    }
+  }
+
+  function hashText(value) {
+    var hash = 2166136261;
+    for (var i = 0; i < value.length; i++) {
+      hash ^= value.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(16);
+  }
+
+  function contextHashForBlock(block, characterOffset) {
+    var text = block ? (block.textContent || '') : '';
+    var offset = Math.max(0, Math.min(Number(characterOffset) || 0, text.length));
+    return hashText(text.slice(Math.max(0, offset - 16), offset + 32));
+  }
+
+  function characterOffsetWithinBlock(block, node, nodeOffset) {
+    if (node && node.nodeType !== Node.TEXT_NODE) {
+      try {
+        var elementRange = document.createRange();
+        elementRange.selectNodeContents(block);
+        elementRange.setEnd(node, nodeOffset);
+        return elementRange.toString().length;
+      } catch (error) {
+        return 0;
+      }
+    }
+    var walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+    var offset = 0;
+    var textNode = walker.nextNode();
+    while (textNode) {
+      if (textNode === node) {
+        return offset + Math.max(0, Math.min(nodeOffset, textNode.nodeValue.length));
+      }
+      offset += textNode.nodeValue.length;
+      textNode = walker.nextNode();
+    }
+    return 0;
+  }
+
+  function caretRangeAtPoint(x, y) {
+    if (document.caretRangeFromPoint) return document.caretRangeFromPoint(x, y);
+    if (document.caretPositionFromPoint) {
+      var position = document.caretPositionFromPoint(x, y);
+      if (!position) return null;
+      var range = document.createRange();
+      range.setStart(position.offsetNode, position.offset);
+      range.collapse(true);
+      return range;
+    }
+    return null;
+  }
+
+  function capturePositionAnchor() {
+    var rect = reader.getBoundingClientRect();
+    var contentRect = isVertical && content ? content.getBoundingClientRect() : null;
+    var targetOffset = isVertical
+      ? (pageBoundaries[currentPage] || 0)
+      : currentPage * pageStepPx;
+    var bestAnchor = null;
+    var bestScore = Number.POSITIVE_INFINITY;
+    var blocks = reader.querySelectorAll('[data-reader-block]');
+
+    function logicalOffsetForRange(range) {
+      var rangeRect = range.getBoundingClientRect();
+      return {
+        offset: isVertical && contentRect
+          ? contentRect.right - rangeRect.right
+          : rangeRect.left - rect.left + reader.scrollLeft,
+        crossOffset: Math.abs(rangeRect.top - rect.top),
+        rect: rangeRect
+      };
+    }
+
+    for (var blockCursor = 0; blockCursor < blocks.length; blockCursor++) {
+      var block = blocks[blockCursor];
+      var blockRect = block.getBoundingClientRect();
+      var blockIsVisible =
+        blockRect.right > rect.left && blockRect.left < rect.right &&
+        blockRect.bottom > rect.top && blockRect.top < rect.bottom;
+      if (!blockIsVisible) continue;
+      var textLength = (block.textContent || '').length;
+      if (textLength < 1) continue;
+      var low = 0;
+      var high = textLength - 1;
+      while (low < high) {
+        var middle = Math.floor((low + high) / 2);
+        var middleRange = rangeAtCharacterOffset(block, middle);
+        if (!middleRange) break;
+        var middleOffset = logicalOffsetForRange(middleRange).offset;
+        if (middleOffset + 1 < targetOffset) low = middle + 1;
+        else high = middle;
+      }
+      var scanStart = Math.max(0, low - 512);
+      var scanEnd = Math.min(textLength - 1, low + 512);
+      for (var characterOffset = scanStart; characterOffset <= scanEnd; characterOffset++) {
+        var range = rangeAtCharacterOffset(block, characterOffset);
+        if (!range) continue;
+        var measured = logicalOffsetForRange(range);
+        var charRect = measured.rect;
+        var isVisible =
+          charRect.right > rect.left && charRect.left < rect.right &&
+          charRect.bottom > rect.top && charRect.top < rect.bottom;
+        var score;
+        if (isVisible) {
+          var primaryEdgeDistance = isVertical
+            ? Math.abs(rect.right - charRect.right)
+            : Math.abs(charRect.left - rect.left);
+          score = primaryEdgeDistance * 1000 + measured.crossOffset;
+        } else {
+          var behindBoundaryPenalty = measured.offset + 1 < targetOffset ? pageStepPx * 4 : 0;
+          score = 1000000 + behindBoundaryPenalty + Math.abs(measured.offset - targetOffset);
+        }
+        if (score >= bestScore) continue;
+        var blockIndex = Number(block.getAttribute('data-reader-block'));
+        if (!Number.isInteger(blockIndex)) continue;
+        bestScore = score;
+        bestAnchor = {
+          blockIndex: blockIndex,
+          characterOffset: characterOffset,
+          contextHash: contextHashForBlock(block, characterOffset)
+        };
+      }
+    }
+    return bestAnchor;
+  }
+
+  function rangeAtCharacterOffset(block, characterOffset) {
+    var walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+    var remaining = Math.max(0, Number(characterOffset) || 0);
+    var node = walker.nextNode();
+    var lastNode = null;
+    while (node) {
+      lastNode = node;
+      if (remaining <= node.nodeValue.length) {
+        var range = document.createRange();
+        var start = remaining;
+        var end = Math.min(node.nodeValue.length, start + 1);
+        if (start === end && start > 0) start -= 1;
+        range.setStart(node, start);
+        range.setEnd(node, end);
+        return range;
+      }
+      remaining -= node.nodeValue.length;
+      node = walker.nextNode();
+    }
+    if (!lastNode) return null;
+    var endRange = document.createRange();
+    var lastLength = lastNode.nodeValue.length;
+    endRange.setStart(lastNode, Math.max(0, lastLength - 1));
+    endRange.setEnd(lastNode, lastLength);
+    return endRange;
+  }
+
+  function pageForPositionAnchor(anchor) {
+    if (!anchor || !Number.isInteger(anchor.blockIndex)) return null;
+    var block = reader.querySelector('[data-reader-block="' + anchor.blockIndex + '"]');
+    if (!block) return null;
+    var offset = Math.max(0, Number(anchor.characterOffset) || 0);
+    if (anchor.contextHash && contextHashForBlock(block, offset) !== anchor.contextHash) return null;
+
+    if (isVertical && content) {
+      content.style.transition = 'none';
+      content.style.transform = 'translateX(0px)';
+    } else {
+      reader.scrollLeft = 0;
+    }
+    var range = rangeAtCharacterOffset(block, offset);
+    if (!range) return null;
+    var rangeRect = range.getBoundingClientRect();
+    if (rangeRect.width === 0 && rangeRect.height === 0) {
+      range.selectNodeContents(block);
+      rangeRect = range.getBoundingClientRect();
+    }
+    if (isVertical && content) {
+      var contentRect = content.getBoundingClientRect();
+      var distance = Math.max(0, contentRect.right - rangeRect.right);
+      var page = 0;
+      for (var i = 1; i < pageBoundaries.length; i++) {
+        if (pageBoundaries[i] <= distance + 1) page = i;
+        else break;
+      }
+      return page;
+    }
+    var readerRect = reader.getBoundingClientRect();
+    return Math.max(0, Math.min(
+      Math.floor(Math.max(0, rangeRect.left - readerRect.left) / Math.max(1, pageStepPx)),
+      totalPages - 1
+    ));
   }
 
   function sendPageInfo() {
-    var progress = totalPages > 1 ? currentPage / (totalPages - 1) : 1;
-    window.ReactNativeWebView.postMessage(JSON.stringify({
-      type: 'page-info', currentPage: currentPage + 1, totalPages: totalPages, progress: Math.round(progress * 100) / 100
-    }));
+    postToNative({
+      type: 'page-info',
+      currentPage: currentPage + 1,
+      totalPages: totalPages,
+      progress: lastKnownProgress,
+      positionAnchor: capturePositionAnchor(),
+      restoreSource: lastRestoreSource,
+      restoredAnchorHash: lastRestoredAnchorHash
+    });
   }
 
-  window.__tadayomuRestoreProgress = function(progress) {
+  function goToProgress(progress) {
     var normalized = Number(progress);
     if (!Number.isFinite(normalized)) return;
     normalized = Math.max(0, Math.min(normalized, 1));
     var restorePage = Math.round(normalized * Math.max(0, totalPages - 1));
-    goToPage(restorePage);
+    goToPage(restorePage, normalized, 'progress');
+  }
+
+  function restorePosition(anchor, progress) {
+    var anchorPage = pageForPositionAnchor(anchor);
+    if (anchorPage !== null) {
+      lastRestoredAnchorHash = anchor.contextHash || null;
+      goToPage(anchorPage, progress, 'anchor');
+      return true;
+    }
+    goToProgress(progress);
+    return false;
+  }
+
+  function repaginatePreservingProgress() {
+    var progressBeforeReflow = lastKnownProgress;
+    var anchorBeforeReflow = capturePositionAnchor();
+    recalcGeometry();
+    calcPages();
+    restorePosition(anchorBeforeReflow, progressBeforeReflow);
+  }
+
+  window.__tadayomuRestoreProgress = function(progress) {
+    goToProgress(progress);
+  };
+  window.__tadayomuRestorePosition = function(anchor, progress) {
+    restorePosition(anchor, progress);
   };
 
   function goNextPage() {
     if (currentPage < totalPages - 1) goToPage(currentPage + 1);
-    else window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'next' }));
+    else postToNative({ type: 'next' });
   }
 
   function goPrevPage() {
     if (currentPage > 0) goToPage(currentPage - 1);
-    else window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'prev' }));
+    else postToNative({ type: 'prev' });
   }
 
   document.addEventListener('message', handleSettingsMessage);
@@ -386,9 +639,7 @@ ${fontLink}
       }
 
       setTimeout(function() {
-        recalcGeometry();
-        calcPages();
-        goToPage(Math.min(currentPage, totalPages - 1));
+        repaginatePreservingProgress();
       }, 50);
     } catch(ex) { }
   }
@@ -444,32 +695,31 @@ ${fontLink}
     } else if (x > containerW * 0.6) {
       if (reverseDirection) goPrevPage(); else goNextPage();
     } else {
-      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'toggle-toolbar' }));
+      postToNative({ type: 'toggle-toolbar' });
     }
   }
 
   window.addEventListener('resize', function() {
-    recalcGeometry();
-    calcPages();
-    goToPage(currentPage);
+    repaginatePreservingProgress();
   });
 
   document.addEventListener('DOMContentLoaded', function() {
     setTimeout(function() {
       recalcGeometry();
       calcPages();
-      if (startAtLast) goToPage(Math.max(0, totalPages - 1));
+      if (startAtLast) goToProgress(1);
+      else if (initialPositionAnchor) {
+        restorePosition(initialPositionAnchor, ${initProg});
+      }
       else if (${initProg} > 0) {
         window.__tadayomuRestoreProgress(${initProg});
       }
-      else goToPage(0);
+      else goToProgress(0);
       
       var imgs = document.querySelectorAll('img');
       for (var i = 0; i < imgs.length; i++) {
         imgs[i].addEventListener('load', function() {
-          recalcGeometry();
-          calcPages();
-          goToPage(currentPage);
+          repaginatePreservingProgress();
         });
       }
       
@@ -477,10 +727,10 @@ ${fontLink}
       function postExpandImage(target) {
         var src = target.getAttribute('data-src') || target.getAttribute('href') || target.getAttribute('src');
         if (src) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
+          postToNative({
             type: 'expand-image',
             url: src
-          }));
+          });
         }
       }
 

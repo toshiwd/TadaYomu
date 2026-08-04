@@ -42,6 +42,14 @@ import { rubyTextToHtml } from "../services/textFormatter";
 import { syncService } from "../services/syncService";
 import { generateReaderHtml } from "../services/readerHtmlGenerator";
 import { normalizeReaderChapterIndex } from "../services/readerEntry";
+import {
+  createReaderProgressSnapshot,
+  isReaderProgressForChapter,
+  normalizeReaderProgress,
+  normalizeReaderPositionAnchor,
+  type ReaderPositionAnchor,
+  type ReaderProgressSnapshot,
+} from "../services/readerProgress";
 export default function ReaderScreen({
   navigation,
   route,
@@ -65,6 +73,7 @@ export default function ReaderScreen({
   const [showSettings, setShowSettings] = useState(false);
   const [isSettingsVisible, setIsSettingsVisible] = useState(false);
   const [initialProgress, setInitialProgress] = useState(0);
+  const [initialPositionAnchor, setInitialPositionAnchor] = useState<ReaderPositionAnchor | null>(null);
   const [settings, setSettings] = useState<ReaderSettings>(() =>
     getReaderSettings(db),
   );
@@ -77,6 +86,8 @@ export default function ReaderScreen({
   const [toolbarVisible, setToolbarVisible] = useState(true);
   const [startAtLastPage, setStartAtLastPage] = useState(false);
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
+  const [webViewRenderFailed, setWebViewRenderFailed] = useState(false);
+  const [webViewInstanceKey, setWebViewInstanceKey] = useState(0);
 
   // Keep a ref to settings so htmlContent doesn't depend on it
   const settingsRef = useRef(settings);
@@ -99,21 +110,29 @@ export default function ReaderScreen({
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const settingsSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const progressSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const latestProgressRef = useRef<{ progress: number; page: number } | null>(null);
-  const pendingRestoreProgressRef = useRef<number | null>(null);
+  const latestProgressRef = useRef<ReaderProgressSnapshot | null>(null);
+  const pendingRestoreRef = useRef<{
+    progress: number;
+    positionAnchor: ReaderPositionAnchor | null;
+  } | null>(null);
   const lastSyncedProgressRef = useRef<{
     novelId: number;
     chapterIndex: number;
     progress: number;
+    anchorKey: string;
   } | null>(null);
 
   const flushLatestProgress = useCallback(() => {
     const latest = latestProgressRef.current;
     if (!latest) return;
-    upsertReadingProgressIfChanged(db, novelId, chapterIndex, latest.progress, {
-      force: true,
-    });
-  }, [db, novelId, chapterIndex]);
+    upsertReadingProgressIfChanged(
+      db,
+      latest.novelId,
+      latest.chapterIndex,
+      latest.progress,
+      { force: true, positionAnchor: latest.positionAnchor },
+    );
+  }, [db]);
 
   const handleCloseReader = useCallback(() => {
     flushLatestProgress();
@@ -126,6 +145,9 @@ export default function ReaderScreen({
     if (n) {
       setTotalChapters(n.totalEpisodes);
       setNovel(n);
+      setChapterIndex((current) =>
+        normalizeReaderChapterIndex(current, n.totalEpisodes),
+      );
     }
   }, [db, novelId]);
 
@@ -183,8 +205,9 @@ export default function ReaderScreen({
           );
           if (!cancelled) {
             const savedProgress = getReadingProgress(db, novelId);
-            const openedChapterProgress =
-              savedProgress?.currentChapter === chapterIndex
+            const openedChapterProgress = startAtLastPage
+              ? 1
+              : savedProgress?.currentChapter === chapterIndex
                 ? savedProgress.scrollPercentage
                 : 0;
             upsertReadingProgressIfChanged(
@@ -214,12 +237,22 @@ export default function ReaderScreen({
       if (!cancelled) {
         // Load initial progress for this chapter if available
         const progress = getReadingProgress(db, novelId);
-        if (progress && progress.currentChapter === chapterIndex) {
-          pendingRestoreProgressRef.current = progress.scrollPercentage;
+        if (startAtLastPage) {
+          pendingRestoreRef.current = { progress: 1, positionAnchor: null };
+          setInitialProgress(1);
+          setInitialPositionAnchor(null);
+        } else if (progress && progress.currentChapter === chapterIndex) {
+          const positionAnchor = normalizeReaderPositionAnchor(progress.positionAnchor);
+          pendingRestoreRef.current = {
+            progress: progress.scrollPercentage,
+            positionAnchor,
+          };
           setInitialProgress(progress.scrollPercentage);
+          setInitialPositionAnchor(positionAnchor);
         } else {
-          pendingRestoreProgressRef.current = 0;
+          pendingRestoreRef.current = { progress: 0, positionAnchor: null };
           setInitialProgress(0);
+          setInitialPositionAnchor(null);
         }
         setLoading(false);
       }
@@ -237,7 +270,7 @@ export default function ReaderScreen({
     return () => {
       cancelled = true;
     };
-  }, [db, novelId, chapterIndex, novel, retryCount]);
+  }, [db, novelId, chapterIndex, novel, retryCount, startAtLastPage]);
 
   useEffect(() => {
     if (settingsSaveTimeoutRef.current) {
@@ -277,23 +310,30 @@ export default function ReaderScreen({
 
   const goNextChapter = useCallback(() => {
     if (chapterIndex < totalChapters) {
+      flushLatestProgress();
       setStartAtLastPage(false);
       setChapterIndex((i) => i + 1);
     }
-  }, [chapterIndex, totalChapters]);
+  }, [chapterIndex, flushLatestProgress, totalChapters]);
 
   const goPrevChapter = useCallback(
     (startAtLast = false) => {
       if (chapterIndex > 1) {
+        flushLatestProgress();
         setStartAtLastPage(startAtLast === true);
         setChapterIndex((i) => i - 1);
       }
     },
-    [chapterIndex],
+    [chapterIndex, flushLatestProgress],
   );
 
   const handleRetry = useCallback(() => {
     setRetryCount((c) => c + 1);
+  }, []);
+
+  const retryWebViewAfterRendererExit = useCallback(() => {
+    setWebViewRenderFailed(false);
+    setWebViewInstanceKey((key) => key + 1);
   }, []);
 
   const toggleToolbar = useCallback(() => {
@@ -366,6 +406,8 @@ export default function ReaderScreen({
   // ========================================================
   // HTML content — generated using external service
   // ========================================================
+  const readerDocumentId = `${novelId}:${chapterIndex}:${retryCount}:${webViewInstanceKey}:${Math.round(containerLayout.width)}x${Math.round(containerLayout.height)}`;
+
   const htmlContent = useMemo(() => {
     if (loading)
       return '<html><body style="display:flex;justify-content:center;align-items:center;height:100vh;"><p>読み込み中...</p></body></html>';
@@ -377,8 +419,10 @@ export default function ReaderScreen({
       containerLayout,
       insets,
       readerTheme,
+      documentId: readerDocumentId,
       startAtLastPage,
       initialProgress,
+      initialPositionAnchor,
       rubyTextToHtml,
     });
   }, [
@@ -387,8 +431,10 @@ export default function ReaderScreen({
     loading,
     insets,
     containerLayout,
+    readerDocumentId,
     startAtLastPage,
     initialProgress,
+    initialPositionAnchor,
   ]);
 
   const webViewSource = useMemo(
@@ -400,32 +446,37 @@ export default function ReaderScreen({
     (event: any) => {
       try {
         const data = JSON.parse(event.nativeEvent.data);
+        if (data.documentId !== readerDocumentId) return;
         if (data.type === "page-info") {
           const nextPage =
             typeof data.currentPage === "number" ? data.currentPage : 1;
           const nextTotalPages =
             typeof data.totalPages === "number" ? data.totalPages : 1;
-          const nextProgress =
-            typeof data.progress === "number" ? data.progress : 0;
+          const nextProgress = normalizeReaderProgress(data.progress);
+          const nextPositionAnchor = normalizeReaderPositionAnchor(data.positionAnchor);
 
-          const pendingRestore = pendingRestoreProgressRef.current;
+          const pendingRestore = pendingRestoreRef.current;
           if (pendingRestore !== null) {
             const expectedPage =
               Math.round(
-                Math.max(0, Math.min(pendingRestore, 1)) *
+                Math.max(0, Math.min(pendingRestore.progress, 1)) *
                   Math.max(0, nextTotalPages - 1),
               ) + 1;
+            const anchorRestored =
+              pendingRestore.positionAnchor !== null &&
+              data.restoreSource === "anchor" &&
+              data.restoredAnchorHash === pendingRestore.positionAnchor.contextHash;
 
-            if (nextPage !== expectedPage) {
+            if (!anchorRestored && nextPage !== expectedPage) {
               webViewRef.current?.injectJavaScript(`
-                if (window.__tadayomuRestoreProgress) {
-                  window.__tadayomuRestoreProgress(${pendingRestore});
+                if (window.__tadayomuRestorePosition) {
+                  window.__tadayomuRestorePosition(${JSON.stringify(pendingRestore.positionAnchor)}, ${pendingRestore.progress});
                 }
                 true;
               `);
               return;
             }
-            pendingRestoreProgressRef.current = null;
+            pendingRestoreRef.current = null;
           }
 
           setCurrentPage((prev) => (prev === nextPage ? prev : nextPage));
@@ -435,16 +486,38 @@ export default function ReaderScreen({
 
           const flushProgress = (force: boolean) => {
             const latest = latestProgressRef.current;
-            if (!latest) return;
-            upsertReadingProgressIfChanged(db, novelId, chapterIndex, latest.progress, {
-              minIntervalMs: 800,
-              minProgressDelta: 0.01,
-              force,
-            });
+            if (!isReaderProgressForChapter(latest, novelId, chapterIndex)) return;
+            upsertReadingProgressIfChanged(
+              db,
+              latest.novelId,
+              latest.chapterIndex,
+              latest.progress,
+              {
+                minIntervalMs: 800,
+                minProgressDelta: 0.001,
+                force,
+                positionAnchor: latest.positionAnchor,
+              },
+            );
           };
 
-          const prevPage = latestProgressRef.current?.page ?? null;
-          latestProgressRef.current = { progress: nextProgress, page: nextPage };
+          const previous = latestProgressRef.current;
+          const prevPage = isReaderProgressForChapter(
+            previous,
+            novelId,
+            chapterIndex,
+          )
+            ? previous.page
+            : null;
+          const nextSnapshot = createReaderProgressSnapshot(
+            novelId,
+            chapterIndex,
+            nextProgress,
+            nextPage,
+            nextPositionAnchor,
+          );
+          if (!nextSnapshot) return;
+          latestProgressRef.current = nextSnapshot;
 
           if (prevPage !== null && prevPage !== nextPage) {
             if (progressSaveTimeoutRef.current) {
@@ -469,6 +542,7 @@ export default function ReaderScreen({
               siteType: novel.siteType,
               currentChapter: chapterIndex,
               scrollPercentage: nextProgress,
+              positionAnchor: nextPositionAnchor,
               lastReadAt: new Date().toISOString(),
             };
             syncTimeoutRef.current = setTimeout(() => {
@@ -477,7 +551,8 @@ export default function ReaderScreen({
                 lastSynced &&
                 lastSynced.novelId === payload.novelId &&
                 lastSynced.chapterIndex === payload.currentChapter &&
-                Math.abs(lastSynced.progress - payload.scrollPercentage) < 0.0001
+                Math.abs(lastSynced.progress - payload.scrollPercentage) < 0.0001 &&
+                lastSynced.anchorKey === JSON.stringify(payload.positionAnchor)
               ) {
                 return;
               }
@@ -489,6 +564,7 @@ export default function ReaderScreen({
                     novelId: payload.novelId,
                     chapterIndex: payload.currentChapter,
                     progress: payload.scrollPercentage,
+                    anchorKey: JSON.stringify(payload.positionAnchor),
                   };
                 })
                 .catch((err) => {
@@ -511,25 +587,49 @@ export default function ReaderScreen({
         console.warn("[Reader] Failed to handle WebView message", err);
       }
     },
-    [db, novelId, chapterIndex, goNextChapter, goPrevChapter, toggleToolbar, novel],
+    [
+      db,
+      novelId,
+      chapterIndex,
+      goNextChapter,
+      goPrevChapter,
+      toggleToolbar,
+      novel,
+      readerDocumentId,
+    ],
   );
 
-  const getLatestRestorableProgress = useCallback(() => {
+  const getLatestRestorablePosition = useCallback(() => {
     const latest = latestProgressRef.current;
-    if (latest) return latest.progress;
+    if (isReaderProgressForChapter(latest, novelId, chapterIndex)) {
+      return { progress: latest.progress, positionAnchor: latest.positionAnchor };
+    }
+
+    if (startAtLastPage) return { progress: 1, positionAnchor: null };
 
     const saved = getReadingProgress(db, novelId);
     if (saved && saved.currentChapter === chapterIndex) {
-      return saved.scrollPercentage;
+      return {
+        progress: normalizeReaderProgress(saved.scrollPercentage),
+        positionAnchor: normalizeReaderPositionAnchor(saved.positionAnchor),
+      };
     }
-    return 0;
-  }, [db, novelId, chapterIndex]);
+    return { progress: 0, positionAnchor: null };
+  }, [db, novelId, chapterIndex, startAtLastPage]);
 
-  const restoreWebViewProgress = useCallback((progress: number) => {
-    pendingRestoreProgressRef.current = progress;
+  const restoreWebViewPosition = useCallback((position: {
+    progress: number;
+    positionAnchor: ReaderPositionAnchor | null;
+  }) => {
+    const normalizedProgress = normalizeReaderProgress(position.progress);
+    const normalizedAnchor = normalizeReaderPositionAnchor(position.positionAnchor);
+    pendingRestoreRef.current = {
+      progress: normalizedProgress,
+      positionAnchor: normalizedAnchor,
+    };
     webViewRef.current?.injectJavaScript(`
-      if (window.__tadayomuRestoreProgress) {
-        window.__tadayomuRestoreProgress(${progress});
+      if (window.__tadayomuRestorePosition) {
+        window.__tadayomuRestorePosition(${JSON.stringify(normalizedAnchor)}, ${normalizedProgress});
       }
       true;
     `);
@@ -542,7 +642,7 @@ export default function ReaderScreen({
         return;
       }
 
-      restoreWebViewProgress(getLatestRestorableProgress());
+      restoreWebViewPosition(getLatestRestorablePosition());
     });
 
     return () => {
@@ -560,8 +660,8 @@ export default function ReaderScreen({
     };
   }, [
     flushLatestProgress,
-    getLatestRestorableProgress,
-    restoreWebViewProgress,
+    getLatestRestorablePosition,
+    restoreWebViewPosition,
   ]);
 
   const settingsTranslateY = settingsAnim.interpolate({
@@ -639,27 +739,50 @@ export default function ReaderScreen({
 
       {/* WebView fills remaining space — onLayout measures final size */}
       <View style={styles.webviewFull} onLayout={onLayout}>
-        <WebView
-          ref={webViewRef}
-          originWhitelist={["*"]}
-          source={webViewSource}
-          style={{ flex: 1, backgroundColor: readerTheme.bg }}
-          onLoadStart={() => {
-            pendingRestoreProgressRef.current = getLatestRestorableProgress();
-          }}
-          onLoadEnd={() => {
-            restoreWebViewProgress(getLatestRestorableProgress());
-          }}
-          onMessage={handleMessage}
-          scrollEnabled={false}
-          showsVerticalScrollIndicator={false}
-          showsHorizontalScrollIndicator={false}
-          textZoom={100}
-          javaScriptEnabled
-          allowFileAccess={true}
-          allowFileAccessFromFileURLs={true}
-          allowUniversalAccessFromFileURLs={true}
-        />
+        {webViewRenderFailed ? (
+          <View style={styles.webViewErrorState}>
+            <Ionicons name="refresh-circle-outline" size={38} color={readerTheme.fg} />
+            <Text style={[styles.webViewErrorText, { color: readerTheme.fg }]}>
+              表示処理が終了しました。読書位置を保ったまま再読み込みできます。
+            </Text>
+            <TouchableOpacity
+              style={[
+                styles.webViewRetryButton,
+                { borderColor: readerTheme.fg + "40" },
+              ]}
+              onPress={retryWebViewAfterRendererExit}
+            >
+              <Text style={{ color: readerTheme.fg }}>再読み込み</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <WebView
+            key={webViewInstanceKey}
+            ref={webViewRef}
+            originWhitelist={["*"]}
+            source={webViewSource}
+            style={{ flex: 1, backgroundColor: readerTheme.bg }}
+            onLoadStart={() => {
+              pendingRestoreRef.current = getLatestRestorablePosition();
+            }}
+            onLoadEnd={() => {
+              restoreWebViewPosition(getLatestRestorablePosition());
+            }}
+            onMessage={handleMessage}
+            onRenderProcessGone={() => {
+              flushLatestProgress();
+              setWebViewRenderFailed(true);
+            }}
+            scrollEnabled={false}
+            showsVerticalScrollIndicator={false}
+            showsHorizontalScrollIndicator={false}
+            textZoom={100}
+            javaScriptEnabled
+            allowFileAccess={true}
+            allowFileAccessFromFileURLs={true}
+            allowUniversalAccessFromFileURLs={true}
+          />
+        )}
       </View>
 
       {/* Settings Panel */}
@@ -1131,6 +1254,23 @@ export default function ReaderScreen({
 const styles = StyleSheet.create({
   container: { flex: 1 },
   webviewFull: { flex: 1 },
+  webViewErrorState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    paddingHorizontal: 24,
+  },
+  webViewErrorText: {
+    fontSize: 14,
+    textAlign: "center",
+  },
+  webViewRetryButton: {
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+  },
   toolbar: {
     flexDirection: "row",
     alignItems: "center",

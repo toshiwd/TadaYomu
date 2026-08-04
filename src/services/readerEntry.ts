@@ -1,5 +1,8 @@
 /** Convert persisted or navigation-provided progress into a safe chapter index. */
-export function normalizeReaderChapterIndex(value: unknown): number {
+export function normalizeReaderChapterIndex(
+  value: unknown,
+  totalChapters?: number,
+): number {
   const numericValue =
     typeof value === "number"
       ? value
@@ -8,5 +11,10 @@ export function normalizeReaderChapterIndex(value: unknown): number {
         : Number.NaN;
 
   if (!Number.isFinite(numericValue) || numericValue < 1) return 1;
-  return Math.floor(numericValue);
+
+  const chapterIndex = Math.floor(numericValue);
+  if (typeof totalChapters === "number" && Number.isFinite(totalChapters) && totalChapters >= 1) {
+    return Math.min(chapterIndex, Math.floor(totalChapters));
+  }
+  return chapterIndex;
 }

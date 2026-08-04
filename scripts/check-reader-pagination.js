@@ -38,6 +38,23 @@ function shouldAcceptPageDuringRestore(progress, totalPages, currentPage) {
     return restorePage(progress, totalPages) + 1 === currentPage;
 }
 
+function pageProgress(page, totalPages) {
+    return totalPages > 1 ? page / (totalPages - 1) : 0;
+}
+
+function reflowPage(page, oldTotalPages, newTotalPages) {
+    return restorePage(pageProgress(page, oldTotalPages), newTotalPages);
+}
+
+function pageForContentOffset(contentOffset, pageBoundaries) {
+    let page = 0;
+    for (let i = 1; i < pageBoundaries.length; i++) {
+        if (pageBoundaries[i] <= contentOffset + 1) page = i;
+        else break;
+    }
+    return page;
+}
+
 function assert(label, actual, expected) {
     if (actual === expected) {
         console.log(`  PASS: ${label} — got ${actual}`);
@@ -170,6 +187,34 @@ console.log('\n=== Test 12: Ignore page 1 until saved page 5 is restored ===');
         shouldAcceptPageDuringRestore(savedProgress, 25, 5),
         true,
     );
+}
+
+console.log('\n=== Test 13: Preserve relative position when pagination changes ===');
+{
+    assert('50/101 pages becomes 100/201 pages', reflowPage(50, 101, 201), 100);
+    assert('last page remains last page', reflowPage(100, 101, 151), 150);
+}
+
+console.log('\n=== Test 14: Long chapter progress keeps sub-percent precision ===');
+{
+    const totalPages = 401;
+    const page = 137;
+    const exactProgress = pageProgress(page, totalPages);
+    const roundedProgress = Math.round(exactProgress * 100) / 100;
+    assert('exact progress restores original page', restorePage(exactProgress, totalPages), page);
+    assert('two-decimal progress would drift', restorePage(roundedProgress, totalPages) === page, false);
+}
+
+console.log('\n=== Test 15: Content anchor survives a screen-size page-count change ===');
+{
+    const logicalTextOffset = 2400;
+    const tabletBoundaries = [0, 500, 1000, 1500, 2000, 2500];
+    const phoneBoundaries = [0, 280, 560, 840, 1120, 1400, 1680, 1960, 2240, 2520, 2800];
+    const tabletPage = pageForContentOffset(logicalTextOffset, tabletBoundaries);
+    const phonePage = pageForContentOffset(logicalTextOffset, phoneBoundaries);
+    assert('tablet page differs from phone page', tabletPage === phonePage, false);
+    assert('tablet page contains same text offset', tabletBoundaries[tabletPage] <= logicalTextOffset, true);
+    assert('phone page contains same text offset', phoneBoundaries[phonePage] <= logicalTextOffset, true);
 }
 
 // ============================================================
