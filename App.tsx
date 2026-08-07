@@ -24,7 +24,14 @@ import { nocturneAdapter } from './src/services/adapters/nocturneAdapter';
 import { registerBackgroundTask, unregisterBackgroundTask } from './src/services/backgroundTask';
 import auth from '@react-native-firebase/auth';
 import { syncService } from './src/services/syncService';
-import { getAllNovels, getSetting, setSetting, getReadingProgress, upsertReadingProgress } from './src/database/repository';
+import {
+  getAllNovels,
+  getSetting,
+  setSetting,
+  getReadingProgress,
+  upsertReadingProgress,
+  isRemoteReadingProgressNewer,
+} from './src/database/repository';
 
 // Register site adapters
 registerAdapter(syosetuAdapter);
@@ -37,19 +44,22 @@ function AppContent() {
   useEffect(() => {
     const backgroundEnabled = getSetting(db, 'background_enabled') !== '0';
     if (backgroundEnabled) {
-      void registerBackgroundTask();
+      void registerBackgroundTask(db);
     } else {
       void unregisterBackgroundTask();
     }
   }, [db]);
 
   useEffect(() => {
+    let cancelled = false;
     const unsubscribe = auth().onAuthStateChanged(async (user) => {
       if (user) {
+        const syncUid = user.uid;
         console.log('[Sync] User signed in. Syncing progress...');
         try {
           const novels = getAllNovels(db);
           const cloudMap = await syncService.downloadAllProgress();
+          if (cancelled || auth().currentUser?.uid !== syncUid) return;
           const localAhead: Parameters<typeof syncService.uploadProgressBatch>[0] = [];
 
           for (const novel of novels) {
@@ -58,8 +68,20 @@ function AppContent() {
             const localProgress = getReadingProgress(db, novel.id);
             const localChapter = localProgress ? localProgress.currentChapter : 0;
             const cloudChapter = cloudProgress ? cloudProgress.currentChapter : 0;
+            const cloudIsNewer = Boolean(
+              cloudProgress &&
+              (!localProgress ||
+                isRemoteReadingProgressNewer(localProgress.lastReadAt, cloudProgress.lastReadAt) ||
+                (cloudProgress.lastReadAt === localProgress.lastReadAt && cloudChapter > localChapter)),
+            );
+            const localIsNewer = Boolean(
+              localProgress &&
+              (!cloudProgress ||
+                isRemoteReadingProgressNewer(cloudProgress.lastReadAt, localProgress.lastReadAt) ||
+                (cloudProgress.lastReadAt === localProgress.lastReadAt && localChapter > cloudChapter)),
+            );
 
-            if (cloudProgress && cloudChapter > localChapter) {
+            if (cloudProgress && cloudIsNewer) {
               // Cloud is ahead
               upsertReadingProgress(
                 db,
@@ -67,7 +89,7 @@ function AppContent() {
                 cloudProgress.currentChapter,
                 cloudProgress.scrollPercentage || 0,
               );
-            } else if (localProgress && localChapter > cloudChapter) {
+            } else if (localProgress && localIsNewer) {
               // Local is ahead, upload in batch
               localAhead.push(localProgress);
             }
@@ -76,13 +98,17 @@ function AppContent() {
           if (localAhead.length > 0) {
             await syncService.uploadProgressBatch(localAhead);
           }
+          if (cancelled || auth().currentUser?.uid !== syncUid) return;
           console.log('[Sync] Initial progress sync complete.');
         } catch (err) {
           console.error('[Sync] Error syncing on login: ', err);
         }
       }
     });
-    return unsubscribe;
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }, [db]);
 
   return (

@@ -32,6 +32,10 @@ import { deleteNovelData } from "../services/downloadManager";
 import { syncService } from "../services/syncService";
 import { getAdapter } from "../services/siteAdapter";
 import { normalizeReaderChapterIndex } from "../services/readerEntry";
+import {
+  getLibraryProgressPercentage,
+  hasNovelMetadataUpdate,
+} from "../services/runtimeGuards";
 
 type ThemeColorMap = ReturnType<typeof useTheme>["colors"];
 
@@ -203,6 +207,8 @@ export default function LibraryScreen({
   const mountedRef = useRef(true);
   const refreshRunningRef = useRef(false);
   const refreshRunIdRef = useRef(0);
+  const onRefreshRef = useRef<(() => Promise<void>) | null>(null);
+  const lastAutoRefreshUidRef = useRef<string | null>(null);
 
   const loadNovels = useCallback(() => {
     setNovels(getAllNovels(db, sortBy, isArchivedTab));
@@ -375,18 +381,7 @@ export default function LibraryScreen({
                     continue;
                   }
 
-                  const infoTime = info.lastUpdatedAt
-                    ? new Date(info.lastUpdatedAt).getTime()
-                    : 0;
-                  const localTime = novel.siteUpdatedAt
-                    ? new Date(novel.siteUpdatedAt).getTime()
-                    : 0;
-                  const needsUpdate =
-                    info.totalEpisodes > novel.totalEpisodes ||
-                    info.isComplete !== novel.isComplete ||
-                    (isNaN(localTime) && !!info.lastUpdatedAt) ||
-                    (!isNaN(infoTime) && !isNaN(localTime) && infoTime > localTime) ||
-                    (info.lastUpdatedAt !== novel.siteUpdatedAt);
+                  const needsUpdate = hasNovelMetadataUpdate(novel, info);
 
                   if (needsUpdate) {
                     updateNovel(db, novel.id, {
@@ -425,18 +420,7 @@ export default function LibraryScreen({
               chunk.map(async (novel) => {
                 try {
                   const info = await adapter.getNovelInfo(novel.siteNovelId);
-                  const infoTime = info.lastUpdatedAt
-                    ? new Date(info.lastUpdatedAt).getTime()
-                    : 0;
-                  const localTime = novel.siteUpdatedAt
-                    ? new Date(novel.siteUpdatedAt).getTime()
-                    : 0;
-                  const needsUpdate =
-                    info.totalEpisodes > novel.totalEpisodes ||
-                    info.isComplete !== novel.isComplete ||
-                    (isNaN(localTime) && !!info.lastUpdatedAt) ||
-                    (!isNaN(infoTime) && !isNaN(localTime) && infoTime > localTime) ||
-                    (info.lastUpdatedAt !== novel.siteUpdatedAt);
+                  const needsUpdate = hasNovelMetadataUpdate(novel, info);
 
                   if (needsUpdate) {
                     updateNovel(db, novel.id, {
@@ -483,13 +467,21 @@ export default function LibraryScreen({
   }, [db, sortBy, isArchivedTab, loadNovels, isRefreshRunActive]);
 
   useEffect(() => {
+    onRefreshRef.current = onRefresh;
+  }, [onRefresh]);
+
+  useEffect(() => {
     const unsubscribe = auth().onAuthStateChanged((user) => {
-      if (user) {
-        onRefresh();
+      if (!user) {
+        lastAutoRefreshUidRef.current = null;
+        return;
       }
+      if (lastAutoRefreshUidRef.current === user.uid) return;
+      lastAutoRefreshUidRef.current = user.uid;
+      void onRefreshRef.current?.();
     });
     return unsubscribe;
-  }, [onRefresh]);
+  }, []);
 
   const renderNovel = useCallback(
     ({ item }: { item: Novel }) => {
@@ -497,10 +489,10 @@ export default function LibraryScreen({
         item.currentChapter !== undefined
           ? `${item.currentChapter} / ${item.totalEpisodes}話`
           : null;
-      const progressPercentage =
-        item.currentChapter !== undefined
-          ? Math.min(100, (item.currentChapter / item.totalEpisodes) * 100)
-          : null;
+      const progressPercentage = getLibraryProgressPercentage(
+        item.currentChapter,
+        item.totalEpisodes,
+      );
 
       return (
         <NovelItem

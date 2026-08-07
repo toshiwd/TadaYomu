@@ -167,7 +167,9 @@ export async function checkNovelUpdates(
       total: 0,
       message: "Checking for updates...",
     });
-    const chapterList = await adapter.getChapterList(novel.siteNovelId);
+    const chapterList = adapter.getLatestChapterList && novel.totalEpisodes > 0
+      ? await adapter.getLatestChapterList(novel.siteNovelId, novel.totalEpisodes)
+      : await adapter.getChapterList(novel.siteNovelId);
 
     const newChapters = chapterList.filter((ch) => ch.index > novel.totalEpisodes);
     if (newChapters.length === 0) {
@@ -191,7 +193,10 @@ export async function checkNovelUpdates(
     });
 
     updateNovel(db, novel.id, {
-      totalEpisodes: chapterList.length,
+      totalEpisodes: Math.max(
+        novel.totalEpisodes,
+        ...newChapters.map((chapter) => chapter.index),
+      ),
       siteUpdatedAt:
         chapterList[chapterList.length - 1]?.publishedAt ||
         new Date().toISOString(),
@@ -207,6 +212,12 @@ export async function checkNovelUpdates(
     return newChapters.length;
   } catch (err) {
     console.warn("[UpdateCheck] Failed to check novel updates", err);
+    onProgress?.({
+      phase: "error",
+      current: 0,
+      total: 0,
+      message: err instanceof Error ? err.message : "Update check failed",
+    });
     return 0;
   }
 }

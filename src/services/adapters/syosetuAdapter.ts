@@ -8,6 +8,7 @@ import type {
     SiteAdapter, NovelInfo, ChapterInfo, ChapterContent,
 } from '../siteAdapter';
 import type { SiteType } from '../../types/novel';
+import { getNextChapterListPage } from '../runtimeGuards';
 
 const NAROU_API = 'https://api.syosetu.com/novelapi/api/';
 const NAROU_BASE = 'https://ncode.syosetu.com';
@@ -296,7 +297,7 @@ export const syosetuAdapter: SiteAdapter = {
     },
 
     async getLatestChapterList(novelId: string, knownTotalEpisodes: number): Promise<ChapterInfo[]> {
-        const latestPage = Math.max(1, Math.ceil(Math.max(knownTotalEpisodes, 1) / 100));
+        const latestPage = getNextChapterListPage(knownTotalEpisodes);
         const html = await rateLimitedFetch(buildIndexUrl(novelId, latestPage));
         return parseChapterIndexPage(html, novelId).chapters;
     },

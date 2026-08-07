@@ -31,8 +31,9 @@ export default function AddNovelScreen({ route, navigation }: RootStackScreenPro
         }
 
         let cancelled = false;
+        let navigationTimer: ReturnType<typeof setTimeout> | null = null;
 
-        (async () => {
+        void (async () => {
             const result = await addNovelByUrl(db, url, (p) => {
                 if (!cancelled) setProgress(p);
             });
@@ -42,15 +43,28 @@ export default function AddNovelScreen({ route, navigation }: RootStackScreenPro
                 if (result.status === 'success' && result.novel) {
                     const savedNovel = result.novel;
                     // Navigate to the novel detail after short delay
-                    setTimeout(() => {
+                    navigationTimer = setTimeout(() => {
                         navigation.replace('NovelDetail', { novelId: savedNovel.id });
                     }, 800);
                 }
             }
-        })();
+        })().catch((error) => {
+            if (cancelled) return;
+            console.error('Failed to add novel', error);
+            setProgress({
+                phase: 'error',
+                current: 0,
+                total: 0,
+                message: error instanceof Error ? error.message : 'Unexpected error',
+            });
+            setDone(true);
+        });
 
-        return () => { cancelled = true; };
-    }, [url, db]); // eslint-disable-line react-hooks/exhaustive-deps
+        return () => {
+            cancelled = true;
+            if (navigationTimer) clearTimeout(navigationTimer);
+        };
+    }, [url, db, navigation]);
 
     const isError = progress.phase === 'error';
     const isDone = progress.phase === 'done';

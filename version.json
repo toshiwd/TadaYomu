@@ -1,5 +1,5 @@
 ﻿{
-    "version":  "1.3.69",
-    "apkUrl":  "https://github.com/toshiwd/TadaYomu/releases/download/v1.3.69/TadaYomu-1.3.69.apk",
-    "releaseNotes":  "画面オフから再表示したときに読書位置が先頭へ戻ることがある問題を修正しました"
+    "version":  "1.3.70",
+    "apkUrl":  "https://github.com/toshiwd/TadaYomu/releases/download/v1.3.70/TadaYomu-1.3.70.apk",
+    "releaseNotes":  "自動更新を軽量化して実行状況を確認できるようにし、画面表示とダウンロードの安定性を改善しました"
 }

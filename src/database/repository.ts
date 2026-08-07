@@ -52,6 +52,8 @@ interface ReadingProgressRow {
     anchor_character_offset: number | null;
     anchor_context_hash: string | null;
     last_read_at: string;
+    site_novel_id?: string;
+    site_type?: string;
 }
 
 interface BookmarkRow {
@@ -199,19 +201,26 @@ export function countDownloadedChapters(db: SQLiteDatabase, novelId: number): nu
 
 // ── Reading Progress ──
 
+function clampReadingProgress(progress: number): number {
+    if (!Number.isFinite(progress)) return 0;
+    return Math.max(0, Math.min(1, progress));
+}
+
 export function getReadingProgress(db: SQLiteDatabase, novelId: number): ReadingProgressWithAnchor | null {
     const row = db.getFirstSync(
-        'SELECT * FROM reading_progress WHERE novel_id = ?',
+        `SELECT rp.*, n.site_novel_id, n.site_type
+         FROM reading_progress rp
+         LEFT JOIN novels n ON n.id = rp.novel_id
+         WHERE rp.novel_id = ?`,
         [novelId]
     ) as ReadingProgressRow | null;
     if (!row) return null;
-    const novel = getNovelById(db, novelId);
     const progress = {
         novelId: row.novel_id,
-        siteNovelId: novel?.siteNovelId ?? '',
-        siteType: novel?.siteType ?? 'syosetu',
+        siteNovelId: row.site_novel_id ?? '',
+        siteType: (row.site_type as SiteType | undefined) ?? 'syosetu',
         currentChapter: row.current_chapter,
-        scrollPercentage: row.scroll_percentage,
+        scrollPercentage: clampReadingProgress(row.scroll_percentage),
         positionAnchor:
             Number.isInteger(row.anchor_block_index) &&
             Number.isInteger(row.anchor_character_offset) &&
@@ -234,6 +243,7 @@ export function upsertReadingProgress(
     scroll: number,
     positionAnchor?: ReaderPositionAnchor | null,
 ): void {
+    const normalizedScroll = clampReadingProgress(scroll);
     const existing = db.getFirstSync(
         `SELECT current_chapter, anchor_block_index, anchor_character_offset, anchor_context_hash
          FROM reading_progress WHERE novel_id = ?`,
@@ -273,7 +283,7 @@ export function upsertReadingProgress(
         [
             novelId,
             chapter,
-            scroll,
+            normalizedScroll,
             validAnchor?.blockIndex ?? null,
             validAnchor?.characterOffset ?? null,
             validAnchor?.contextHash ?? null,
@@ -296,6 +306,7 @@ export function upsertReadingProgressIfChanged(
     const minIntervalMs = options?.minIntervalMs ?? 800;
     const minProgressDelta = options?.minProgressDelta ?? 0.01;
     const force = options?.force === true;
+    const normalizedScroll = clampReadingProgress(scroll);
 
     const current = db.getFirstSync(
         `SELECT current_chapter, scroll_percentage, last_read_at,
@@ -312,12 +323,14 @@ export function upsertReadingProgressIfChanged(
     } | null;
 
     if (!current || force) {
-        upsertReadingProgress(db, novelId, chapter, scroll, options?.positionAnchor);
+        upsertReadingProgress(db, novelId, chapter, normalizedScroll, options?.positionAnchor);
         return true;
     }
 
     const chapterChanged = current.current_chapter !== chapter;
-    const progressDelta = Math.abs((current.scroll_percentage ?? 0) - scroll);
+    const progressDelta = Math.abs(
+        clampReadingProgress(current.scroll_percentage ?? 0) - normalizedScroll,
+    );
     const elapsed = Date.now() - parseReadingTimestampMs(current.last_read_at);
     const intervalPassed = elapsed >= minIntervalMs;
     const nextAnchor = options?.positionAnchor;
@@ -328,7 +341,7 @@ export function upsertReadingProgressIfChanged(
     );
 
     if (chapterChanged || progressDelta >= minProgressDelta || anchorChanged || intervalPassed) {
-        upsertReadingProgress(db, novelId, chapter, scroll, options?.positionAnchor);
+        upsertReadingProgress(db, novelId, chapter, normalizedScroll, options?.positionAnchor);
         return true;
     }
 
@@ -414,7 +427,7 @@ function mapRowToNovel(row: NovelRow): Novel {
     };
     if (row.current_chapter !== undefined && row.current_chapter !== null) {
         novel.currentChapter = row.current_chapter;
-        novel.scrollPercentage = row.scroll_percentage;
+        novel.scrollPercentage = clampReadingProgress(row.scroll_percentage ?? 0);
     }
     return novel;
 }

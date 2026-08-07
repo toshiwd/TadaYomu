@@ -81,6 +81,22 @@ export function getAdapter(siteType: SiteType): SiteAdapter | undefined {
 }
 
 export function getAdapterForUrl(url: string): SiteAdapter | undefined {
+    try {
+        const parsed = new URL(url);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return undefined;
+        if (parsed.username || parsed.password || parsed.port) return undefined;
+
+        const supportedNovelHosts = new Set([
+            'ncode.syosetu.com',
+            'novel18.syosetu.com',
+            'kakuyomu.jp',
+            'syosetu.org',
+        ]);
+        if (!supportedNovelHosts.has(parsed.hostname.toLowerCase())) return undefined;
+    } catch {
+        return undefined;
+    }
+
     for (const adapter of adapterRegistry.values()) {
         if (adapter.matchesUrl(url)) return adapter;
     }

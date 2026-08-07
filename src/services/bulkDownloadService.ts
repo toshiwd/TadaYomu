@@ -36,6 +36,7 @@ export async function startBulkDownload(
     db: SQLiteDatabase,
     novel: Novel,
     onProgress: ProgressCallback,
+    options: { limit?: number } = {},
 ): Promise<void> {
     // Cancel any existing job for this novel
     cancelBulkDownload(novel.id);
@@ -50,9 +51,10 @@ export async function startBulkDownload(
     console.log(`[BulkDL] novel=${novel.id} totalChapters=${chapters.length} currentChapter=${r}`);
 
     // Filter to chapters after the current read position that need downloading, limit to 50
+    const limit = Math.max(0, Math.floor(options.limit ?? 50));
     const pending = chapters
         .filter((ch) => ch.index > r && !ch.isDownloaded && ch.url)
-        .slice(0, 50);
+        .slice(0, limit);
     const total = chapters.length;
     let downloaded = countDownloadedChapters(db, novel.id);
 
@@ -61,7 +63,7 @@ export async function startBulkDownload(
     if (pending.length === 0) {
         console.log(`[BulkDL] No pending chapters — returning idle immediately`);
         onProgress({ state: 'idle', downloaded, total });
-        activeJobs.delete(novel.id);
+        if (activeJobs.get(novel.id) === job) activeJobs.delete(novel.id);
         return;
     }
 
@@ -132,7 +134,7 @@ export async function startBulkDownload(
     }
     await Promise.all(workers);
 
-    activeJobs.delete(novel.id);
+    if (activeJobs.get(novel.id) === job) activeJobs.delete(novel.id);
 
     // Final state
     if (completedSincePersist > 0) {

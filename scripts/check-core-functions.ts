@@ -22,6 +22,15 @@ import {
 } from "../src/services/readerProgress";
 import { generateReaderHtml } from "../src/services/readerHtmlGenerator";
 import { DEFAULT_READER_SETTINGS } from "../src/types/novel";
+import {
+  calculateSliderValue,
+  getLibraryProgressPercentage,
+  getNextChapterListPage,
+  hasNovelMetadataUpdate,
+  isSameLocalCalendarDay,
+  normalizeBackgroundCursor,
+  shouldRefreshChapterList,
+} from "../src/services/runtimeGuards";
 
 let failed = 0;
 
@@ -90,6 +99,16 @@ for (const [url, expected] of adapterCases) {
 }
 check("adapter registry size", getAllAdapters().length, 4);
 check(
+  "adapter routing rejects a lookalike host",
+  getAdapterForUrl("https://kakuyomu.jp.example.com/works/2912051603474311296"),
+  undefined,
+);
+check(
+  "adapter routing rejects credentials in a URL",
+  getAdapterForUrl("https://user:password@ncode.syosetu.com/n6316bn/"),
+  undefined,
+);
+check(
   "Nocturne exact-page 404 ends a populated chapter list",
   isExpectedChapterListEndStatus(404, 3, 200),
   true,
@@ -131,6 +150,40 @@ check("reader entry rejects zero progress", normalizeReaderChapterIndex(0), 1);
 check("reader entry accepts numeric cloud progress", normalizeReaderChapterIndex("134"), 134);
 check("reader entry floors fractional progress", normalizeReaderChapterIndex(12.9), 12);
 check("reader entry clamps stale chapter to available range", normalizeReaderChapterIndex(195, 194), 194);
+check("settings slider uses measured width", calculateSliderValue(10, 100, 200, 10, 30, 1), 20);
+check("settings slider stays stable before layout", calculateSliderValue(18, 100, 0, 10, 30, 1), 18);
+check("library progress rejects zero total", getLibraryProgressPercentage(1, 0), null);
+check("library progress is clamped", getLibraryProgressPercentage(12, 10), 100);
+check(
+  "missing remote timestamp is not a false update",
+  hasNovelMetadataUpdate(
+    { totalEpisodes: 10, isComplete: false, siteUpdatedAt: "2026-08-08T01:00:00.000Z" },
+    { totalEpisodes: 10, isComplete: false, lastUpdatedAt: null },
+  ),
+  false,
+);
+check(
+  "equivalent timestamps are not a false update",
+  hasNovelMetadataUpdate(
+    { totalEpisodes: 10, isComplete: false, siteUpdatedAt: "2026-08-08T01:00:00.000Z" },
+    { totalEpisodes: 10, isComplete: false, lastUpdatedAt: "2026-08-08T10:00:00+09:00" },
+  ),
+  false,
+);
+const localNow = new Date(2026, 7, 8, 4, 0, 0);
+check(
+  "background timestamp uses local calendar day",
+  isSameLocalCalendarDay(new Date(2026, 7, 8, 0, 30, 0).toISOString(), localNow),
+  true,
+);
+check(
+  "fresh complete chapter list skips refresh",
+  shouldRefreshChapterList(10, 10, "2026-08-08T01:00:00.000Z", Date.parse("2026-08-08T01:03:00.000Z")),
+  false,
+);
+check("background cursor wraps", normalizeBackgroundCursor("5", 3), 2);
+check("background cursor rejects invalid state", normalizeBackgroundCursor("bad", 3), 0);
+check("latest chapter page crosses exact boundary", getNextChapterListPage(100), 2);
 check("reader progress clamps below zero", normalizeReaderProgress(-0.2), 0);
 check("reader progress clamps above one", normalizeReaderProgress(1.2), 1);
 check(

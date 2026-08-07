@@ -16,6 +16,8 @@ import {
 
 const progressMap = new Map<number, BulkDownloadProgress>();
 const listeners = new Set<() => void>();
+const runIds = new Map<number, number>();
+const cleanupTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
 function notify() {
     listeners.forEach((fn) => fn());
@@ -35,6 +37,14 @@ export function subscribe(listener: () => void): () => void {
 }
 
 export function startDownload(db: SQLiteDatabase, novel: Novel): void {
+    if (progressMap.get(novel.id)?.state === 'running') return;
+
+    const previousTimer = cleanupTimers.get(novel.id);
+    if (previousTimer) clearTimeout(previousTimer);
+    cleanupTimers.delete(novel.id);
+    const runId = (runIds.get(novel.id) ?? 0) + 1;
+    runIds.set(novel.id, runId);
+
     // Set initial state immediately BEFORE starting the download
     // This prevents race conditions if the download logic finishes synchronously
     progressMap.set(novel.id, { state: 'running', downloaded: 0, total: novel.totalEpisodes });
@@ -43,21 +53,26 @@ export function startDownload(db: SQLiteDatabase, novel: Novel): void {
     // Start the download — fire-and-forget (the promise resolves when done)
     console.log(`[BulkStore] Starting bulk download for novel ${novel.id} (${novel.title})`);
     _startBulkDownload(db, novel, (progress: BulkDownloadProgress) => {
+        if (runIds.get(novel.id) !== runId) return;
         console.log(`[BulkStore] Progress: state=${progress.state} ${progress.downloaded}/${progress.total}`);
         progressMap.set(novel.id, progress);
         notify();
 
         // Clean up completed/idle entries after a delay
         if (progress.state === 'idle' || progress.state === 'error') {
-            setTimeout(() => {
+            const timer = setTimeout(() => {
+                if (runIds.get(novel.id) !== runId) return;
                 const current = progressMap.get(novel.id);
                 if (current && (current.state === 'idle' || current.state === 'error')) {
                     progressMap.delete(novel.id);
                     notify();
                 }
+                cleanupTimers.delete(novel.id);
             }, 5000);
+            cleanupTimers.set(novel.id, timer);
         }
     }).catch((err: any) => {
+        if (runIds.get(novel.id) !== runId) return;
         console.error(`[BulkStore] Bulk download failed for novel ${novel.id}:`, err);
         progressMap.set(novel.id, {
             state: 'error',
@@ -66,13 +81,16 @@ export function startDownload(db: SQLiteDatabase, novel: Novel): void {
             errorMessage: err?.message || '不明なエラー',
         });
         notify();
-        setTimeout(() => {
+        const timer = setTimeout(() => {
+            if (runIds.get(novel.id) !== runId) return;
             const current = progressMap.get(novel.id);
             if (current && current.state === 'error') {
                 progressMap.delete(novel.id);
                 notify();
             }
+            cleanupTimers.delete(novel.id);
         }, 5000);
+        cleanupTimers.set(novel.id, timer);
     });
 }
 
