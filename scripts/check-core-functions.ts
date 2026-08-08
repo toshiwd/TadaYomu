@@ -14,6 +14,15 @@ import {
 } from "../src/database/repository";
 import { normalizeReaderChapterIndex } from "../src/services/readerEntry";
 import {
+  createChapterReadKey,
+  getNextChapterIndexToPrefetch,
+  runChapterReadSingleFlight,
+} from "../src/services/readerPrefetch";
+import {
+  getReaderFlickDirection,
+  getVolumeButtonPageDirection,
+} from "../src/services/readerInput";
+import {
   createReaderProgressSnapshot,
   isReaderProgressForChapter,
   normalizeReaderProgress,
@@ -150,6 +159,67 @@ check("reader entry rejects zero progress", normalizeReaderChapterIndex(0), 1);
 check("reader entry accepts numeric cloud progress", normalizeReaderChapterIndex("134"), 134);
 check("reader entry floors fractional progress", normalizeReaderChapterIndex(12.9), 12);
 check("reader entry clamps stale chapter to available range", normalizeReaderChapterIndex(195, 194), 194);
+check("reader prefetch selects the next chapter", getNextChapterIndexToPrefetch(4, 8), 5);
+check("reader prefetch stops at the final chapter", getNextChapterIndexToPrefetch(8, 8), null);
+check("reader prefetch rejects an invalid chapter", getNextChapterIndexToPrefetch(0, 8), null);
+check(
+  "reader prefetch key separates site types",
+  createChapterReadKey("syosetu", "n1234ab", 2) ===
+    createChapterReadKey("nocturne", "n1234ab", 2),
+  false,
+);
+let chapterReadCalls = 0;
+const pendingChapterRead = new Promise<string>(() => {});
+const firstChapterRead = runChapterReadSingleFlight("prefetch-test", () => {
+  chapterReadCalls += 1;
+  return pendingChapterRead;
+});
+const secondChapterRead = runChapterReadSingleFlight("prefetch-test", () => {
+  chapterReadCalls += 1;
+  return pendingChapterRead;
+});
+check("reader prefetch shares an in-flight chapter read", firstChapterRead === secondChapterRead, true);
+check("reader prefetch starts one chapter read", chapterReadCalls, 1);
+check(
+  "reader left flick advances a page",
+  getReaderFlickDirection(-80, 6, 180, false),
+  "next",
+);
+check(
+  "reader right flick returns a page",
+  getReaderFlickDirection(80, 6, 180, false),
+  "previous",
+);
+check(
+  "reader flick follows reversed page direction",
+  getReaderFlickDirection(-80, 6, 180, true),
+  "previous",
+);
+check(
+  "reader ignores a mostly vertical flick",
+  getReaderFlickDirection(-60, 80, 180, false),
+  null,
+);
+check(
+  "reader ignores a short drag",
+  getReaderFlickDirection(-30, 2, 180, false),
+  null,
+);
+check(
+  "reader ignores a slow horizontal drag",
+  getReaderFlickDirection(-80, 2, 900, false),
+  null,
+);
+check(
+  "reader volume down advances a page",
+  getVolumeButtonPageDirection("volumeDown"),
+  "next",
+);
+check(
+  "reader volume up returns a page",
+  getVolumeButtonPageDirection("volumeUp"),
+  "previous",
+);
 check("settings slider uses measured width", calculateSliderValue(10, 100, 200, 10, 30, 1), 20);
 check("settings slider stays stable before layout", calculateSliderValue(18, 100, 0, 10, 30, 1), 18);
 check("library progress rejects zero total", getLibraryProgressPercentage(1, 0), null);
@@ -248,6 +318,16 @@ check(
 check(
   "reader HTML preserves progress across reflow",
   readerHtml.includes("repaginatePreservingProgress"),
+  true,
+);
+check(
+  "reader HTML exposes native page turns",
+  readerHtml.includes("window.__tadayomuTurnPage"),
+  true,
+);
+check(
+  "reader HTML handles horizontal flicks",
+  readerHtml.includes("var isHorizontalFlick"),
   true,
 );
 check(

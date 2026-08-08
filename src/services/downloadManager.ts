@@ -14,6 +14,10 @@ import {
 } from "../database/repository";
 import { getAdapterForUrl, getAdapter } from "./siteAdapter";
 import { formatNovelText } from "./textFormatter";
+import {
+  createChapterReadKey,
+  runChapterReadSingleFlight,
+} from "./readerPrefetch";
 
 /** Get the novels base directory */
 function getNovelsDir(): Directory {
@@ -316,7 +320,7 @@ export async function downloadSingleChapter(
  * Read a chapter's text from local storage.
  * If the file is empty or missing, automatically re-downloads from the site.
  */
-export async function readChapterText(
+async function readChapterTextOnce(
   chapter: Chapter,
   siteNovelId: string,
   db?: SQLiteDatabase,
@@ -356,6 +360,22 @@ export async function readChapterText(
 
   throw new Error(
     "No local chapter file and no network fallback available for this chapter.",
+  );
+}
+
+/**
+ * Read a chapter while sharing an in-flight read/download for the same chapter.
+ * This prevents a foreground chapter transition from duplicating its prefetch.
+ */
+export function readChapterText(
+  chapter: Chapter,
+  siteNovelId: string,
+  db?: SQLiteDatabase,
+  siteType?: string,
+): Promise<string> {
+  const key = createChapterReadKey(siteType, siteNovelId, chapter.index);
+  return runChapterReadSingleFlight(key, () =>
+    readChapterTextOnce(chapter, siteNovelId, db, siteType),
   );
 }
 

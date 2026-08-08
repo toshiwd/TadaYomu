@@ -1,4 +1,9 @@
 import type { ReaderSettings } from '../types/novel';
+import {
+  READER_FLICK_AXIS_RATIO,
+  READER_FLICK_MAX_DURATION_MS,
+  READER_FLICK_MIN_DISTANCE_PX,
+} from './readerInput';
 import type { ReaderPositionAnchor } from './readerProgress';
 
 export interface GenerateHtmlParams {
@@ -626,6 +631,11 @@ ${fontLink}
     else postToNative({ type: 'prev' });
   }
 
+  window.__tadayomuTurnPage = function(direction) {
+    if (direction === 'next') goNextPage();
+    else if (direction === 'previous') goPrevPage();
+  };
+
   document.addEventListener('message', handleSettingsMessage);
   window.addEventListener('message', handleSettingsMessage);
 
@@ -657,7 +667,8 @@ ${fontLink}
     } catch(ex) { }
   }
 
-  var touchStartX = 0, touchStartY = 0, touchMoved = false, isDragging = false;
+  var touchStartX = 0, touchStartY = 0, touchStartTime = 0;
+  var touchMoved = false, isDragging = false;
 
   function isInteractiveImageTarget(target) {
     if (!target) return false;
@@ -669,12 +680,16 @@ ${fontLink}
   }
 
   document.body.addEventListener('touchstart', function(e) {
-    if (e.touches.length > 1) return;
+    if (e.touches.length > 1) {
+      isDragging = false;
+      return;
+    }
     var target = e.target;
     if (isInteractiveImageTarget(target)) {
       touchMoved = false; isDragging = false; return;
     }
     touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY;
+    touchStartTime = Date.now();
     touchMoved = false; isDragging = true;
   }, { passive: false });
 
@@ -683,6 +698,7 @@ ${fontLink}
     var currentX = e.touches[0].clientX, currentY = e.touches[0].clientY;
     var dx = currentX - touchStartX, dy = currentY - touchStartY;
     if (Math.abs(dx) > 10 || Math.abs(dy) > 10) touchMoved = true;
+    if (Math.abs(dx) > Math.abs(dy)) e.preventDefault();
   }, { passive: false });
 
   document.body.addEventListener('touchend', function(e) {
@@ -693,8 +709,27 @@ ${fontLink}
     if (!isDragging) return;
     isDragging = false;
     var endX = e.changedTouches[0].clientX, endY = e.changedTouches[0].clientY;
+    var dx = endX - touchStartX, dy = endY - touchStartY;
+    var durationMs = Date.now() - touchStartTime;
+    var isHorizontalFlick =
+      durationMs <= ${READER_FLICK_MAX_DURATION_MS} &&
+      Math.abs(dx) >= ${READER_FLICK_MIN_DISTANCE_PX} &&
+      Math.abs(dx) > Math.abs(dy) * ${READER_FLICK_AXIS_RATIO};
+
+    if (isHorizontalFlick) {
+      var direction = dx < 0 ? 'next' : 'previous';
+      if (reverseDirection) {
+        direction = direction === 'next' ? 'previous' : 'next';
+      }
+      window.__tadayomuTurnPage(direction);
+      return;
+    }
     if (touchMoved) return;
     handleClickBoundary(endX, endY);
+  });
+
+  document.body.addEventListener('touchcancel', function() {
+    isDragging = false;
   });
 
   function handleClickBoundary(x, y) {

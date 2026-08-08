@@ -18,6 +18,7 @@ import {
 } from "react-native";
 import { WebView } from "react-native-webview";
 import { Ionicons } from "@expo/vector-icons";
+import { useKeepAwake } from "expo-keep-awake";
 import { StatusBar } from "expo-status-bar";
 import type { Novel, ReaderSettings } from "../types/novel";
 import { useSQLiteContext } from "expo-sqlite";
@@ -42,6 +43,11 @@ import { rubyTextToHtml } from "../services/textFormatter";
 import { syncService } from "../services/syncService";
 import { generateReaderHtml } from "../services/readerHtmlGenerator";
 import { normalizeReaderChapterIndex } from "../services/readerEntry";
+import { getNextChapterIndexToPrefetch } from "../services/readerPrefetch";
+import {
+  addVolumePageTurnListener,
+  setVolumePagingEnabled,
+} from "../services/readerControls";
 import {
   createReaderProgressSnapshot,
   isReaderProgressForChapter,
@@ -59,6 +65,7 @@ export default function ReaderScreen({
   const db = useSQLiteContext();
   const webViewRef = useRef<WebView>(null);
   const insets = useSafeAreaInsets();
+  useKeepAwake("tadayomu-reader");
 
   const novelId = route.params.novelId;
   const initialChapter = normalizeReaderChapterIndex(route.params.chapterIndex);
@@ -134,6 +141,30 @@ export default function ReaderScreen({
     anchorKey: string;
   } | null>(null);
 
+  useEffect(() => {
+    const subscription = addVolumePageTurnListener((direction) => {
+      webViewRef.current?.injectJavaScript(`
+        if (window.__tadayomuTurnPage) {
+          window.__tadayomuTurnPage(${JSON.stringify(direction)});
+        }
+        true;
+      `);
+    });
+
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    const enabled =
+      !loading &&
+      !isSettingsVisible &&
+      zoomedImage === null &&
+      !webViewRenderFailed;
+    setVolumePagingEnabled(enabled);
+
+    return () => setVolumePagingEnabled(false);
+  }, [loading, isSettingsVisible, zoomedImage, webViewRenderFailed]);
+
   const flushLatestProgress = useCallback(() => {
     const latest = latestProgressRef.current;
     if (!latest) return;
@@ -171,6 +202,7 @@ export default function ReaderScreen({
     setLoadError(false);
 
     void (async () => {
+      let availableChapterCount = novel.totalEpisodes;
       let ch = getChapter(db, novelId, chapterIndex);
 
       // チャプターがDBに存在しない場合（同期済みだが未取得）
@@ -199,6 +231,7 @@ export default function ReaderScreen({
               totalEpisodes: chapterList.length,
               lastCheckedAt: new Date().toISOString(),
             });
+            availableChapterCount = chapterList.length;
             setTotalChapters(chapterList.length);
             ch = getChapter(db, novelId, chapterIndex);
           } catch (err) {
@@ -230,6 +263,33 @@ export default function ReaderScreen({
               { force: true },
             );
             setChapterText(rawText);
+
+            const nextChapterIndex = getNextChapterIndexToPrefetch(
+              chapterIndex,
+              availableChapterCount,
+            );
+            const nextChapter = nextChapterIndex
+              ? getChapter(db, novelId, nextChapterIndex)
+              : null;
+            if (nextChapter?.url) {
+              void readChapterText(
+                nextChapter,
+                novel.siteNovelId,
+                db,
+                novel.siteType,
+              )
+                .then(() => {
+                  console.log(
+                    `[Reader] Prefetched chapter ${nextChapter.index}`,
+                  );
+                })
+                .catch((err) => {
+                  console.warn(
+                    `[Reader] Failed to prefetch chapter ${nextChapter.index}:`,
+                    err,
+                  );
+                });
+            }
             setChapterTitle(ch.title || `第${chapterIndex}話`);
           }
         } catch (err: any) {

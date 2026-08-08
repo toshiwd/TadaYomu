@@ -1,6 +1,6 @@
 {
   "name": "tadayomu",
-  "version": "1.3.70",
+  "version": "1.3.71",
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
@@ -29,6 +29,7 @@
     "expo-file-system": "~19.0.23",
     "expo-font": "~14.0.12",
     "expo-intent-launcher": "~13.0.8",
+    "expo-keep-awake": "~15.0.8",
     "expo-linking": "~8.0.12",
     "expo-network": "~8.0.8",
     "expo-sqlite": "^16.0.10",
