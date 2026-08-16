@@ -20,7 +20,11 @@ import { Radius, Spacing, Typography } from "../theme/colors";
 import type { MainTabScreenProps } from "../navigation/types";
 import type { ReaderSettings } from "../types/novel";
 import { getReaderSettings, saveReaderSettings, getSetting } from "../database/repository";
-import { checkForUpdates, getCurrentVersion } from "../services/updateChecker";
+import {
+  checkForUpdates,
+  getCurrentVersion,
+  type UpdateProgress,
+} from "../services/updateChecker";
 import { syncService } from "../services/syncService";
 import {
   getBackgroundTaskDiagnostics,
@@ -180,6 +184,7 @@ export default function SettingsScreen(
   const [user, setUser] = useState<FirebaseAuthTypes.User | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [updateProgress, setUpdateProgress] = useState<UpdateProgress>({ phase: "idle" });
   const [bgEnabled, setBgEnabled] = useState(true);
   const [isTogglingBackground, setIsTogglingBackground] = useState(false);
   const [isTestingBackground, setIsTestingBackground] = useState(false);
@@ -266,7 +271,7 @@ export default function SettingsScreen(
     if (isCheckingUpdate) return;
     setIsCheckingUpdate(true);
     try {
-      await checkForUpdates(false);
+      await checkForUpdates(false, setUpdateProgress);
     } finally {
       setIsCheckingUpdate(false);
     }
@@ -618,7 +623,13 @@ export default function SettingsScreen(
               color={colors.text.primary}
             />
             <Text style={[styles.appActionText, { color: colors.text.primary }]}>
-              {isCheckingUpdate ? "確認中..." : "アップデートを確認"}
+              {updateProgress.phase === "downloading"
+                ? `ダウンロード中${updateProgress.progress === null ? "..." : ` ${Math.round(updateProgress.progress * 100)}%`}`
+                : updateProgress.phase === "installing"
+                  ? "インストーラーを開いています..."
+                  : isCheckingUpdate
+                    ? "確認中..."
+                    : "アップデートを確認"}
             </Text>
           </View>
           {isCheckingUpdate ? (
