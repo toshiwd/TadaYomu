@@ -12,6 +12,7 @@ import {
   Text,
   Animated,
   AppState,
+  Alert,
   Modal,
   Image,
   TouchableWithoutFeedback,
@@ -42,7 +43,11 @@ import { getAdapter } from "../services/siteAdapter";
 import { rubyTextToHtml } from "../services/textFormatter";
 import { syncService } from "../services/syncService";
 import { generateReaderHtml } from "../services/readerHtmlGenerator";
-import { normalizeReaderChapterIndex } from "../services/readerEntry";
+import {
+  normalizeReaderChapterIndex,
+  resolveReaderChapterList,
+  resolveReaderNextChapter,
+} from "../services/readerEntry";
 import { getNextChapterIndexToPrefetch } from "../services/readerPrefetch";
 import {
   addVolumePageTurnListener,
@@ -69,6 +74,9 @@ export default function ReaderScreen({
 
   const novelId = route.params.novelId;
   const initialChapter = normalizeReaderChapterIndex(route.params.chapterIndex);
+  const loadRequestIdRef = useRef(0);
+  const nextChapterRequestIdRef = useRef(0);
+  const nextChapterCheckingRef = useRef(false);
 
   const [chapterIndex, setChapterIndex] = useState(initialChapter);
   const [chapterTitle, setChapterTitle] = useState("");
@@ -96,6 +104,14 @@ export default function ReaderScreen({
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
   const [webViewRenderFailed, setWebViewRenderFailed] = useState(false);
   const [webViewInstanceKey, setWebViewInstanceKey] = useState(0);
+  const [checkingNextChapter, setCheckingNextChapter] = useState(false);
+  const readerTargetRef = useRef({ novelId, chapterIndex });
+  readerTargetRef.current = { novelId, chapterIndex };
+
+  useEffect(() => () => {
+    nextChapterRequestIdRef.current += 1;
+    nextChapterCheckingRef.current = false;
+  }, []);
 
   // Keep a ref to settings so htmlContent doesn't depend on it
   const settingsRef = useRef(settings);
@@ -185,19 +201,41 @@ export default function ReaderScreen({
   // Load novel info
   useEffect(() => {
     const n = getNovelById(db, novelId);
-    if (n) {
-      setTotalChapters(n.totalEpisodes);
-      setNovel(n);
-      setChapterIndex((current) =>
-        normalizeReaderChapterIndex(current, n.totalEpisodes),
-      );
+    if (!n) {
+      setChapterText("作品情報が見つかりません。書庫に戻って再読み込みしてください");
+      setLoadError(true);
+      setLoading(false);
+      return;
     }
-  }, [db, novelId]);
+    const normalizedChapterIndex = normalizeReaderChapterIndex(
+      route.params.chapterIndex,
+      n.totalEpisodes,
+    );
+    console.log("[ReaderInit]", {
+      novelId,
+      routeChapterIndex: route.params.chapterIndex,
+      normalizedChapterIndex,
+      totalEpisodes: n.totalEpisodes,
+    });
+    setTotalChapters(n.totalEpisodes);
+    if (n.totalEpisodes <= 0) {
+      setNovel(null);
+      setChapterText("話一覧を取得できませんでした。再読み込みしてください");
+      setLoadError(true);
+      setLoading(false);
+      return;
+    }
+    setNovel(n);
+    setChapterIndex(normalizedChapterIndex);
+  }, [db, novelId, route.params.chapterIndex, retryCount]);
 
   // Load chapter text
   useEffect(() => {
     if (!novel) return;
+    const requestId = ++loadRequestIdRef.current;
     let cancelled = false;
+    const isCurrentRequest = () =>
+      !cancelled && loadRequestIdRef.current === requestId;
     setLoading(true);
     setLoadError(false);
 
@@ -212,7 +250,23 @@ export default function ReaderScreen({
           try {
             console.log(`[Reader] No chapter in DB, fetching chapter list from site...`);
             const chapterList = await adapter.getChapterList(novel.siteNovelId);
-            if (cancelled) return;
+            if (!isCurrentRequest()) return;
+            console.log("[ReaderChapterList]", {
+              novelId,
+              requestedChapter: chapterIndex,
+              chapterCount: chapterList.length,
+            });
+            const resolution = resolveReaderChapterList(
+              chapterIndex,
+              chapterList.length,
+            );
+            if (resolution.kind === "empty") {
+              setTotalChapters(0);
+              setChapterText("話一覧を取得できませんでした。再読み込みしてください");
+              setLoadError(true);
+              setLoading(false);
+              return;
+            }
             db.withTransactionSync(() => {
               for (const c of chapterList) {
                 upsertChapter(db, {
@@ -233,7 +287,16 @@ export default function ReaderScreen({
             });
             availableChapterCount = chapterList.length;
             setTotalChapters(chapterList.length);
-            ch = getChapter(db, novelId, chapterIndex);
+            setNovel((current) =>
+              current?.id === novel.id
+                ? { ...current, totalEpisodes: chapterList.length }
+                : current,
+            );
+            if (resolution.changed) {
+              setChapterIndex(resolution.chapterIndex);
+              return;
+            }
+            ch = getChapter(db, novelId, resolution.chapterIndex);
           } catch (err) {
             console.error(`[Reader] Failed to fetch chapter list:`, err);
           }
@@ -248,7 +311,7 @@ export default function ReaderScreen({
             db,
             novel.siteType,
           );
-          if (!cancelled) {
+          if (isCurrentRequest()) {
             const savedProgress = getReadingProgress(db, novelId);
             const openedChapterProgress = startAtLastPage
               ? 1
@@ -294,7 +357,7 @@ export default function ReaderScreen({
           }
         } catch (err: any) {
           console.error(`[Reader] Failed to load chapter:`, err);
-          if (!cancelled) {
+          if (isCurrentRequest()) {
             setChapterText(
               `テキストの読み込みに失敗しました\n${err?.message || ""}`,
             );
@@ -302,11 +365,11 @@ export default function ReaderScreen({
           }
         }
       } else {
-        if (!cancelled)
+        if (isCurrentRequest())
           setChapterText("この話はまだダウンロードされていません");
       }
 
-      if (!cancelled) {
+      if (isCurrentRequest()) {
         // Load initial progress for this chapter if available
         const progress = getReadingProgress(db, novelId);
         if (startAtLastPage) {
@@ -330,7 +393,7 @@ export default function ReaderScreen({
       }
     })().catch((err: any) => {
       console.error("[Reader] Failed to initialize chapter:", err);
-      if (!cancelled) {
+      if (isCurrentRequest()) {
         setChapterText(
           `テキストの読み込みに失敗しました\n${err?.message || ""}`,
         );
@@ -385,8 +448,78 @@ export default function ReaderScreen({
       flushLatestProgress();
       setStartAtLastPage(false);
       setChapterIndex((i) => i + 1);
+      return;
     }
-  }, [chapterIndex, flushLatestProgress, totalChapters]);
+    if (!novel || nextChapterCheckingRef.current) return;
+    const adapter = getAdapter(novel.siteType);
+    if (!adapter) {
+      Alert.alert("次の話を確認できません", "この作品のサイトに対応していません");
+      return;
+    }
+
+    const requestId = ++nextChapterRequestIdRef.current;
+    const requestedTarget = { novelId, chapterIndex };
+    nextChapterCheckingRef.current = true;
+    setCheckingNextChapter(true);
+    void adapter.getChapterList(novel.siteNovelId).then((chapterList) => {
+      const currentTarget = readerTargetRef.current;
+      if (
+        nextChapterRequestIdRef.current !== requestId ||
+        currentTarget.novelId !== requestedTarget.novelId ||
+        currentTarget.chapterIndex !== requestedTarget.chapterIndex
+      ) return;
+
+      console.log("[ReaderChapterList]", {
+        novelId,
+        requestedChapter: chapterIndex,
+        chapterCount: chapterList.length,
+        reason: "next_chapter_boundary",
+      });
+      const resolution = resolveReaderNextChapter(chapterIndex, chapterList.length);
+      if (resolution.kind === "empty") {
+        Alert.alert("話一覧を取得できませんでした", "通信状態を確認して、もう一度お試しください");
+        return;
+      }
+      db.withTransactionSync(() => {
+        for (const c of chapterList) {
+          upsertChapter(db, {
+            novelId: novel.id,
+            index: c.index,
+            title: c.title,
+            localPath: null,
+            isDownloaded: false,
+            url: c.url,
+            publishedAt: c.publishedAt,
+            revisedAt: c.revisedAt,
+          });
+        }
+      });
+      updateNovel(db, novel.id, {
+        totalEpisodes: resolution.totalChapters,
+        lastCheckedAt: new Date().toISOString(),
+      });
+      setTotalChapters(resolution.totalChapters);
+      setNovel((current) => current?.id === novel.id
+        ? { ...current, totalEpisodes: resolution.totalChapters }
+        : current);
+      if (resolution.kind === "latest") {
+        Alert.alert("最新話です", "現在表示している話が最新です");
+        return;
+      }
+      flushLatestProgress();
+      setStartAtLastPage(false);
+      setChapterIndex(resolution.chapterIndex);
+    }).catch((error) => {
+      if (nextChapterRequestIdRef.current !== requestId) return;
+      console.error("[Reader] Failed to refresh next chapter boundary", error);
+      Alert.alert("次の話を確認できませんでした", "通信状態を確認して、もう一度お試しください");
+    }).finally(() => {
+      if (nextChapterRequestIdRef.current === requestId) {
+        nextChapterCheckingRef.current = false;
+        setCheckingNextChapter(false);
+      }
+    });
+  }, [chapterIndex, db, flushLatestProgress, novel, novelId, totalChapters]);
 
   const goPrevChapter = useCallback(
     (startAtLast = false) => {
@@ -825,7 +958,8 @@ export default function ReaderScreen({
           style={[styles.chapterLabel, { color: readerTheme.fg }]}
           numberOfLines={1}
         >
-          {chapterIndex}/{totalChapters} {chapterTitle}
+          {chapterIndex} / {totalChapters}
+          {chapterTitle ? `　${chapterTitle}` : ""}
         </Text>
         <Text
           style={[styles.pageLabel, { color: readerTheme.fg }]}
@@ -844,13 +978,13 @@ export default function ReaderScreen({
         <TouchableOpacity
           onPress={goNextChapter}
           style={styles.toolbarBtn}
-          disabled={chapterIndex >= totalChapters}
+          disabled={checkingNextChapter}
         >
           <Ionicons
-            name="chevron-forward"
+            name={checkingNextChapter ? "sync" : "chevron-forward"}
             size={18}
             color={
-              chapterIndex < totalChapters
+              !checkingNextChapter
                 ? readerTheme.fg
                 : readerTheme.fg + "44"
             }

@@ -225,10 +225,25 @@ export default function LibraryScreen({
     (novel: Novel) => {
       if (openingReaderRef.current) return;
       openingReaderRef.current = true;
-      navigation.navigate("Reader", {
+      const normalizedChapter = normalizeReaderChapterIndex(
+        novel.currentChapter,
+        novel.totalEpisodes,
+      );
+      console.log("[LibraryResume]", {
         novelId: novel.id,
-        chapterIndex: normalizeReaderChapterIndex(novel.currentChapter),
+        currentChapter: novel.currentChapter,
+        totalEpisodes: novel.totalEpisodes,
+        normalizedChapter,
       });
+      try {
+        navigation.navigate("Reader", {
+          novelId: novel.id,
+          chapterIndex: normalizedChapter,
+        });
+      } catch (error) {
+        openingReaderRef.current = false;
+        console.error("[LibraryResume] navigation failed", error);
+      }
     },
     [navigation],
   );

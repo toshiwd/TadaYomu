@@ -12,7 +12,11 @@ import {
   isRemoteReadingProgressNewer,
   parseReadingTimestampMs,
 } from "../src/database/repository";
-import { normalizeReaderChapterIndex } from "../src/services/readerEntry";
+import {
+  normalizeReaderChapterIndex,
+  resolveReaderChapterList,
+  resolveReaderNextChapter,
+} from "../src/services/readerEntry";
 import {
   createChapterReadKey,
   getNextChapterIndexToPrefetch,
@@ -154,11 +158,39 @@ check(
   true,
 );
 check("reader entry defaults missing progress", normalizeReaderChapterIndex(undefined), 1);
+check("reader entry defaults null progress", normalizeReaderChapterIndex(null), 1);
 check("reader entry rejects NaN progress", normalizeReaderChapterIndex(Number.NaN), 1);
 check("reader entry rejects zero progress", normalizeReaderChapterIndex(0), 1);
+check("reader entry rejects negative progress", normalizeReaderChapterIndex(-10), 1);
 check("reader entry accepts numeric cloud progress", normalizeReaderChapterIndex("134"), 134);
 check("reader entry floors fractional progress", normalizeReaderChapterIndex(12.9), 12);
 check("reader entry clamps stale chapter to available range", normalizeReaderChapterIndex(195, 194), 194);
+check("reader entry keeps an in-range chapter", normalizeReaderChapterIndex(54, 61), 54);
+check("reader entry clamps a chapter above total", normalizeReaderChapterIndex(100, 61), 61);
+check("reader entry keeps the final chapter", normalizeReaderChapterIndex(61, 61), 61);
+const shrunkChapterList = resolveReaderChapterList(54, 53);
+check("reader entry accepts a non-empty refreshed list", shrunkChapterList.kind, "ready");
+check(
+  "reader entry clamps after a refreshed list shrinks",
+  shrunkChapterList.kind === "ready" ? shrunkChapterList.chapterIndex : null,
+  53,
+);
+check("reader entry rejects an empty refreshed list", resolveReaderChapterList(1, 0).kind, "empty");
+check(
+  "reader boundary advances when a new chapter appears",
+  JSON.stringify(resolveReaderNextChapter(53, 54)),
+  JSON.stringify({ kind: "advance", chapterIndex: 54, totalChapters: 54 }),
+);
+check(
+  "reader boundary stays put at the latest chapter",
+  JSON.stringify(resolveReaderNextChapter(53, 53)),
+  JSON.stringify({ kind: "latest", totalChapters: 53 }),
+);
+check(
+  "reader boundary does not move backwards on a temporarily shorter list",
+  JSON.stringify(resolveReaderNextChapter(53, 52)),
+  JSON.stringify({ kind: "latest", totalChapters: 53 }),
+);
 check("reader prefetch selects the next chapter", getNextChapterIndexToPrefetch(4, 8), 5);
 check("reader prefetch stops at the final chapter", getNextChapterIndexToPrefetch(8, 8), null);
 check("reader prefetch rejects an invalid chapter", getNextChapterIndexToPrefetch(0, 8), null);

@@ -1,5 +1,5 @@
 ﻿{
-    "version":  "1.3.71",
-    "apkUrl":  "https://github.com/toshiwd/TadaYomu/releases/download/v1.3.71/TadaYomu-1.3.71.apk",
-    "releaseNotes":  "次の章を事前に読み込み、画面消灯防止・音量ボタン・横フリックで快適にページ送りできるようになりました"
+    "version":  "1.3.72",
+    "apkUrl":  "https://github.com/toshiwd/TadaYomu/releases/download/v1.3.72/TadaYomu-1.3.72.apk",
+    "releaseNotes":  "書庫の続きから読む操作とReader起動を安定化し、最新話の確認後に次章へ進めるよう改善しました"
 }
