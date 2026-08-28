@@ -3,7 +3,7 @@
  * check-reader-pagination.js
  *
  * Pure-arithmetic regression tests for the Reader pagination logic.
- * Mirrors the calcPages() / goToPage() formulas from ReaderScreen.tsx.
+ * Mirrors the calcPages() / goToPage() formulas from readerHtmlGenerator.ts.
  *
  * Usage:  node scripts/check-reader-pagination.js
  * Exit 0 = all PASS, Exit 1 = at least one FAIL.
@@ -30,12 +30,28 @@ function goToPage(page, totalPages, pageStepPx, scrollWidth) {
 }
 
 function restorePage(progress, totalPages) {
-    const normalized = Math.max(0, Math.min(Number(progress), 1));
+    const normalized = normalizeProgress(progress);
     return Math.round(normalized * Math.max(0, totalPages - 1));
 }
 
-function shouldAcceptPageDuringRestore(progress, totalPages, currentPage) {
-    return restorePage(progress, totalPages) + 1 === currentPage;
+function normalizeProgress(progress) {
+    const normalized = Number(progress);
+    if (!Number.isFinite(normalized)) return 0;
+    return Math.max(0, Math.min(normalized, 1));
+}
+
+function restoreState(progress, totalPages) {
+    const normalized = normalizeProgress(progress);
+    return {
+        page: restorePage(normalized, totalPages),
+        progress: normalized,
+    };
+}
+
+function shouldAcceptPageDuringRestore(progress, totalPages, currentPage, currentProgress) {
+    const normalized = normalizeProgress(progress);
+    return restorePage(normalized, totalPages) + 1 === currentPage
+        && Math.abs(normalizeProgress(currentProgress) - normalized) < 0.000001;
 }
 
 function assert(label, actual, expected) {
@@ -162,14 +178,37 @@ console.log('\n=== Test 12: Ignore page 1 until saved page 5 is restored ===');
     const savedProgress = (5 - 1) / (25 - 1);
     assert(
         'reject provisional first page',
-        shouldAcceptPageDuringRestore(savedProgress, 25, 1),
+        shouldAcceptPageDuringRestore(savedProgress, 25, 1, savedProgress),
         false,
     );
     assert(
         'accept restored fifth page',
-        shouldAcceptPageDuringRestore(savedProgress, 25, 5),
+        shouldAcceptPageDuringRestore(savedProgress, 25, 5, savedProgress),
         true,
     );
+    assert(
+        'reject stale progress even on the same page',
+        shouldAcceptPageDuringRestore(savedProgress, 25, 5, savedProgress + 0.01),
+        false,
+    );
+}
+
+console.log('\n=== Test 13: Clamp invalid saved progress ===');
+{
+    assert('negative progress', normalizeProgress(-0.5), 0);
+    assert('progress over one', normalizeProgress(1.5), 1);
+    assert('NaN progress', normalizeProgress(Number.NaN), 0);
+}
+
+console.log('\n=== Test 14: Preserve progress across provisional layout ===');
+{
+    const provisional = restoreState(0.727, 1);
+    assert('provisional page', provisional.page, 0);
+    assert('provisional progress remains saved value', provisional.progress, 0.727);
+
+    const finalLayout = restoreState(provisional.progress, 100);
+    assert('restored page after repagination', finalLayout.page, 72);
+    assert('progress survives repagination', finalLayout.progress, 0.727);
 }
 
 // ============================================================

@@ -44,6 +44,8 @@ interface ReadingProgressRow {
     current_chapter: number;
     scroll_percentage: number;
     last_read_at: string;
+    site_novel_id?: string;
+    site_type?: string;
 }
 
 interface BookmarkRow {
@@ -191,19 +193,26 @@ export function countDownloadedChapters(db: SQLiteDatabase, novelId: number): nu
 
 // ── Reading Progress ──
 
+function clampReadingProgress(progress: number): number {
+    if (!Number.isFinite(progress)) return 0;
+    return Math.max(0, Math.min(1, progress));
+}
+
 export function getReadingProgress(db: SQLiteDatabase, novelId: number): ReadingProgress | null {
     const row = db.getFirstSync(
-        'SELECT * FROM reading_progress WHERE novel_id = ?',
+        `SELECT rp.*, n.site_novel_id, n.site_type
+         FROM reading_progress rp
+         LEFT JOIN novels n ON n.id = rp.novel_id
+         WHERE rp.novel_id = ?`,
         [novelId]
     ) as ReadingProgressRow | null;
     if (!row) return null;
-    const novel = getNovelById(db, novelId);
     return {
         novelId: row.novel_id,
-        siteNovelId: novel?.siteNovelId ?? '',
-        siteType: novel?.siteType ?? 'syosetu',
+        siteNovelId: row.site_novel_id ?? '',
+        siteType: (row.site_type as SiteType | undefined) ?? 'syosetu',
         currentChapter: row.current_chapter,
-        scrollPercentage: row.scroll_percentage,
+        scrollPercentage: clampReadingProgress(row.scroll_percentage),
         lastReadAt: row.last_read_at,
     };
 }
@@ -211,6 +220,7 @@ export function getReadingProgress(db: SQLiteDatabase, novelId: number): Reading
 export function upsertReadingProgress(
     db: SQLiteDatabase, novelId: number, chapter: number, scroll: number
 ): void {
+    const normalizedScroll = clampReadingProgress(scroll);
     db.runSync(
         `INSERT INTO reading_progress (novel_id, current_chapter, scroll_percentage, last_read_at)
      VALUES (?, ?, ?, datetime('now'))
@@ -218,7 +228,7 @@ export function upsertReadingProgress(
        current_chapter = excluded.current_chapter,
        scroll_percentage = excluded.scroll_percentage,
        last_read_at = datetime('now')`,
-        [novelId, chapter, scroll]
+        [novelId, chapter, normalizedScroll]
     );
 }
 
@@ -236,6 +246,7 @@ export function upsertReadingProgressIfChanged(
     const minIntervalMs = options?.minIntervalMs ?? 800;
     const minProgressDelta = options?.minProgressDelta ?? 0.01;
     const force = options?.force === true;
+    const normalizedScroll = clampReadingProgress(scroll);
 
     const current = db.getFirstSync(
         'SELECT current_chapter, scroll_percentage, last_read_at FROM reading_progress WHERE novel_id = ?',
@@ -247,17 +258,19 @@ export function upsertReadingProgressIfChanged(
     } | null;
 
     if (!current || force) {
-        upsertReadingProgress(db, novelId, chapter, scroll);
+        upsertReadingProgress(db, novelId, chapter, normalizedScroll);
         return true;
     }
 
     const chapterChanged = current.current_chapter !== chapter;
-    const progressDelta = Math.abs((current.scroll_percentage ?? 0) - scroll);
+    const progressDelta = Math.abs(
+        clampReadingProgress(current.scroll_percentage ?? 0) - normalizedScroll,
+    );
     const elapsed = Date.now() - parseReadingTimestampMs(current.last_read_at);
     const intervalPassed = elapsed >= minIntervalMs;
 
     if (chapterChanged || progressDelta >= minProgressDelta || intervalPassed) {
-        upsertReadingProgress(db, novelId, chapter, scroll);
+        upsertReadingProgress(db, novelId, chapter, normalizedScroll);
         return true;
     }
 
@@ -343,7 +356,7 @@ function mapRowToNovel(row: NovelRow): Novel {
     };
     if (row.current_chapter !== undefined && row.current_chapter !== null) {
         novel.currentChapter = row.current_chapter;
-        novel.scrollPercentage = row.scroll_percentage;
+        novel.scrollPercentage = clampReadingProgress(row.scroll_percentage ?? 0);
     }
     return novel;
 }

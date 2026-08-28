@@ -1,4 +1,9 @@
 import type { ReaderSettings } from '../types/novel';
+import {
+  READER_FLICK_AXIS_RATIO,
+  READER_FLICK_MAX_DURATION_MS,
+  READER_FLICK_MIN_DISTANCE_PX,
+} from './readerInput';
 
 export interface GenerateHtmlParams {
   chapterText: string;
@@ -119,7 +124,9 @@ export function generateReaderHtml({
     ? '"Noto Sans JP", "游ゴシック", "YuGothic", "ヒラギノ角ゴ ProN", sans-serif'
     : '"Noto Serif JP", "游明朝", "YuMincho", "ヒラギノ明朝 ProN", serif';
 
-  const initProg = typeof initialProgress === 'number' ? initialProgress : 0;
+  const initProg = typeof initialProgress === 'number' && Number.isFinite(initialProgress)
+    ? Math.max(0, Math.min(1, initialProgress))
+    : 0;
 
   return `<!DOCTYPE html>
 <html lang="ja">
@@ -231,6 +238,7 @@ ${fontLink}
   var currentPage = 0;
   var totalPages = 1;
   var currentVisualOffset = 0;
+  var currentProgress = ${initProg};
 
   function log(msg) { window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'log', message: msg })); }
 
@@ -312,7 +320,13 @@ ${fontLink}
     }
   }
 
-  function goToPage(page) {
+  function normalizeProgress(progress) {
+    var normalized = Number(progress);
+    if (!Number.isFinite(normalized)) return 0;
+    return Math.max(0, Math.min(normalized, 1));
+  }
+
+  function goToPage(page, restoredProgress) {
     page = Math.max(0, Math.min(page, totalPages - 1));
     currentPage = page;
     if (isVertical && content) {
@@ -332,23 +346,31 @@ ${fontLink}
         reader.scrollLeft = offset;
       }
     }
+    currentProgress = typeof restoredProgress === 'number'
+      ? normalizeProgress(restoredProgress)
+      : (totalPages > 1 ? currentPage / (totalPages - 1) : 0);
     sendPageInfo();
   }
 
   function sendPageInfo() {
-    var progress = totalPages > 1 ? currentPage / (totalPages - 1) : 1;
+    var progress = normalizeProgress(currentProgress);
     window.ReactNativeWebView.postMessage(JSON.stringify({
-      type: 'page-info', currentPage: currentPage + 1, totalPages: totalPages, progress: Math.round(progress * 100) / 100
+      type: 'page-info', currentPage: currentPage + 1, totalPages: totalPages, progress: Math.round(progress * 1000000) / 1000000
     }));
   }
 
   window.__tadayomuRestoreProgress = function(progress) {
-    var normalized = Number(progress);
-    if (!Number.isFinite(normalized)) return;
-    normalized = Math.max(0, Math.min(normalized, 1));
+    var normalized = normalizeProgress(progress);
     var restorePage = Math.round(normalized * Math.max(0, totalPages - 1));
-    goToPage(restorePage);
+    goToPage(restorePage, normalized);
   };
+
+  function repaginateAtCurrentProgress() {
+    var progressBeforeLayout = currentProgress;
+    recalcGeometry();
+    calcPages();
+    window.__tadayomuRestoreProgress(progressBeforeLayout);
+  }
 
   function goNextPage() {
     if (currentPage < totalPages - 1) goToPage(currentPage + 1);
@@ -359,6 +381,11 @@ ${fontLink}
     if (currentPage > 0) goToPage(currentPage - 1);
     else window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'prev' }));
   }
+
+  window.__tadayomuTurnPage = function(direction) {
+    if (direction === 'next') goNextPage();
+    else if (direction === 'previous') goPrevPage();
+  };
 
   document.addEventListener('message', handleSettingsMessage);
   window.addEventListener('message', handleSettingsMessage);
@@ -386,14 +413,13 @@ ${fontLink}
       }
 
       setTimeout(function() {
-        recalcGeometry();
-        calcPages();
-        goToPage(Math.min(currentPage, totalPages - 1));
+        repaginateAtCurrentProgress();
       }, 50);
     } catch(ex) { }
   }
 
-  var touchStartX = 0, touchStartY = 0, touchMoved = false, isDragging = false;
+  var touchStartX = 0, touchStartY = 0, touchStartTime = 0;
+  var touchMoved = false, isDragging = false;
 
   function isInteractiveImageTarget(target) {
     if (!target) return false;
@@ -405,12 +431,16 @@ ${fontLink}
   }
 
   document.body.addEventListener('touchstart', function(e) {
-    if (e.touches.length > 1) return;
+    if (e.touches.length > 1) {
+      isDragging = false;
+      return;
+    }
     var target = e.target;
     if (isInteractiveImageTarget(target)) {
       touchMoved = false; isDragging = false; return;
     }
     touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY;
+    touchStartTime = Date.now();
     touchMoved = false; isDragging = true;
   }, { passive: false });
 
@@ -419,6 +449,7 @@ ${fontLink}
     var currentX = e.touches[0].clientX, currentY = e.touches[0].clientY;
     var dx = currentX - touchStartX, dy = currentY - touchStartY;
     if (Math.abs(dx) > 10 || Math.abs(dy) > 10) touchMoved = true;
+    if (Math.abs(dx) > Math.abs(dy)) e.preventDefault();
   }, { passive: false });
 
   document.body.addEventListener('touchend', function(e) {
@@ -429,8 +460,27 @@ ${fontLink}
     if (!isDragging) return;
     isDragging = false;
     var endX = e.changedTouches[0].clientX, endY = e.changedTouches[0].clientY;
+    var dx = endX - touchStartX, dy = endY - touchStartY;
+    var durationMs = Date.now() - touchStartTime;
+    var isHorizontalFlick =
+      durationMs <= ${READER_FLICK_MAX_DURATION_MS} &&
+      Math.abs(dx) >= ${READER_FLICK_MIN_DISTANCE_PX} &&
+      Math.abs(dx) > Math.abs(dy) * ${READER_FLICK_AXIS_RATIO};
+
+    if (isHorizontalFlick) {
+      var direction = dx < 0 ? 'next' : 'previous';
+      if (reverseDirection) {
+        direction = direction === 'next' ? 'previous' : 'next';
+      }
+      window.__tadayomuTurnPage(direction);
+      return;
+    }
     if (touchMoved) return;
     handleClickBoundary(endX, endY);
+  });
+
+  document.body.addEventListener('touchcancel', function() {
+    isDragging = false;
   });
 
   function handleClickBoundary(x, y) {
@@ -449,9 +499,7 @@ ${fontLink}
   }
 
   window.addEventListener('resize', function() {
-    recalcGeometry();
-    calcPages();
-    goToPage(currentPage);
+    repaginateAtCurrentProgress();
   });
 
   document.addEventListener('DOMContentLoaded', function() {
@@ -467,10 +515,14 @@ ${fontLink}
       var imgs = document.querySelectorAll('img');
       for (var i = 0; i < imgs.length; i++) {
         imgs[i].addEventListener('load', function() {
-          recalcGeometry();
-          calcPages();
-          goToPage(currentPage);
+          repaginateAtCurrentProgress();
         });
+      }
+
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function() {
+          repaginateAtCurrentProgress();
+        }).catch(function() { });
       }
       
       // Image expansion handling

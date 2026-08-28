@@ -22,7 +22,13 @@ import type { ReaderSettings } from "../types/novel";
 import { getReaderSettings, saveReaderSettings, getSetting } from "../database/repository";
 import { checkForUpdates, getCurrentVersion } from "../services/updateChecker";
 import { syncService } from "../services/syncService";
-import { toggleBackgroundTask } from "../services/backgroundTask";
+import {
+  getBackgroundTaskDiagnostics,
+  runBackgroundUpdateNow,
+  toggleBackgroundTask,
+  type BackgroundTaskDiagnostics,
+} from "../services/backgroundTask";
+import { calculateSliderValue } from "../services/runtimeGuards";
 
 type ThemeColors = ReturnType<typeof useTheme>["colors"];
 
@@ -52,35 +58,41 @@ function CustomSlider({
   colors: ThemeColors;
 }) {
   const [localValue, setLocalValue] = useState(value);
-  const [width, setWidth] = useState(0);
+  const localValueRef = useRef(value);
+  const widthRef = useRef(0);
   const startValueRef = useRef(value);
+  const onSlidingCompleteRef = useRef(onSlidingComplete);
 
   useEffect(() => {
+    localValueRef.current = value;
     setLocalValue(value);
   }, [value]);
+
+  useEffect(() => {
+    onSlidingCompleteRef.current = onSlidingComplete;
+  }, [onSlidingComplete]);
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
-        startValueRef.current = localValue;
+        startValueRef.current = localValueRef.current;
       },
       onPanResponderMove: (_, gestureState) => {
-        if (width === 0) return;
-        const range = max - min;
-        const dxValue = (gestureState.dx / width) * range;
-        let newValue = startValueRef.current + dxValue;
-        newValue = Math.max(min, Math.min(max, newValue));
-        newValue = Math.round(newValue / step) * step;
-        newValue = Number(newValue.toFixed(2));
+        const newValue = calculateSliderValue(
+          startValueRef.current,
+          gestureState.dx,
+          widthRef.current,
+          min,
+          max,
+          step,
+        );
+        localValueRef.current = newValue;
         setLocalValue(newValue);
       },
       onPanResponderRelease: () => {
-        setLocalValue((finalValue) => {
-          onSlidingComplete(finalValue);
-          return finalValue;
-        });
+        onSlidingCompleteRef.current(localValueRef.current);
       },
     })
   ).current;
@@ -94,7 +106,9 @@ function CustomSlider({
       </View>
       <View
         style={sliderStyles.trackContainer}
-        onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+        onLayout={(e) => {
+          widthRef.current = e.nativeEvent.layout.width;
+        }}
         {...panResponder.panHandlers}
       >
         {/* Track */}
@@ -168,6 +182,9 @@ export default function SettingsScreen(
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [bgEnabled, setBgEnabled] = useState(true);
   const [isTogglingBackground, setIsTogglingBackground] = useState(false);
+  const [isTestingBackground, setIsTestingBackground] = useState(false);
+  const [backgroundDiagnostics, setBackgroundDiagnostics] =
+    useState<BackgroundTaskDiagnostics | null>(null);
 
   const loadSettings = useCallback(() => {
     setSettings(getReaderSettings(db));
@@ -185,8 +202,21 @@ export default function SettingsScreen(
   useFocusEffect(
     useCallback(() => {
       loadSettings();
-    }, [loadSettings]),
+      let active = true;
+      void getBackgroundTaskDiagnostics(db).then((diagnostics) => {
+        if (active) setBackgroundDiagnostics(diagnostics);
+      }).catch((error) => {
+        console.warn("Failed to read background task diagnostics", error);
+      });
+      return () => {
+        active = false;
+      };
+    }, [db, loadSettings]),
   );
+
+  const refreshBackgroundDiagnostics = useCallback(async () => {
+    setBackgroundDiagnostics(await getBackgroundTaskDiagnostics(db));
+  }, [db]);
 
   const updateSetting = <K extends keyof ReaderSettings>(
     key: K,
@@ -255,6 +285,8 @@ export default function SettingsScreen(
           "自動更新の変更に失敗",
           "バックグラウンド処理の設定を変更できませんでした。",
         );
+      } else {
+        await refreshBackgroundDiagnostics();
       }
     } catch (e: any) {
       setBgEnabled(previous);
@@ -264,6 +296,23 @@ export default function SettingsScreen(
       );
     } finally {
       setIsTogglingBackground(false);
+    }
+  };
+
+  const handleBackgroundTest = async () => {
+    if (isTestingBackground) return;
+    setIsTestingBackground(true);
+    try {
+      const message = await runBackgroundUpdateNow();
+      await refreshBackgroundDiagnostics();
+      Alert.alert("バックグラウンド更新テスト", message);
+    } catch (error) {
+      Alert.alert(
+        "バックグラウンド更新テスト失敗",
+        error instanceof Error ? error.message : "不明なエラー",
+      );
+    } finally {
+      setIsTestingBackground(false);
     }
   };
 
@@ -526,8 +575,32 @@ export default function SettingsScreen(
             </View>
           </View>
           <Text style={[styles.bgDescription, { color: colors.text.secondary }]}>
-            深夜3〜8時・充電中・WiFi接続時に新着話の取り込みと先読みダウンロードを自動実行します。
+            充電中・Wi-Fi接続時に作品を順番に確認し、1回につき1作品・最大5話を先読みします。
           </Text>
+          <Text style={[styles.bgDescription, { color: colors.text.secondary }]}>
+            登録: {backgroundDiagnostics?.registered ? "登録済み" : "未登録"}
+            {"\n"}最終結果: {backgroundDiagnostics?.lastResult ?? "未実行"}
+            {"\n"}最終実行: {backgroundDiagnostics?.lastFinishedAt
+              ? new Date(backgroundDiagnostics.lastFinishedAt).toLocaleString("ja-JP")
+              : "未実行"}
+            {backgroundDiagnostics?.lastMessage
+              ? `\n詳細: ${backgroundDiagnostics.lastMessage}`
+              : ""}
+          </Text>
+          <TouchableOpacity
+            style={[styles.primaryBtn, { backgroundColor: colors.surfaceContainerHighest }]}
+            onPress={handleBackgroundTest}
+            disabled={isTestingBackground || !bgEnabled}
+          >
+            {isTestingBackground ? (
+              <ActivityIndicator size="small" color={colors.ui.primary} />
+            ) : (
+              <Ionicons name="pulse-outline" size={18} color={colors.text.primary} />
+            )}
+            <Text style={[styles.primaryBtnText, { color: colors.text.primary }]}>
+              {isTestingBackground ? "テスト実行中..." : "今すぐ1作品でテスト"}
+            </Text>
+          </TouchableOpacity>
         </View>
       </Section>
       <Section title="アプリ" colors={colors}>
@@ -559,6 +632,20 @@ export default function SettingsScreen(
         <View style={styles.footerContainer}>
           <Text style={[styles.versionText, { color: colors.text.disabled }]}>
             VERSION {getCurrentVersion()}
+          </Text>
+        </View>
+      </Section>
+
+      <Section title="プライバシー" colors={colors}>
+        <View
+          style={[
+            styles.settingCard,
+            { backgroundColor: colors.surfaceContainerLow },
+          ]}
+        >
+          <Text style={[styles.bgDescription, { color: colors.text.secondary }]}>
+            アプリの品質改善および不具合調査のため、Firebase
+            Crashlyticsを利用して、クラッシュ情報、端末・OS・アプリのバージョン情報、技術的なエラー情報を収集する場合があります。作品本文、作品名、メールアドレスはクラッシュ報告用の独自情報として送信しません。
           </Text>
         </View>
       </Section>

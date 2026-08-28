@@ -47,10 +47,14 @@ export async function checkForUpdates(
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-    const res = await fetch(`${MANIFEST_URL}?t=${Date.now()}`, {
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
+    let res: Response;
+    try {
+      res = await fetch(`${MANIFEST_URL}?t=${Date.now()}`, {
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!res.ok) {
       if (!silent)
@@ -105,7 +109,7 @@ export async function checkForUpdates(
     if (compareSemver(manifest.version, current) > 0) {
       if (!silent) {
         // User manually checked: open browser immediately to start download
-        Linking.openURL(manifest.apkUrl);
+        await Linking.openURL(manifest.apkUrl);
       } else {
         // Background check: prompt first
         Alert.alert(
@@ -116,7 +120,9 @@ export async function checkForUpdates(
             {
               text: "ダウンロード",
               onPress: () => {
-                Linking.openURL(manifest.apkUrl);
+                void Linking.openURL(manifest.apkUrl).catch((error) => {
+                  console.error("Failed to open update URL", error);
+                });
               },
             },
           ],

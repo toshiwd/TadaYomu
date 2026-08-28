@@ -43,6 +43,7 @@ import {
   type BulkDownloadState,
 } from "../services/bulkDownloadStore";
 import { syncService } from "../services/syncService";
+import { shouldRefreshChapterList } from "../services/runtimeGuards";
 
 export default function NovelDetailScreen({
   route,
@@ -61,6 +62,7 @@ export default function NovelDetailScreen({
   const [isSynopsisExpanded, setIsSynopsisExpanded] = useState(false);
   const [fetchingChapters, setFetchingChapters] = useState(false);
   const chapterFetchRunRef = useRef(0);
+  const detailLoadRunRef = useRef(0);
 
   const storeProgress = useBulkDownloadProgress(novelId);
   const bulkState: BulkDownloadState = storeProgress?.state ?? "idle";
@@ -138,7 +140,7 @@ export default function NovelDetailScreen({
         if (adapter.getLatestChapterList && n.totalEpisodes > localCount) {
           const latestChapters = await adapter.getLatestChapterList(
             n.siteNovelId,
-            n.totalEpisodes,
+            localCount,
           );
           if (chapterFetchRunRef.current !== runId) return;
 
@@ -192,14 +194,23 @@ export default function NovelDetailScreen({
   );
 
   const loadData = useCallback(() => {
+    const loadRunId = detailLoadRunRef.current + 1;
+    detailLoadRunRef.current = loadRunId;
     const n = getNovelById(db, novelId);
     setNovel(n);
     if (!n) return;
 
     const localChapters = getChaptersByNovelId(db, novelId);
     setChapters(localChapters);
-    if (n.url) {
-      fetchChapterList(n);
+    if (
+      n.url &&
+      shouldRefreshChapterList(
+        localChapters.length,
+        n.totalEpisodes,
+        n.lastCheckedAt,
+      )
+    ) {
+      void fetchChapterList(n);
     }
 
     const progress = getReadingProgress(db, novelId);
@@ -209,6 +220,7 @@ export default function NovelDetailScreen({
       syncService
         .downloadProgress(n.siteNovelId, n.siteType)
         .then((remoteProgress) => {
+          if (detailLoadRunRef.current !== loadRunId) return;
           if (!remoteProgress) return;
           if (
             isRemoteReadingProgressNewer(
@@ -234,6 +246,11 @@ export default function NovelDetailScreen({
   useFocusEffect(
     useCallback(() => {
       loadData();
+      return () => {
+        detailLoadRunRef.current += 1;
+        chapterFetchRunRef.current += 1;
+        setFetchingChapters(false);
+      };
     }, [loadData]),
   );
 
@@ -350,7 +367,7 @@ export default function NovelDetailScreen({
       await downloadSingleChapter(db, chapter, novel.siteNovelId, novel.siteType);
       const downloaded = countDownloadedChapters(db, novel.id);
       updateNovel(db, novel.id, { downloadedEpisodes: downloaded });
-      loadData();
+      refreshLocalChapterState(novel.id);
     } catch (err: any) {
       Alert.alert("ダウンロード失敗", err?.message || "通信エラー");
     } finally {

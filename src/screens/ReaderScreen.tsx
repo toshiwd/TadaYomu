@@ -12,12 +12,14 @@ import {
   Text,
   Animated,
   AppState,
+  Alert,
   Modal,
   Image,
   TouchableWithoutFeedback,
 } from "react-native";
 import { WebView } from "react-native-webview";
 import { Ionicons } from "@expo/vector-icons";
+import { useKeepAwake } from "expo-keep-awake";
 import { StatusBar } from "expo-status-bar";
 import type { Novel, ReaderSettings } from "../types/novel";
 import { useSQLiteContext } from "expo-sqlite";
@@ -41,6 +43,23 @@ import { getAdapter } from "../services/siteAdapter";
 import { rubyTextToHtml } from "../services/textFormatter";
 import { syncService } from "../services/syncService";
 import { generateReaderHtml } from "../services/readerHtmlGenerator";
+import { reportNonFatal } from "../services/crashReporter";
+import {
+  normalizeReaderChapterIndex,
+  resolveReaderChapterList,
+  resolveReaderNextChapter,
+} from "../services/readerEntry";
+import { getNextChapterIndexToPrefetch } from "../services/readerPrefetch";
+import {
+  addVolumePageTurnListener,
+  setVolumePagingEnabled,
+} from "../services/readerControls";
+
+function clampProgress(progress: unknown): number {
+  if (typeof progress !== "number" || !Number.isFinite(progress)) return 0;
+  return Math.max(0, Math.min(1, progress));
+}
+
 export default function ReaderScreen({
   navigation,
   route,
@@ -48,10 +67,14 @@ export default function ReaderScreen({
   const { mode } = useTheme();
   const db = useSQLiteContext();
   const webViewRef = useRef<WebView>(null);
+  const loadRequestIdRef = useRef(0);
+  const nextChapterRequestIdRef = useRef(0);
+  const nextChapterCheckingRef = useRef(false);
   const insets = useSafeAreaInsets();
+  useKeepAwake("tadayomu-reader");
 
   const novelId = route.params.novelId;
-  const initialChapter = route.params.chapterIndex ?? 1;
+  const initialChapter = normalizeReaderChapterIndex(route.params.chapterIndex);
 
   const [chapterIndex, setChapterIndex] = useState(initialChapter);
   const [chapterTitle, setChapterTitle] = useState("");
@@ -76,6 +99,19 @@ export default function ReaderScreen({
   const [toolbarVisible, setToolbarVisible] = useState(true);
   const [startAtLastPage, setStartAtLastPage] = useState(false);
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
+  const [webViewRenderFailed, setWebViewRenderFailed] = useState(false);
+  const [webViewInstanceKey, setWebViewInstanceKey] = useState(0);
+  const [checkingNextChapter, setCheckingNextChapter] = useState(false);
+  const readerTargetRef = useRef({ novelId, chapterIndex });
+
+  readerTargetRef.current = { novelId, chapterIndex };
+
+  useEffect(() => {
+    return () => {
+      nextChapterRequestIdRef.current += 1;
+      nextChapterCheckingRef.current = false;
+    };
+  }, []);
 
   // Keep a ref to settings so htmlContent doesn't depend on it
   const settingsRef = useRef(settings);
@@ -106,6 +142,30 @@ export default function ReaderScreen({
     progress: number;
   } | null>(null);
 
+  useEffect(() => {
+    const subscription = addVolumePageTurnListener((direction) => {
+      webViewRef.current?.injectJavaScript(`
+        if (window.__tadayomuTurnPage) {
+          window.__tadayomuTurnPage(${JSON.stringify(direction)});
+        }
+        true;
+      `);
+    });
+
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    const enabled =
+      !loading &&
+      !isSettingsVisible &&
+      zoomedImage === null &&
+      !webViewRenderFailed;
+    setVolumePagingEnabled(enabled);
+
+    return () => setVolumePagingEnabled(false);
+  }, [loading, isSettingsVisible, zoomedImage, webViewRenderFailed]);
+
   const flushLatestProgress = useCallback(() => {
     const latest = latestProgressRef.current;
     if (!latest) return;
@@ -122,20 +182,48 @@ export default function ReaderScreen({
   // Load novel info
   useEffect(() => {
     const n = getNovelById(db, novelId);
-    if (n) {
-      setTotalChapters(n.totalEpisodes);
-      setNovel(n);
+    if (!n) {
+      setChapterText("作品情報が見つかりません。書庫に戻って再読み込みしてください");
+      setLoadError(true);
+      setLoading(false);
+      return;
     }
-  }, [db, novelId]);
+    const normalizedChapterIndex = normalizeReaderChapterIndex(
+      route.params.chapterIndex,
+      n.totalEpisodes,
+    );
+    console.log("[ReaderInit]", {
+      novelId,
+      routeChapterIndex: route.params.chapterIndex,
+      normalizedChapterIndex,
+      totalEpisodes: n.totalEpisodes,
+    });
+    setTotalChapters(n.totalEpisodes);
+    if (n.totalEpisodes <= 0) {
+      setNovel(null);
+      setChapterText("話一覧を取得できませんでした。再読み込みしてください");
+      setLoadError(true);
+      setLoading(false);
+      return;
+    }
+    setNovel(n);
+    setChapterIndex((current) =>
+      current === normalizedChapterIndex ? current : normalizedChapterIndex,
+    );
+  }, [db, novelId, route.params.chapterIndex, retryCount]);
 
   // Load chapter text
   useEffect(() => {
     if (!novel) return;
+    const requestId = ++loadRequestIdRef.current;
     let cancelled = false;
+    const isCurrentRequest = () =>
+      !cancelled && loadRequestIdRef.current === requestId;
     setLoading(true);
     setLoadError(false);
 
-    (async () => {
+    void (async () => {
+      let availableChapterCount = novel.totalEpisodes;
       let ch = getChapter(db, novelId, chapterIndex);
 
       // チャプターがDBに存在しない場合（同期済みだが未取得）
@@ -145,7 +233,23 @@ export default function ReaderScreen({
           try {
             console.log(`[Reader] No chapter in DB, fetching chapter list from site...`);
             const chapterList = await adapter.getChapterList(novel.siteNovelId);
-            if (cancelled) return;
+            if (!isCurrentRequest()) return;
+            console.log("[ReaderChapterList]", {
+              novelId,
+              requestedChapter: chapterIndex,
+              chapterCount: chapterList.length,
+            });
+            const chapterListResolution = resolveReaderChapterList(
+              chapterIndex,
+              chapterList.length,
+            );
+            if (chapterListResolution.kind === "empty") {
+              setTotalChapters(0);
+              setChapterText("話一覧を取得できませんでした。再読み込みしてください");
+              setLoadError(true);
+              setLoading(false);
+              return;
+            }
             db.withTransactionSync(() => {
               for (const c of chapterList) {
                 upsertChapter(db, {
@@ -164,8 +268,18 @@ export default function ReaderScreen({
               totalEpisodes: chapterList.length,
               lastCheckedAt: new Date().toISOString(),
             });
+            availableChapterCount = chapterList.length;
             setTotalChapters(chapterList.length);
-            ch = getChapter(db, novelId, chapterIndex);
+            setNovel((current) =>
+              current?.id === novel.id
+                ? { ...current, totalEpisodes: chapterList.length }
+                : current,
+            );
+            if (chapterListResolution.changed) {
+              setChapterIndex(chapterListResolution.chapterIndex);
+              return;
+            }
+            ch = getChapter(db, novelId, chapterListResolution.chapterIndex);
           } catch (err) {
             console.error(`[Reader] Failed to fetch chapter list:`, err);
           }
@@ -180,11 +294,11 @@ export default function ReaderScreen({
             db,
             novel.siteType,
           );
-          if (!cancelled) {
+          if (isCurrentRequest()) {
             const savedProgress = getReadingProgress(db, novelId);
             const openedChapterProgress =
               savedProgress?.currentChapter === chapterIndex
-                ? savedProgress.scrollPercentage
+                ? clampProgress(savedProgress.scrollPercentage)
                 : 0;
             upsertReadingProgressIfChanged(
               db,
@@ -194,11 +308,38 @@ export default function ReaderScreen({
               { force: true },
             );
             setChapterText(rawText);
+
+            const nextChapterIndex = getNextChapterIndexToPrefetch(
+              chapterIndex,
+              availableChapterCount,
+            );
+            const nextChapter = nextChapterIndex
+              ? getChapter(db, novelId, nextChapterIndex)
+              : null;
+            if (nextChapter?.url) {
+              void readChapterText(
+                nextChapter,
+                novel.siteNovelId,
+                db,
+                novel.siteType,
+              )
+                .then(() => {
+                  console.log(
+                    `[Reader] Prefetched chapter ${nextChapter.index}`,
+                  );
+                })
+                .catch((err) => {
+                  console.warn(
+                    `[Reader] Failed to prefetch chapter ${nextChapter.index}:`,
+                    err,
+                  );
+                });
+            }
             setChapterTitle(ch.title || `第${chapterIndex}話`);
           }
         } catch (err: any) {
           console.error(`[Reader] Failed to load chapter:`, err);
-          if (!cancelled) {
+          if (isCurrentRequest()) {
             setChapterText(
               `テキストの読み込みに失敗しました\n${err?.message || ""}`,
             );
@@ -206,23 +347,41 @@ export default function ReaderScreen({
           }
         }
       } else {
-        if (!cancelled)
+        if (isCurrentRequest())
           setChapterText("この話はまだダウンロードされていません");
       }
 
-      if (!cancelled) {
+      if (isCurrentRequest()) {
         // Load initial progress for this chapter if available
         const progress = getReadingProgress(db, novelId);
         if (progress && progress.currentChapter === chapterIndex) {
-          pendingRestoreProgressRef.current = progress.scrollPercentage;
-          setInitialProgress(progress.scrollPercentage);
+          const savedProgress = clampProgress(progress.scrollPercentage);
+          pendingRestoreProgressRef.current = savedProgress;
+          setInitialProgress(savedProgress);
         } else {
           pendingRestoreProgressRef.current = 0;
           setInitialProgress(0);
         }
         setLoading(false);
       }
-    })();
+    })().catch((err: any) => {
+      console.error("[Reader] Failed to initialize chapter:", err);
+      if (isCurrentRequest()) {
+        setChapterText(
+          `テキストの読み込みに失敗しました\n${err?.message || ""}`,
+        );
+        setLoadError(true);
+        setLoading(false);
+      }
+      void reportNonFatal(err, {
+        feature: "reader_entry",
+        operationType: "initialize_chapter",
+        errorCategory: "reader_initialization_failure",
+        screenName: "reader",
+        internalWorkId: novelId,
+        retryCount,
+      });
+    });
 
     return () => {
       cancelled = true;
@@ -269,8 +428,95 @@ export default function ReaderScreen({
     if (chapterIndex < totalChapters) {
       setStartAtLastPage(false);
       setChapterIndex((i) => i + 1);
+      return;
     }
-  }, [chapterIndex, totalChapters]);
+    if (!novel || nextChapterCheckingRef.current) return;
+
+    const adapter = getAdapter(novel.siteType);
+    if (!adapter) {
+      Alert.alert("次の話を確認できません", "この作品のサイトに対応していません");
+      return;
+    }
+
+    const requestId = ++nextChapterRequestIdRef.current;
+    const requestedTarget = { novelId, chapterIndex };
+    nextChapterCheckingRef.current = true;
+    setCheckingNextChapter(true);
+    void adapter
+      .getChapterList(novel.siteNovelId)
+      .then((chapterList) => {
+        const currentTarget = readerTargetRef.current;
+        if (
+          nextChapterRequestIdRef.current !== requestId ||
+          currentTarget.novelId !== requestedTarget.novelId ||
+          currentTarget.chapterIndex !== requestedTarget.chapterIndex
+        ) {
+          return;
+        }
+        console.log("[ReaderChapterList]", {
+          novelId,
+          requestedChapter: chapterIndex,
+          chapterCount: chapterList.length,
+          reason: "next_chapter_boundary",
+        });
+        const resolution = resolveReaderNextChapter(
+          chapterIndex,
+          chapterList.length,
+        );
+        if (resolution.kind === "empty") {
+          Alert.alert(
+            "話一覧を取得できませんでした",
+            "通信状態を確認して、もう一度お試しください",
+          );
+          return;
+        }
+
+        db.withTransactionSync(() => {
+          for (const c of chapterList) {
+            upsertChapter(db, {
+              novelId: novel.id,
+              index: c.index,
+              title: c.title,
+              localPath: null,
+              isDownloaded: false,
+              url: c.url,
+              publishedAt: c.publishedAt,
+              revisedAt: c.revisedAt,
+            });
+          }
+        });
+        updateNovel(db, novel.id, {
+          totalEpisodes: resolution.totalChapters,
+          lastCheckedAt: new Date().toISOString(),
+        });
+        setTotalChapters(resolution.totalChapters);
+        setNovel((current) =>
+          current?.id === novel.id
+            ? { ...current, totalEpisodes: resolution.totalChapters }
+            : current,
+        );
+        if (resolution.kind === "latest") {
+          Alert.alert("最新話です", "現在表示している話が最新です");
+          return;
+        }
+        setStartAtLastPage(false);
+        setChapterIndex(resolution.chapterIndex);
+      })
+      .catch((error) => {
+        if (nextChapterRequestIdRef.current !== requestId) return;
+        console.error("[Reader] Failed to refresh next chapter boundary", error);
+        Alert.alert(
+          "次の話を確認できませんでした",
+          "通信状態を確認して、もう一度お試しください",
+        );
+      })
+      .finally(() => {
+        if (nextChapterRequestIdRef.current === requestId) {
+          nextChapterCheckingRef.current = false;
+          setCheckingNextChapter(false);
+        }
+      });
+  }, [chapterIndex, totalChapters, novel, novelId, db]);
 
   const goPrevChapter = useCallback(
     (startAtLast = false) => {
@@ -284,6 +530,11 @@ export default function ReaderScreen({
 
   const handleRetry = useCallback(() => {
     setRetryCount((c) => c + 1);
+  }, []);
+
+  const retryWebViewAfterRendererExit = useCallback(() => {
+    setWebViewRenderFailed(false);
+    setWebViewInstanceKey((key) => key + 1);
   }, []);
 
   const toggleToolbar = useCallback(() => {
@@ -395,21 +646,22 @@ export default function ReaderScreen({
             typeof data.currentPage === "number" ? data.currentPage : 1;
           const nextTotalPages =
             typeof data.totalPages === "number" ? data.totalPages : 1;
-          const nextProgress =
-            typeof data.progress === "number" ? data.progress : 0;
+          const nextProgress = clampProgress(data.progress);
 
           const pendingRestore = pendingRestoreProgressRef.current;
           if (pendingRestore !== null) {
+            const normalizedRestore = clampProgress(pendingRestore);
             const expectedPage =
               Math.round(
-                Math.max(0, Math.min(pendingRestore, 1)) *
-                  Math.max(0, nextTotalPages - 1),
+                normalizedRestore * Math.max(0, nextTotalPages - 1),
               ) + 1;
+            const restoredProgressMatches =
+              Math.abs(nextProgress - normalizedRestore) < 0.000001;
 
-            if (nextPage !== expectedPage) {
+            if (nextPage !== expectedPage || !restoredProgressMatches) {
               webViewRef.current?.injectJavaScript(`
                 if (window.__tadayomuRestoreProgress) {
-                  window.__tadayomuRestoreProgress(${pendingRestore});
+                  window.__tadayomuRestoreProgress(${normalizedRestore});
                 }
                 true;
               `);
@@ -506,20 +758,21 @@ export default function ReaderScreen({
 
   const getLatestRestorableProgress = useCallback(() => {
     const latest = latestProgressRef.current;
-    if (latest) return latest.progress;
+    if (latest) return clampProgress(latest.progress);
 
     const saved = getReadingProgress(db, novelId);
     if (saved && saved.currentChapter === chapterIndex) {
-      return saved.scrollPercentage;
+      return clampProgress(saved.scrollPercentage);
     }
     return 0;
   }, [db, novelId, chapterIndex]);
 
   const restoreWebViewProgress = useCallback((progress: number) => {
-    pendingRestoreProgressRef.current = progress;
+    const normalizedProgress = clampProgress(progress);
+    pendingRestoreProgressRef.current = normalizedProgress;
     webViewRef.current?.injectJavaScript(`
       if (window.__tadayomuRestoreProgress) {
-        window.__tadayomuRestoreProgress(${progress});
+        window.__tadayomuRestoreProgress(${normalizedProgress});
       }
       true;
     `);
@@ -594,7 +847,8 @@ export default function ReaderScreen({
           style={[styles.chapterLabel, { color: readerTheme.fg }]}
           numberOfLines={1}
         >
-          {chapterIndex}/{totalChapters} {chapterTitle}
+          {chapterIndex} / {totalChapters}
+          {chapterTitle ? `　${chapterTitle}` : ""}
         </Text>
         <Text
           style={[styles.pageLabel, { color: readerTheme.fg }]}
@@ -613,13 +867,13 @@ export default function ReaderScreen({
         <TouchableOpacity
           onPress={goNextChapter}
           style={styles.toolbarBtn}
-          disabled={chapterIndex >= totalChapters}
+          disabled={checkingNextChapter}
         >
           <Ionicons
-            name="chevron-forward"
+            name={checkingNextChapter ? "sync" : "chevron-forward"}
             size={18}
             color={
-              chapterIndex < totalChapters
+              !checkingNextChapter
                 ? readerTheme.fg
                 : readerTheme.fg + "44"
             }
@@ -629,27 +883,77 @@ export default function ReaderScreen({
 
       {/* WebView fills remaining space — onLayout measures final size */}
       <View style={styles.webviewFull} onLayout={onLayout}>
-        <WebView
-          ref={webViewRef}
-          originWhitelist={["*"]}
-          source={webViewSource}
-          style={{ flex: 1, backgroundColor: readerTheme.bg }}
-          onLoadStart={() => {
-            pendingRestoreProgressRef.current = getLatestRestorableProgress();
-          }}
-          onLoadEnd={() => {
-            restoreWebViewProgress(getLatestRestorableProgress());
-          }}
-          onMessage={handleMessage}
-          scrollEnabled={false}
-          showsVerticalScrollIndicator={false}
-          showsHorizontalScrollIndicator={false}
-          textZoom={100}
-          javaScriptEnabled
-          allowFileAccess={true}
-          allowFileAccessFromFileURLs={true}
-          allowUniversalAccessFromFileURLs={true}
-        />
+        {webViewRenderFailed ? (
+          <View
+            style={[
+              styles.webViewError,
+              { backgroundColor: readerTheme.bg },
+            ]}
+          >
+            <Ionicons
+              name="warning-outline"
+              size={28}
+              color={readerTheme.fg}
+            />
+            <Text style={[styles.webViewErrorText, { color: readerTheme.fg }]}>
+              表示処理が終了しました。再読み込みしてください。
+            </Text>
+            <TouchableOpacity
+              style={[
+                styles.webViewRetryButton,
+                { borderColor: readerTheme.fg + "40" },
+              ]}
+              onPress={retryWebViewAfterRendererExit}
+            >
+              <Text style={{ color: readerTheme.fg }}>再読み込み</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <WebView
+            key={webViewInstanceKey}
+            ref={webViewRef}
+            originWhitelist={["*"]}
+            source={webViewSource}
+            style={{ flex: 1, backgroundColor: readerTheme.bg }}
+            onLoadStart={() => {
+              pendingRestoreProgressRef.current = getLatestRestorableProgress();
+            }}
+            onLoadEnd={() => {
+              restoreWebViewProgress(getLatestRestorableProgress());
+            }}
+            onMessage={handleMessage}
+            onRenderProcessGone={(event) => {
+              const didCrash = event.nativeEvent.didCrash;
+              setWebViewRenderFailed(true);
+              void reportNonFatal(
+                new Error(
+                  didCrash
+                    ? "Android WebView render process crashed"
+                    : "Android WebView render process was killed by the OS",
+                ),
+                {
+                  feature: "reader_webview",
+                  operationType: "render_process_exit",
+                  errorCategory: didCrash
+                    ? "webview_renderer_crash"
+                    : "webview_renderer_os_kill",
+                  screenName: "reader",
+                  internalWorkId: novelId,
+                  didCrash,
+                  retryCount,
+                },
+              );
+            }}
+            scrollEnabled={false}
+            showsVerticalScrollIndicator={false}
+            showsHorizontalScrollIndicator={false}
+            textZoom={100}
+            javaScriptEnabled
+            allowFileAccess={true}
+            allowFileAccessFromFileURLs={true}
+            allowUniversalAccessFromFileURLs={true}
+          />
+        )}
       </View>
 
       {/* Settings Panel */}
@@ -1121,6 +1425,23 @@ export default function ReaderScreen({
 const styles = StyleSheet.create({
   container: { flex: 1 },
   webviewFull: { flex: 1 },
+  webViewError: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    paddingHorizontal: 24,
+  },
+  webViewErrorText: {
+    fontSize: 14,
+    textAlign: "center",
+  },
+  webViewRetryButton: {
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+  },
   toolbar: {
     flexDirection: "row",
     alignItems: "center",

@@ -1,5 +1,5 @@
 ﻿{
-    "version":  "1.3.64",
-    "apkUrl":  "https://github.com/toshiwd/TadaYomu/releases/download/v1.3.64/TadaYomu-1.3.64.apk",
-    "releaseNotes":  "読んでいる話数のリアルタイム保存とクラウド進捗の時刻比較を修正"
+    "version":  "1.3.65",
+    "apkUrl":  "https://github.com/toshiwd/TadaYomu/releases/download/v1.3.65/TadaYomu-1.3.65.apk",
+    "releaseNotes":  "クラッシュおよびANRの診断機能を追加"
 }

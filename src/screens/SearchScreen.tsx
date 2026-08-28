@@ -42,9 +42,8 @@ export default function SearchScreen({
 
     try {
       const parsed = new URL(url.startsWith("http") ? url : `https://${url}`);
-      const supported = SITE_PATTERNS.some((s) =>
-        parsed.hostname.includes(s.domain),
-      );
+      const hostname = parsed.hostname.toLowerCase();
+      const supported = SITE_PATTERNS.some((s) => hostname === s.domain);
       if (!supported) {
         setError("対応していないサイトです");
         return;

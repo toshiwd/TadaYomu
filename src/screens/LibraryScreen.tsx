@@ -31,6 +31,11 @@ import {
 import { deleteNovelData } from "../services/downloadManager";
 import { syncService } from "../services/syncService";
 import { getAdapter } from "../services/siteAdapter";
+import { normalizeReaderChapterIndex } from "../services/readerEntry";
+import {
+  getLibraryProgressPercentage,
+  hasNovelMetadataUpdate,
+} from "../services/runtimeGuards";
 
 type ThemeColorMap = ReturnType<typeof useTheme>["colors"];
 
@@ -62,14 +67,15 @@ const NovelItem = memo(
     }, [item.addedAt, item.lastCheckedAt, item.siteUpdatedAt, sortBy]);
 
     return (
-      <TouchableOpacity
-        style={[styles.card, { backgroundColor: colors.surface }]}
-        onPress={() => onPress(item.id)}
-        activeOpacity={0.7}
-        delayPressIn={0}
-      >
-        <View style={styles.cardContent}>
-          <View style={styles.cardHeader}>
+      <View style={[styles.card, { backgroundColor: colors.surface }]}>
+        <TouchableOpacity
+          style={styles.cardMainAction}
+          onPress={() => onPress(item.id)}
+          activeOpacity={0.7}
+          delayPressIn={0}
+        >
+          <View style={styles.cardContent}>
+            <View style={styles.cardHeader}>
             <Text
               style={[styles.cardTitle, { color: colors.text.primary }]}
               numberOfLines={1}
@@ -99,8 +105,8 @@ const NovelItem = memo(
                 {item.isComplete ? "完結" : "連載"}
               </Text>
             </View>
-          </View>
-          <View style={styles.cardMeta}>
+            </View>
+            <View style={styles.cardMeta}>
             <Text
               style={[styles.cardAuthor, { color: colors.text.secondary }]}
               numberOfLines={1}
@@ -119,8 +125,8 @@ const NovelItem = memo(
                 </Text>
               </>
             ) : null}
-          </View>
-          {progressPercentage !== null && (
+            </View>
+            {progressPercentage !== null && (
             <View
               style={[
                 styles.progressBar,
@@ -137,24 +143,31 @@ const NovelItem = memo(
                 ]}
               />
             </View>
-          )}
-        </View>
+            )}
+          </View>
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.resumeButton}
-          onPress={(e) => {
-            e.stopPropagation();
-            onResumePress(item);
-          }}
+          onPress={() => onResumePress(item)}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel={`${item.title}を続きから開く`}
         >
           <Ionicons name="book-outline" size={24} color={colors.ui.primary} />
         </TouchableOpacity>
-        <Ionicons
-          name="chevron-forward"
-          size={14}
-          color={colors.text.disabled}
-        />
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.detailChevronButton}
+          onPress={() => onPress(item.id)}
+          accessibilityRole="button"
+          accessibilityLabel={`${item.title}の詳細を開く`}
+        >
+          <Ionicons
+            name="chevron-forward"
+            size={14}
+            color={colors.text.disabled}
+          />
+        </TouchableOpacity>
+      </View>
     );
   },
 );
@@ -169,6 +182,7 @@ export default function LibraryScreen({
   const insets = useSafeAreaInsets();
 
   const [novels, setNovels] = useState<Novel[]>([]);
+  const openingReaderRef = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'連載' | '完結' | '短編' | 'アーカイブ'>('連載');
   const [sortBy, setSortBy] = useState<LibrarySortBy>(() => {
@@ -191,6 +205,8 @@ export default function LibraryScreen({
   const mountedRef = useRef(true);
   const refreshRunningRef = useRef(false);
   const refreshRunIdRef = useRef(0);
+  const onRefreshRef = useRef<(() => Promise<void>) | null>(null);
+  const lastAutoRefreshUidRef = useRef<string | null>(null);
 
   const loadNovels = useCallback(() => {
     setNovels(getAllNovels(db, sortBy, isArchivedTab));
@@ -198,8 +214,36 @@ export default function LibraryScreen({
 
   useFocusEffect(
     useCallback(() => {
+      openingReaderRef.current = false;
       loadNovels();
     }, [loadNovels]),
+  );
+
+  const openReaderFromLibrary = useCallback(
+    (novel: Novel) => {
+      if (openingReaderRef.current) return;
+      openingReaderRef.current = true;
+      const normalizedChapter = normalizeReaderChapterIndex(
+        novel.currentChapter,
+        novel.totalEpisodes,
+      );
+      console.log("[LibraryResume]", {
+        novelId: novel.id,
+        currentChapter: novel.currentChapter,
+        totalEpisodes: novel.totalEpisodes,
+        normalizedChapter,
+      });
+      try {
+        navigation.navigate("Reader", {
+          novelId: novel.id,
+          chapterIndex: normalizedChapter,
+        });
+      } catch (error) {
+        openingReaderRef.current = false;
+        console.error("[LibraryResume] navigation failed", error);
+      }
+    },
+    [navigation],
   );
 
   useEffect(() => {
@@ -350,18 +394,7 @@ export default function LibraryScreen({
                     continue;
                   }
 
-                  const infoTime = info.lastUpdatedAt
-                    ? new Date(info.lastUpdatedAt).getTime()
-                    : 0;
-                  const localTime = novel.siteUpdatedAt
-                    ? new Date(novel.siteUpdatedAt).getTime()
-                    : 0;
-                  const needsUpdate =
-                    info.totalEpisodes > novel.totalEpisodes ||
-                    info.isComplete !== novel.isComplete ||
-                    (isNaN(localTime) && !!info.lastUpdatedAt) ||
-                    (!isNaN(infoTime) && !isNaN(localTime) && infoTime > localTime) ||
-                    (info.lastUpdatedAt !== novel.siteUpdatedAt);
+                  const needsUpdate = hasNovelMetadataUpdate(novel, info);
 
                   if (needsUpdate) {
                     updateNovel(db, novel.id, {
@@ -400,18 +433,7 @@ export default function LibraryScreen({
               chunk.map(async (novel) => {
                 try {
                   const info = await adapter.getNovelInfo(novel.siteNovelId);
-                  const infoTime = info.lastUpdatedAt
-                    ? new Date(info.lastUpdatedAt).getTime()
-                    : 0;
-                  const localTime = novel.siteUpdatedAt
-                    ? new Date(novel.siteUpdatedAt).getTime()
-                    : 0;
-                  const needsUpdate =
-                    info.totalEpisodes > novel.totalEpisodes ||
-                    info.isComplete !== novel.isComplete ||
-                    (isNaN(localTime) && !!info.lastUpdatedAt) ||
-                    (!isNaN(infoTime) && !isNaN(localTime) && infoTime > localTime) ||
-                    (info.lastUpdatedAt !== novel.siteUpdatedAt);
+                  const needsUpdate = hasNovelMetadataUpdate(novel, info);
 
                   if (needsUpdate) {
                     updateNovel(db, novel.id, {
@@ -458,13 +480,21 @@ export default function LibraryScreen({
   }, [db, sortBy, isArchivedTab, loadNovels, isRefreshRunActive]);
 
   useEffect(() => {
+    onRefreshRef.current = onRefresh;
+  }, [onRefresh]);
+
+  useEffect(() => {
     const unsubscribe = auth().onAuthStateChanged((user) => {
-      if (user) {
-        onRefresh();
+      if (!user) {
+        lastAutoRefreshUidRef.current = null;
+        return;
       }
+      if (lastAutoRefreshUidRef.current === user.uid) return;
+      lastAutoRefreshUidRef.current = user.uid;
+      void onRefreshRef.current?.();
     });
     return unsubscribe;
-  }, [onRefresh]);
+  }, []);
 
   const renderNovel = useCallback(
     ({ item }: { item: Novel }) => {
@@ -472,10 +502,10 @@ export default function LibraryScreen({
         item.currentChapter !== undefined
           ? `${item.currentChapter} / ${item.totalEpisodes}話`
           : null;
-      const progressPercentage =
-        item.currentChapter !== undefined
-          ? Math.min(100, (item.currentChapter / item.totalEpisodes) * 100)
-          : null;
+      const progressPercentage = getLibraryProgressPercentage(
+        item.currentChapter,
+        item.totalEpisodes,
+      );
 
       return (
         <NovelItem
@@ -485,16 +515,11 @@ export default function LibraryScreen({
           colors={colors}
           sortBy={sortBy}
           onPress={(id) => navigation.navigate("NovelDetail", { novelId: id })}
-          onResumePress={(novel) =>
-            navigation.navigate("Reader", {
-              novelId: novel.id,
-              chapterIndex: novel.currentChapter || 1,
-            })
-          }
+          onResumePress={openReaderFromLibrary}
         />
       );
     },
-    [navigation, colors, sortBy],
+    [navigation, colors, sortBy, openReaderFromLibrary],
   );
 
   return (
@@ -642,10 +667,15 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 9,
-    paddingHorizontal: 3,
     borderRadius: Radius.md,
     marginBottom: 4,
+  },
+  cardMainAction: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 9,
+    paddingLeft: 3,
   },
   cardContent: { flex: 1, marginRight: 2 },
   cardHeader: {
@@ -708,9 +738,15 @@ const styles = StyleSheet.create({
   },
   progressFill: { height: "100%", borderRadius: 1.5 },
   resumeButton: {
-    padding: 2,
+    paddingVertical: 11,
+    paddingHorizontal: 5,
     marginRight: 2,
     marginLeft: 4,
+  },
+  detailChevronButton: {
+    paddingVertical: 14,
+    paddingLeft: 2,
+    paddingRight: 3,
   },
   emptyState: {
     flex: 1,
