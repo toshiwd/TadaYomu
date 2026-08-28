@@ -67,7 +67,9 @@ const NovelItem = memo(
     }, [item.addedAt, item.lastCheckedAt, item.siteUpdatedAt, sortBy]);
 
     return (
-      <View style={[styles.card, { backgroundColor: colors.surface }]}>
+      <View
+        style={[styles.card, { backgroundColor: colors.surface }]}
+      >
         <TouchableOpacity
           style={styles.cardMainAction}
           onPress={() => onPress(item.id)}
@@ -75,7 +77,7 @@ const NovelItem = memo(
           delayPressIn={0}
         >
           <View style={styles.cardContent}>
-            <View style={styles.cardHeader}>
+          <View style={styles.cardHeader}>
             <Text
               style={[styles.cardTitle, { color: colors.text.primary }]}
               numberOfLines={1}
@@ -105,8 +107,8 @@ const NovelItem = memo(
                 {item.isComplete ? "完結" : "連載"}
               </Text>
             </View>
-            </View>
-            <View style={styles.cardMeta}>
+          </View>
+          <View style={styles.cardMeta}>
             <Text
               style={[styles.cardAuthor, { color: colors.text.secondary }]}
               numberOfLines={1}
@@ -125,8 +127,8 @@ const NovelItem = memo(
                 </Text>
               </>
             ) : null}
-            </View>
-            {progressPercentage !== null && (
+          </View>
+          {progressPercentage !== null && (
             <View
               style={[
                 styles.progressBar,
@@ -143,7 +145,7 @@ const NovelItem = memo(
                 ]}
               />
             </View>
-            )}
+          )}
           </View>
         </TouchableOpacity>
         <TouchableOpacity

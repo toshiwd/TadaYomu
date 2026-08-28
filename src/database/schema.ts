@@ -83,6 +83,19 @@ export function initDatabase(db: SQLiteDatabase): void {
     db.execSync(`ALTER TABLE novels ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0;`);
   }
 
+  // Content anchors allow a reading position to survive screen-size changes.
+  const progressColumns = db.getAllSync(`PRAGMA table_info(reading_progress)`) as { name: string }[];
+  const progressColumnNames = new Set(progressColumns.map(col => col.name));
+  if (!progressColumnNames.has('anchor_block_index')) {
+    db.execSync(`ALTER TABLE reading_progress ADD COLUMN anchor_block_index INTEGER;`);
+  }
+  if (!progressColumnNames.has('anchor_character_offset')) {
+    db.execSync(`ALTER TABLE reading_progress ADD COLUMN anchor_character_offset INTEGER;`);
+  }
+  if (!progressColumnNames.has('anchor_context_hash')) {
+    db.execSync(`ALTER TABLE reading_progress ADD COLUMN anchor_context_hash TEXT;`);
+  }
+
   // --- Indexes for performance ---
   db.execSync(`
     CREATE INDEX IF NOT EXISTS idx_novels_archived ON novels(is_archived);

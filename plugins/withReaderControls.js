@@ -1,12 +1,57 @@
 const fs = require("fs");
 const path = require("path");
 const {
+  withAppBuildGradle,
   withDangerousMod,
   withMainActivity,
   withMainApplication,
 } = require("@expo/config-plugins");
 
 const READER_CONTROLS_PACKAGE = "TadayomuReaderControlsPackage";
+
+function withReleaseSigning(config) {
+  return withAppBuildGradle(config, (nextConfig) => {
+    if (nextConfig.modResults.language !== "groovy") {
+      throw new Error("Tadayomu release signing requires a Groovy app build file");
+    }
+
+    let contents = nextConfig.modResults.contents;
+    if (!contents.includes("signingConfig signingConfigs.release")) {
+      const signingBlockEnd = "        }\n    }\n    buildTypes {";
+      if (!contents.includes(signingBlockEnd)) {
+        throw new Error("Unable to locate Android signingConfigs block");
+      }
+      contents = contents.replace(
+        signingBlockEnd,
+        `        }
+        release {
+            storeFile file('release.keystore')
+            storePassword System.getenv('KEYSTORE_PASSWORD') ?: findProperty('TADAYOMU_KEYSTORE_PASSWORD') ?: ''
+            keyAlias 'tadayomu'
+            keyPassword System.getenv('KEY_PASSWORD') ?: findProperty('TADAYOMU_KEY_PASSWORD') ?: ''
+        }
+    }
+    buildTypes {`,
+      );
+
+      const generatedReleaseSigning = `        release {
+            // Caution! In production, you need to generate your own keystore file.
+            // see https://reactnative.dev/docs/signed-apk-android.
+            signingConfig signingConfigs.debug`;
+      if (!contents.includes(generatedReleaseSigning)) {
+        throw new Error("Unable to locate generated Android release signing config");
+      }
+      contents = contents.replace(
+        generatedReleaseSigning,
+        `        release {
+            signingConfig signingConfigs.release`,
+      );
+    }
+
+    nextConfig.modResults.contents = contents;
+    return nextConfig;
+  });
+}
 
 function withReaderMainActivity(config) {
   return withMainActivity(config, (nextConfig) => {
@@ -121,6 +166,7 @@ function withReaderNativeSources(config) {
 }
 
 module.exports = function withReaderControls(config) {
+  config = withReleaseSigning(config);
   config = withReaderMainActivity(config);
   config = withReaderMainApplication(config);
   config = withReaderNativeSources(config);

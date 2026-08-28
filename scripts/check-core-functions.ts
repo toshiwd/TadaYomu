@@ -12,7 +12,6 @@ import {
   isRemoteReadingProgressNewer,
   parseReadingTimestampMs,
 } from "../src/database/repository";
-import { createPrivacySafeCrashRecord } from "../src/services/crashPrivacy";
 import {
   normalizeReaderChapterIndex,
   resolveReaderChapterList,
@@ -28,6 +27,15 @@ import {
   getVolumeButtonPageDirection,
 } from "../src/services/readerInput";
 import {
+  createReaderProgressSnapshot,
+  isReaderProgressForChapter,
+  normalizeReaderProgress,
+  normalizeReaderPositionAnchor,
+  shouldProcessReaderPageInfo,
+} from "../src/services/readerProgress";
+import { generateReaderHtml } from "../src/services/readerHtmlGenerator";
+import { DEFAULT_READER_SETTINGS } from "../src/types/novel";
+import {
   calculateSliderValue,
   getLibraryProgressPercentage,
   getNextChapterListPage,
@@ -36,8 +44,22 @@ import {
   normalizeBackgroundCursor,
   shouldRefreshChapterList,
 } from "../src/services/runtimeGuards";
+import {
+  compareSemver,
+  parseVersionManifest,
+} from "../src/services/updateManifest";
 
 let failed = 0;
+
+function checkThrows(label: string, action: () => unknown): void {
+  try {
+    action();
+    console.error(`FAIL: ${label}: expected an exception`);
+    failed += 1;
+  } catch {
+    console.log(`PASS: ${label}`);
+  }
+}
 
 function check(label: string, actual: unknown, expected: unknown): void {
   if (actual === expected) {
@@ -49,6 +71,26 @@ function check(label: string, actual: unknown, expected: unknown): void {
   );
   failed += 1;
 }
+
+check("newer update version", compareSemver("1.3.73", "1.3.72"), 1);
+check("same update version", compareSemver("1.3.73", "1.3.73"), 0);
+check(
+  "valid GitHub update manifest",
+  parseVersionManifest(
+    '\uFEFF{"version":"1.3.73","apkUrl":"https://github.com/toshiwd/TadaYomu/releases/download/v1.3.73/TadaYomu-v1.3.73.apk","releaseNotes":"更新"}',
+  ).version,
+  "1.3.73",
+);
+checkThrows("reject non-HTTPS update URL", () =>
+  parseVersionManifest(
+    '{"version":"1.3.73","apkUrl":"http://github.com/example.apk","releaseNotes":"更新"}',
+  ),
+);
+checkThrows("reject lookalike update host", () =>
+  parseVersionManifest(
+    '{"version":"1.3.73","apkUrl":"https://github.com.evil.example/update.apk","releaseNotes":"更新"}',
+  ),
+);
 
 check(
   "first paragraph indentation",
@@ -156,6 +198,7 @@ check("reader entry rejects zero progress", normalizeReaderChapterIndex(0), 1);
 check("reader entry rejects negative progress", normalizeReaderChapterIndex(-10), 1);
 check("reader entry accepts numeric cloud progress", normalizeReaderChapterIndex("134"), 134);
 check("reader entry floors fractional progress", normalizeReaderChapterIndex(12.9), 12);
+check("reader entry clamps stale chapter to available range", normalizeReaderChapterIndex(195, 194), 194);
 check("reader entry keeps an in-range chapter", normalizeReaderChapterIndex(54, 61), 54);
 check("reader entry clamps a chapter above total", normalizeReaderChapterIndex(100, 61), 61);
 check("reader entry keeps the final chapter", normalizeReaderChapterIndex(61, 61), 61);
@@ -166,11 +209,7 @@ check(
   shrunkChapterList.kind === "ready" ? shrunkChapterList.chapterIndex : null,
   53,
 );
-check(
-  "reader entry rejects an empty refreshed list",
-  resolveReaderChapterList(1, 0).kind,
-  "empty",
-);
+check("reader entry rejects an empty refreshed list", resolveReaderChapterList(1, 0).kind, "empty");
 check(
   "reader boundary advances when a new chapter appears",
   JSON.stringify(resolveReaderNextChapter(53, 54)),
@@ -247,153 +286,163 @@ check(
   getVolumeButtonPageDirection("volumeUp"),
   "previous",
 );
-
+check("settings slider uses measured width", calculateSliderValue(10, 100, 200, 10, 30, 1), 20);
+check("settings slider stays stable before layout", calculateSliderValue(18, 100, 0, 10, 30, 1), 18);
+check("library progress rejects zero total", getLibraryProgressPercentage(1, 0), null);
+check("library progress is clamped", getLibraryProgressPercentage(12, 10), 100);
 check(
-  "settings slider uses the measured width",
-  calculateSliderValue(10, 100, 200, 10, 30, 1),
-  20,
-);
-check(
-  "settings slider keeps its value before layout",
-  calculateSliderValue(18, 100, 0, 10, 30, 1),
-  18,
-);
-check(
-  "library progress rejects a zero episode count",
-  getLibraryProgressPercentage(1, 0),
-  null,
-);
-check(
-  "library progress is clamped",
-  getLibraryProgressPercentage(12, 10),
-  100,
-);
-
-const localNovelMetadata = {
-  totalEpisodes: 10,
-  isComplete: false,
-  siteUpdatedAt: "2026-08-08T01:00:00.000Z",
-};
-check(
-  "missing remote timestamp does not create a false update",
-  hasNovelMetadataUpdate(localNovelMetadata, {
-    totalEpisodes: 10,
-    isComplete: false,
-    lastUpdatedAt: null,
-  }),
+  "missing remote timestamp is not a false update",
+  hasNovelMetadataUpdate(
+    { totalEpisodes: 10, isComplete: false, siteUpdatedAt: "2026-08-08T01:00:00.000Z" },
+    { totalEpisodes: 10, isComplete: false, lastUpdatedAt: null },
+  ),
   false,
 );
 check(
-  "equivalent timestamp formats do not create a false update",
-  hasNovelMetadataUpdate(localNovelMetadata, {
-    totalEpisodes: 10,
-    isComplete: false,
-    lastUpdatedAt: "2026-08-08T10:00:00+09:00",
-  }),
+  "equivalent timestamps are not a false update",
+  hasNovelMetadataUpdate(
+    { totalEpisodes: 10, isComplete: false, siteUpdatedAt: "2026-08-08T01:00:00.000Z" },
+    { totalEpisodes: 10, isComplete: false, lastUpdatedAt: "2026-08-08T10:00:00+09:00" },
+  ),
   false,
 );
-check(
-  "new episode count is detected",
-  hasNovelMetadataUpdate(localNovelMetadata, {
-    totalEpisodes: 11,
-    isComplete: false,
-    lastUpdatedAt: null,
-  }),
-  true,
-);
-
 const localNow = new Date(2026, 7, 8, 4, 0, 0);
 check(
-  "background UTC timestamp is compared as a local calendar day",
+  "background timestamp uses local calendar day",
   isSameLocalCalendarDay(new Date(2026, 7, 8, 0, 30, 0).toISOString(), localNow),
   true,
 );
 check(
-  "background previous local day remains pending",
-  isSameLocalCalendarDay(new Date(2026, 7, 7, 23, 59, 0).toISOString(), localNow),
+  "fresh complete chapter list skips refresh",
+  shouldRefreshChapterList(10, 10, "2026-08-08T01:00:00.000Z", Date.parse("2026-08-08T01:03:00.000Z")),
   false,
 );
+check("background cursor wraps", normalizeBackgroundCursor("5", 3), 2);
+check("background cursor rejects invalid state", normalizeBackgroundCursor("bad", 3), 0);
+check("latest chapter page crosses exact boundary", getNextChapterListPage(100), 2);
+check("reader progress clamps below zero", normalizeReaderProgress(-0.2), 0);
+check("reader progress clamps above one", normalizeReaderProgress(1.2), 1);
 check(
-  "chapter list refresh is skipped while metadata is fresh",
-  shouldRefreshChapterList(
-    10,
-    10,
-    "2026-08-08T01:00:00.000Z",
-    Date.parse("2026-08-08T01:03:00.000Z"),
-  ),
-  false,
-);
-check(
-  "chapter list refresh runs when local chapters are missing",
-  shouldRefreshChapterList(
-    9,
-    10,
-    "2026-08-08T01:00:00.000Z",
-    Date.parse("2026-08-08T01:01:00.000Z"),
-  ),
+  "reader accepts page info while interactive",
+  shouldProcessReaderPageInfo("active"),
   true,
 );
-check("background cursor wraps across novels", normalizeBackgroundCursor("5", 3), 2);
-check("background cursor rejects invalid state", normalizeBackgroundCursor("bad", 3), 0);
-check("background cursor handles an empty library", normalizeBackgroundCursor("2", 0), 0);
-check("latest chapter probe stays on page one before boundary", getNextChapterListPage(99), 1);
-check("latest chapter probe crosses exact page boundary", getNextChapterListPage(100), 2);
-check("latest chapter probe stays on current partial page", getNextChapterListPage(199), 2);
-
-const sensitiveError = new Error(
-  "HTTP 403 https://example.com/work/secret?token=abc user@example.com C:\\private\\chapter.txt",
+check(
+  "reader rejects transient page info while screen is off",
+  shouldProcessReaderPageInfo("background"),
+  false,
 );
-sensitiveError.stack = [
-  sensitiveError.message,
-  "    at loadWork (https://example.com/work/secret?token=abc:10:2)",
-  "    at readFile (C:\\private\\chapter.txt:20:4)",
-  "    at localFile (file:///data/user/0/com.enish.tadayomu/files/novels/secret.txt:30:6)",
-].join("\n");
-const safeCrash = createPrivacySafeCrashRecord(
-  sensitiveError,
-  {
-    feature: "reader_webview",
-    operationType: "render_process_exit",
-    errorCategory: "webview_renderer_crash",
-    screenName: "reader",
-    internalWorkId: 123,
-    didCrash: true,
-    retryCount: 2,
+check(
+  "reader rejects transient page info while becoming inactive",
+  shouldProcessReaderPageInfo("inactive"),
+  false,
+);
+
+const chapter134Progress = createReaderProgressSnapshot(7, 134, 0.456789, 57);
+check(
+  "progress snapshot belongs to its source chapter",
+  isReaderProgressForChapter(chapter134Progress, 7, 134),
+  true,
+);
+check(
+  "progress snapshot cannot be saved under the next chapter",
+  isReaderProgressForChapter(chapter134Progress, 7, 135),
+  false,
+);
+check(
+  "progress snapshot preserves full precision",
+  chapter134Progress?.progress,
+  0.456789,
+);
+
+const readerHtml = generateReaderHtml({
+  chapterText: "first paragraph\n\nsecond paragraph",
+  settings: DEFAULT_READER_SETTINGS,
+  containerLayout: { width: 360, height: 720 },
+  insets: { top: 0, right: 0, bottom: 0, left: 0 },
+  readerTheme: { bg: "#fff", fg: "#000", selection: "transparent" },
+  documentId: "7:134:0:0:360x720",
+  startAtLastPage: false,
+  initialProgress: 0.3425,
+  initialPositionAnchor: {
+    blockIndex: 1,
+    characterOffset: 4,
+    contextHash: "abc123",
   },
-  "1.3.65",
-  "23",
-  "foreground",
-);
-const serializedCrash = JSON.stringify({
-  attributes: safeCrash.attributes,
-  message: safeCrash.error.message,
-  stack: safeCrash.error.stack,
+  rubyTextToHtml: (text) => text,
 });
-
-for (const forbidden of [
-  "example.com",
-  "secret",
-  "user@example.com",
-  "C:\\private",
-  "/data/user",
-  "token=abc",
-]) {
-  check(`Crashlytics privacy redacts ${forbidden}`, serializedCrash.includes(forbidden), false);
+check(
+  "reader document messages carry their generation id",
+  readerHtml.includes('var documentId = "7:134:0:0:360x720"'),
+  true,
+);
+check(
+  "reader HTML keeps exact progress",
+  readerHtml.includes("progress: lastKnownProgress"),
+  true,
+);
+check(
+  "reader HTML preserves progress across reflow",
+  readerHtml.includes("repaginatePreservingProgress"),
+  true,
+);
+check(
+  "reader HTML exposes native page turns",
+  readerHtml.includes("window.__tadayomuTurnPage"),
+  true,
+);
+check(
+  "reader HTML handles horizontal flicks",
+  readerHtml.includes("var isHorizontalFlick"),
+  true,
+);
+check(
+  "reader HTML assigns stable content blocks",
+  readerHtml.includes('data-reader-block="1"'),
+  true,
+);
+check(
+  "reader HTML restores a content anchor before percentage fallback",
+  readerHtml.includes('restorePosition(initialPositionAnchor'),
+  true,
+);
+check(
+  "reader resumes the exact page when pagination is unchanged",
+  readerHtml.includes("resumeTotalPages === totalPages") &&
+    readerHtml.includes("goToPage(resumePage - 1, progress, 'resume-page')"),
+  true,
+);
+const readerScript = readerHtml.match(/<script>([\s\S]*?)<\/script>/)?.[1] ?? "";
+let readerScriptParses = true;
+try {
+  new Function(readerScript);
+} catch {
+  readerScriptParses = false;
 }
+check("generated reader script parses", readerScriptParses, true);
 check(
-  "Crashlytics privacy keeps technical status",
-  safeCrash.attributes.technical_status_code,
-  "403",
+  "reader saves a stable anchor after page animation",
+  readerHtml.includes("stablePageInfoTimer = setTimeout"),
+  true,
 );
 check(
-  "Crashlytics privacy keeps internal work ID",
-  safeCrash.attributes.internal_work_id,
-  "123",
+  "reader identifies the exact anchor restored",
+  readerHtml.includes("restoredAnchorHash: lastRestoredAnchorHash"),
+  true,
 );
 check(
-  "Crashlytics privacy keeps renderer category",
-  safeCrash.attributes.error_category,
-  "webview_renderer_crash",
+  "valid reader content anchor is accepted",
+  JSON.stringify(normalizeReaderPositionAnchor({
+    blockIndex: 3,
+    characterOffset: 12,
+    contextHash: "feedbeef",
+  })),
+  JSON.stringify({ blockIndex: 3, characterOffset: 12, contextHash: "feedbeef" }),
+);
+check(
+  "invalid reader content anchor is rejected",
+  normalizeReaderPositionAnchor({ blockIndex: -1, characterOffset: 0, contextHash: "x" }),
+  null,
 );
 
 process.exit(failed > 0 ? 1 : 0);

@@ -16,13 +16,9 @@ export function calculateSliderValue(
   if (!Number.isFinite(width) || width <= 0 || max <= min) {
     return clamp(startValue, min, max);
   }
-
   const rawValue = startValue + (dx / width) * (max - min);
   const clampedValue = clamp(rawValue, min, max);
-  if (!Number.isFinite(step) || step <= 0) {
-    return clampedValue;
-  }
-
+  if (!Number.isFinite(step) || step <= 0) return clampedValue;
   const steppedValue = min + Math.round((clampedValue - min) / step) * step;
   return Number(clamp(steppedValue, min, max).toFixed(2));
 }
@@ -32,14 +28,11 @@ export function getLibraryProgressPercentage(
   totalEpisodes: number,
 ): number | null {
   if (
-    !Number.isFinite(currentChapter) ||
     currentChapter === undefined ||
+    !Number.isFinite(currentChapter) ||
     !Number.isFinite(totalEpisodes) ||
     totalEpisodes <= 0
-  ) {
-    return null;
-  }
-
+  ) return null;
   return clamp((currentChapter / totalEpisodes) * 100, 0, 100);
 }
 
@@ -47,15 +40,11 @@ export function hasNovelMetadataUpdate(
   novel: Pick<Novel, 'totalEpisodes' | 'isComplete' | 'siteUpdatedAt'>,
   info: Pick<NovelInfo, 'totalEpisodes' | 'isComplete' | 'lastUpdatedAt'>,
 ): boolean {
-  if (info.totalEpisodes > novel.totalEpisodes || info.isComplete !== novel.isComplete) {
-    return true;
-  }
-
+  if (info.totalEpisodes > novel.totalEpisodes || info.isComplete !== novel.isComplete) return true;
   if (!info.lastUpdatedAt) return false;
   const remoteTime = Date.parse(info.lastUpdatedAt);
   if (Number.isNaN(remoteTime)) return false;
   if (!novel.siteUpdatedAt) return true;
-
   const localTime = Date.parse(novel.siteUpdatedAt);
   return Number.isNaN(localTime) || remoteTime > localTime;
 }
@@ -73,13 +62,10 @@ export function isSameLocalCalendarDay(
 ): boolean {
   const parsed = parseDatabaseTimestampMs(timestamp);
   if (parsed <= 0) return false;
-
   const date = new Date(parsed);
-  return (
-    date.getFullYear() === now.getFullYear() &&
-    date.getMonth() === now.getMonth() &&
-    date.getDate() === now.getDate()
-  );
+  return date.getFullYear() === now.getFullYear()
+    && date.getMonth() === now.getMonth()
+    && date.getDate() === now.getDate();
 }
 
 export function shouldRefreshChapterList(
@@ -90,10 +76,8 @@ export function shouldRefreshChapterList(
   maxAgeMs: number = 5 * 60 * 1000,
 ): boolean {
   if (localChapterCount <= 0 || totalEpisodes > localChapterCount) return true;
-
   const lastCheckedMs = parseDatabaseTimestampMs(lastCheckedAt);
-  if (lastCheckedMs <= 0) return true;
-  return nowMs - lastCheckedMs >= maxAgeMs;
+  return lastCheckedMs <= 0 || nowMs - lastCheckedMs >= maxAgeMs;
 }
 
 export function normalizeBackgroundCursor(

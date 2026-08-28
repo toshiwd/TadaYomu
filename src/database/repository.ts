@@ -3,7 +3,12 @@
  */
 import type { SQLiteDatabase } from 'expo-sqlite';
 import type { Novel, Chapter, ReadingProgress, Bookmark, ReaderSettings, SiteType } from '../types/novel';
+import type { ReaderPositionAnchor } from '../services/readerProgress';
 import { DEFAULT_READER_SETTINGS } from '../types/novel';
+
+export type ReadingProgressWithAnchor = ReadingProgress & {
+    positionAnchor?: ReaderPositionAnchor | null;
+};
 
 // ── Database Row Types ──
 interface NovelRow {
@@ -43,6 +48,9 @@ interface ReadingProgressRow {
     novel_id: number;
     current_chapter: number;
     scroll_percentage: number;
+    anchor_block_index: number | null;
+    anchor_character_offset: number | null;
+    anchor_context_hash: string | null;
     last_read_at: string;
     site_novel_id?: string;
     site_type?: string;
@@ -198,7 +206,7 @@ function clampReadingProgress(progress: number): number {
     return Math.max(0, Math.min(1, progress));
 }
 
-export function getReadingProgress(db: SQLiteDatabase, novelId: number): ReadingProgress | null {
+export function getReadingProgress(db: SQLiteDatabase, novelId: number): ReadingProgressWithAnchor | null {
     const row = db.getFirstSync(
         `SELECT rp.*, n.site_novel_id, n.site_type
          FROM reading_progress rp
@@ -207,28 +215,79 @@ export function getReadingProgress(db: SQLiteDatabase, novelId: number): Reading
         [novelId]
     ) as ReadingProgressRow | null;
     if (!row) return null;
-    return {
+    const progress = {
         novelId: row.novel_id,
         siteNovelId: row.site_novel_id ?? '',
         siteType: (row.site_type as SiteType | undefined) ?? 'syosetu',
         currentChapter: row.current_chapter,
         scrollPercentage: clampReadingProgress(row.scroll_percentage),
+        positionAnchor:
+            Number.isInteger(row.anchor_block_index) &&
+            Number.isInteger(row.anchor_character_offset) &&
+            typeof row.anchor_context_hash === 'string'
+                ? {
+                    blockIndex: row.anchor_block_index as number,
+                    characterOffset: row.anchor_character_offset as number,
+                    contextHash: row.anchor_context_hash,
+                }
+                : null,
         lastReadAt: row.last_read_at,
     };
+    return progress;
 }
 
 export function upsertReadingProgress(
-    db: SQLiteDatabase, novelId: number, chapter: number, scroll: number
+    db: SQLiteDatabase,
+    novelId: number,
+    chapter: number,
+    scroll: number,
+    positionAnchor?: ReaderPositionAnchor | null,
 ): void {
     const normalizedScroll = clampReadingProgress(scroll);
+    const existing = db.getFirstSync(
+        `SELECT current_chapter, anchor_block_index, anchor_character_offset, anchor_context_hash
+         FROM reading_progress WHERE novel_id = ?`,
+        [novelId],
+    ) as {
+        current_chapter: number;
+        anchor_block_index: number | null;
+        anchor_character_offset: number | null;
+        anchor_context_hash: string | null;
+    } | null;
+    const preservedAnchor = existing?.current_chapter === chapter && positionAnchor === undefined
+        ? {
+            blockIndex: existing.anchor_block_index,
+            characterOffset: existing.anchor_character_offset,
+            contextHash: existing.anchor_context_hash,
+        }
+        : positionAnchor;
+    const validAnchor =
+        preservedAnchor &&
+        Number.isInteger(preservedAnchor.blockIndex) &&
+        Number.isInteger(preservedAnchor.characterOffset) &&
+        typeof preservedAnchor.contextHash === 'string'
+            ? preservedAnchor
+            : null;
     db.runSync(
-        `INSERT INTO reading_progress (novel_id, current_chapter, scroll_percentage, last_read_at)
-     VALUES (?, ?, ?, datetime('now'))
+        `INSERT INTO reading_progress (
+           novel_id, current_chapter, scroll_percentage,
+           anchor_block_index, anchor_character_offset, anchor_context_hash, last_read_at
+         ) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
      ON CONFLICT(novel_id) DO UPDATE SET
        current_chapter = excluded.current_chapter,
        scroll_percentage = excluded.scroll_percentage,
+       anchor_block_index = excluded.anchor_block_index,
+       anchor_character_offset = excluded.anchor_character_offset,
+       anchor_context_hash = excluded.anchor_context_hash,
        last_read_at = datetime('now')`,
-        [novelId, chapter, normalizedScroll]
+        [
+            novelId,
+            chapter,
+            normalizedScroll,
+            validAnchor?.blockIndex ?? null,
+            validAnchor?.characterOffset ?? null,
+            validAnchor?.contextHash ?? null,
+        ]
     );
 }
 
@@ -241,6 +300,7 @@ export function upsertReadingProgressIfChanged(
         minIntervalMs?: number;
         minProgressDelta?: number;
         force?: boolean;
+        positionAnchor?: ReaderPositionAnchor | null;
     },
 ): boolean {
     const minIntervalMs = options?.minIntervalMs ?? 800;
@@ -249,16 +309,21 @@ export function upsertReadingProgressIfChanged(
     const normalizedScroll = clampReadingProgress(scroll);
 
     const current = db.getFirstSync(
-        'SELECT current_chapter, scroll_percentage, last_read_at FROM reading_progress WHERE novel_id = ?',
+        `SELECT current_chapter, scroll_percentage, last_read_at,
+                anchor_block_index, anchor_character_offset, anchor_context_hash
+         FROM reading_progress WHERE novel_id = ?`,
         [novelId],
     ) as {
         current_chapter: number;
         scroll_percentage: number;
         last_read_at: string;
+        anchor_block_index: number | null;
+        anchor_character_offset: number | null;
+        anchor_context_hash: string | null;
     } | null;
 
     if (!current || force) {
-        upsertReadingProgress(db, novelId, chapter, normalizedScroll);
+        upsertReadingProgress(db, novelId, chapter, normalizedScroll, options?.positionAnchor);
         return true;
     }
 
@@ -268,9 +333,15 @@ export function upsertReadingProgressIfChanged(
     );
     const elapsed = Date.now() - parseReadingTimestampMs(current.last_read_at);
     const intervalPassed = elapsed >= minIntervalMs;
+    const nextAnchor = options?.positionAnchor;
+    const anchorChanged = nextAnchor !== undefined && (
+        (nextAnchor?.blockIndex ?? null) !== current.anchor_block_index ||
+        (nextAnchor?.characterOffset ?? null) !== current.anchor_character_offset ||
+        (nextAnchor?.contextHash ?? null) !== current.anchor_context_hash
+    );
 
-    if (chapterChanged || progressDelta >= minProgressDelta || intervalPassed) {
-        upsertReadingProgress(db, novelId, chapter, normalizedScroll);
+    if (chapterChanged || progressDelta >= minProgressDelta || anchorChanged || intervalPassed) {
+        upsertReadingProgress(db, novelId, chapter, normalizedScroll, options?.positionAnchor);
         return true;
     }
 

@@ -24,7 +24,6 @@ import { nocturneAdapter } from './src/services/adapters/nocturneAdapter';
 import { registerBackgroundTask, unregisterBackgroundTask } from './src/services/backgroundTask';
 import auth from '@react-native-firebase/auth';
 import { syncService } from './src/services/syncService';
-import { initializeCrashReporting, reportNonFatal } from './src/services/crashReporter';
 import {
   getAllNovels,
   getSetting,
@@ -41,12 +40,6 @@ registerAdapter(nocturneAdapter);
 function AppContent() {
   const { mode } = useTheme();
   const db = useSQLiteContext();
-
-  useEffect(() => {
-    void initializeCrashReporting().catch((error) => {
-      console.error('[CrashReporter] Initialization failed:', error);
-    });
-  }, []);
 
   useEffect(() => {
     const backgroundEnabled = getSetting(db, 'background_enabled') !== '0';
@@ -78,26 +71,18 @@ function AppContent() {
             const cloudIsNewer = Boolean(
               cloudProgress &&
               (!localProgress ||
-                isRemoteReadingProgressNewer(
-                  localProgress.lastReadAt,
-                  cloudProgress.lastReadAt,
-                ) ||
-                (cloudProgress.lastReadAt === localProgress.lastReadAt &&
-                  cloudChapter > localChapter)),
+                isRemoteReadingProgressNewer(localProgress.lastReadAt, cloudProgress.lastReadAt) ||
+                (cloudProgress.lastReadAt === localProgress.lastReadAt && cloudChapter > localChapter)),
             );
             const localIsNewer = Boolean(
               localProgress &&
               (!cloudProgress ||
-                isRemoteReadingProgressNewer(
-                  cloudProgress.lastReadAt,
-                  localProgress.lastReadAt,
-                ) ||
-                (cloudProgress.lastReadAt === localProgress.lastReadAt &&
-                  localChapter > cloudChapter)),
+                isRemoteReadingProgressNewer(cloudProgress.lastReadAt, localProgress.lastReadAt) ||
+                (cloudProgress.lastReadAt === localProgress.lastReadAt && localChapter > cloudChapter)),
             );
 
             if (cloudProgress && cloudIsNewer) {
-              // Prefer the newest reading event, including movement within one chapter.
+              // Cloud is ahead
               upsertReadingProgress(
                 db,
                 novel.id,
@@ -105,6 +90,7 @@ function AppContent() {
                 cloudProgress.scrollPercentage || 0,
               );
             } else if (localProgress && localIsNewer) {
+              // Local is ahead, upload in batch
               localAhead.push(localProgress);
             }
           }
@@ -116,12 +102,6 @@ function AppContent() {
           console.log('[Sync] Initial progress sync complete.');
         } catch (err) {
           console.error('[Sync] Error syncing on login: ', err);
-          void reportNonFatal(err, {
-            feature: 'cloud_sync',
-            operationType: 'initial_progress_sync',
-            errorCategory: 'sync_failure',
-            screenName: 'app_root',
-          });
         }
       }
     });

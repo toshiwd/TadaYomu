@@ -234,6 +234,7 @@ export default function NovelDetailScreen({
               novelId,
               remoteProgress.currentChapter,
               remoteProgress.scrollPercentage,
+              remoteProgress.positionAnchor,
             );
           }
         })

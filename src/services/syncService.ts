@@ -1,7 +1,12 @@
 import type { ReadingProgress, Novel } from '../types/novel';
+import type { ReaderPositionAnchor } from './readerProgress';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
+
+export type SyncedReadingProgress = ReadingProgress & {
+    positionAnchor?: ReaderPositionAnchor | null;
+};
 
 export interface SyncService {
     /** Whether the user is signed in */
@@ -11,15 +16,15 @@ export interface SyncService {
     /** Sign out */
     signOut(): Promise<void>;
     /** Upload reading progress */
-    uploadProgress(progress: ReadingProgress): Promise<void>;
+    uploadProgress(progress: SyncedReadingProgress): Promise<void>;
     /** Download latest progress for a novel */
-    downloadProgress(siteNovelId: string, siteType: string): Promise<ReadingProgress | null>;
+    downloadProgress(siteNovelId: string, siteType: string): Promise<SyncedReadingProgress | null>;
     /** Download all progress entries for the signed-in user */
-    downloadAllProgress(): Promise<Record<string, ReadingProgress>>;
+    downloadAllProgress(): Promise<Record<string, SyncedReadingProgress>>;
     /** Upload the entire library list */
     uploadLibrary(novels: Novel[]): Promise<void>;
     /** Upload progress entries in batch */
-    uploadProgressBatch(progresses: ReadingProgress[]): Promise<void>;
+    uploadProgressBatch(progresses: SyncedReadingProgress[]): Promise<void>;
     /** Download the library list and deleted tombstones */
     downloadLibrary(): Promise<{ novels: Partial<Novel>[], deletedAt: Record<string, number> } | null>;
     /** Mark a novel as deleted in the synced library to prevent re-downloading */
@@ -101,7 +106,7 @@ export const syncService: SyncService = {
             const data = doc.data();
             if (data) {
                 // Convert back specific fields if needed
-                return data as ReadingProgress;
+                return data as SyncedReadingProgress;
             }
         } catch (error) {
             console.error('Download progress failed', error);
@@ -120,12 +125,12 @@ export const syncService: SyncService = {
                 .collection('reading_progress')
                 .get();
 
-            const map: Record<string, ReadingProgress> = {};
+            const map: Record<string, SyncedReadingProgress> = {};
             snapshot.forEach((doc) => {
                 const data = doc.data() as Partial<ReadingProgress> | undefined;
                 if (!data?.siteNovelId || !data?.siteType) return;
                 const key = `${data.siteType}_${data.siteNovelId}`;
-                map[key] = data as ReadingProgress;
+                map[key] = data as SyncedReadingProgress;
             });
 
             return map;
@@ -169,7 +174,7 @@ export const syncService: SyncService = {
         }
     },
 
-    async uploadProgressBatch(progresses: ReadingProgress[]) {
+    async uploadProgressBatch(progresses: SyncedReadingProgress[]) {
         const user = auth().currentUser;
         if (!user || progresses.length === 0) return;
 

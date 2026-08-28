@@ -6,7 +6,7 @@ import {
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
-import { Linking } from "react-native";
+import { Alert, Linking } from "react-native";
 
 import { useTheme } from "../theme/ThemeContext";
 import { Colors } from "../theme/colors";
@@ -21,8 +21,10 @@ import NovelDetailScreen from "../screens/NovelDetailScreen";
 import SiteBrowserScreen from "../screens/SiteBrowserScreen";
 import {
   getExternalSiteBrowserParams,
+  getSharedExternalSiteBrowserParams,
   type ExternalSiteBrowserParams,
 } from "../services/externalSiteLinks";
+import TadayomuShareIntent from "../../modules/tadayomu-share-intent";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -96,6 +98,23 @@ export default function AppNavigator() {
     pendingExternalLinkRef.current = params;
   }, []);
 
+  const openSharedText = React.useCallback(async (text: string) => {
+    const params = await getSharedExternalSiteBrowserParams(text);
+    if (!params) {
+      Alert.alert(
+        "対応していないリンク",
+        "共有内容になろう・ノクターン・ハーメルンのリンクが見つかりませんでした。",
+      );
+      return;
+    }
+
+    if (navigationRef.isReady()) {
+      navigationRef.navigate("SiteBrowser", params);
+      return;
+    }
+    pendingExternalLinkRef.current = params;
+  }, []);
+
   React.useEffect(() => {
     void Linking.getInitialURL()
       .then((url) => {
@@ -110,6 +129,24 @@ export default function AppNavigator() {
     });
     return () => subscription.remove();
   }, [openExternalLink]);
+
+  React.useEffect(() => {
+    if (!TadayomuShareIntent) return;
+
+    const subscription = TadayomuShareIntent.addListener(
+      "onShareReceived",
+      ({ text }) => {
+        void openSharedText(text);
+      },
+    );
+
+    const initialText = TadayomuShareIntent.consumeInitialShareText();
+    if (initialText) {
+      void openSharedText(initialText);
+    }
+
+    return () => subscription.remove();
+  }, [openSharedText]);
 
   const handleNavigationReady = React.useCallback(() => {
     const pendingLink = pendingExternalLinkRef.current;

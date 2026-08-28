@@ -43,7 +43,6 @@ import { getAdapter } from "../services/siteAdapter";
 import { rubyTextToHtml } from "../services/textFormatter";
 import { syncService } from "../services/syncService";
 import { generateReaderHtml } from "../services/readerHtmlGenerator";
-import { reportNonFatal } from "../services/crashReporter";
 import {
   normalizeReaderChapterIndex,
   resolveReaderChapterList,
@@ -54,12 +53,15 @@ import {
   addVolumePageTurnListener,
   setVolumePagingEnabled,
 } from "../services/readerControls";
-
-function clampProgress(progress: unknown): number {
-  if (typeof progress !== "number" || !Number.isFinite(progress)) return 0;
-  return Math.max(0, Math.min(1, progress));
-}
-
+import {
+  createReaderProgressSnapshot,
+  isReaderProgressForChapter,
+  normalizeReaderProgress,
+  normalizeReaderPositionAnchor,
+  shouldProcessReaderPageInfo,
+  type ReaderPositionAnchor,
+  type ReaderProgressSnapshot,
+} from "../services/readerProgress";
 export default function ReaderScreen({
   navigation,
   route,
@@ -67,14 +69,14 @@ export default function ReaderScreen({
   const { mode } = useTheme();
   const db = useSQLiteContext();
   const webViewRef = useRef<WebView>(null);
-  const loadRequestIdRef = useRef(0);
-  const nextChapterRequestIdRef = useRef(0);
-  const nextChapterCheckingRef = useRef(false);
   const insets = useSafeAreaInsets();
   useKeepAwake("tadayomu-reader");
 
   const novelId = route.params.novelId;
   const initialChapter = normalizeReaderChapterIndex(route.params.chapterIndex);
+  const loadRequestIdRef = useRef(0);
+  const nextChapterRequestIdRef = useRef(0);
+  const nextChapterCheckingRef = useRef(false);
 
   const [chapterIndex, setChapterIndex] = useState(initialChapter);
   const [chapterTitle, setChapterTitle] = useState("");
@@ -87,6 +89,7 @@ export default function ReaderScreen({
   const [showSettings, setShowSettings] = useState(false);
   const [isSettingsVisible, setIsSettingsVisible] = useState(false);
   const [initialProgress, setInitialProgress] = useState(0);
+  const [initialPositionAnchor, setInitialPositionAnchor] = useState<ReaderPositionAnchor | null>(null);
   const [settings, setSettings] = useState<ReaderSettings>(() =>
     getReaderSettings(db),
   );
@@ -103,14 +106,11 @@ export default function ReaderScreen({
   const [webViewInstanceKey, setWebViewInstanceKey] = useState(0);
   const [checkingNextChapter, setCheckingNextChapter] = useState(false);
   const readerTargetRef = useRef({ novelId, chapterIndex });
-
   readerTargetRef.current = { novelId, chapterIndex };
 
-  useEffect(() => {
-    return () => {
-      nextChapterRequestIdRef.current += 1;
-      nextChapterCheckingRef.current = false;
-    };
+  useEffect(() => () => {
+    nextChapterRequestIdRef.current += 1;
+    nextChapterCheckingRef.current = false;
   }, []);
 
   // Keep a ref to settings so htmlContent doesn't depend on it
@@ -134,12 +134,27 @@ export default function ReaderScreen({
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const settingsSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const progressSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const latestProgressRef = useRef<{ progress: number; page: number } | null>(null);
-  const pendingRestoreProgressRef = useRef<number | null>(null);
+  const appResumeRestoreTimeoutsRef = useRef<NodeJS.Timeout[]>([]);
+  const appStateRef = useRef(AppState.currentState);
+  const latestProgressRef = useRef<ReaderProgressSnapshot | null>(null);
+  const latestTotalPagesRef = useRef(1);
+  const backgroundRestorePositionRef = useRef<{
+    progress: number;
+    positionAnchor: ReaderPositionAnchor | null;
+    resumePage?: number;
+    resumeTotalPages?: number;
+  } | null>(null);
+  const pendingRestoreRef = useRef<{
+    progress: number;
+    positionAnchor: ReaderPositionAnchor | null;
+    resumePage?: number;
+    resumeTotalPages?: number;
+  } | null>(null);
   const lastSyncedProgressRef = useRef<{
     novelId: number;
     chapterIndex: number;
     progress: number;
+    anchorKey: string;
   } | null>(null);
 
   useEffect(() => {
@@ -169,10 +184,14 @@ export default function ReaderScreen({
   const flushLatestProgress = useCallback(() => {
     const latest = latestProgressRef.current;
     if (!latest) return;
-    upsertReadingProgressIfChanged(db, novelId, chapterIndex, latest.progress, {
-      force: true,
-    });
-  }, [db, novelId, chapterIndex]);
+    upsertReadingProgressIfChanged(
+      db,
+      latest.novelId,
+      latest.chapterIndex,
+      latest.progress,
+      { force: true, positionAnchor: latest.positionAnchor },
+    );
+  }, [db]);
 
   const handleCloseReader = useCallback(() => {
     flushLatestProgress();
@@ -207,9 +226,7 @@ export default function ReaderScreen({
       return;
     }
     setNovel(n);
-    setChapterIndex((current) =>
-      current === normalizedChapterIndex ? current : normalizedChapterIndex,
-    );
+    setChapterIndex(normalizedChapterIndex);
   }, [db, novelId, route.params.chapterIndex, retryCount]);
 
   // Load chapter text
@@ -239,11 +256,11 @@ export default function ReaderScreen({
               requestedChapter: chapterIndex,
               chapterCount: chapterList.length,
             });
-            const chapterListResolution = resolveReaderChapterList(
+            const resolution = resolveReaderChapterList(
               chapterIndex,
               chapterList.length,
             );
-            if (chapterListResolution.kind === "empty") {
+            if (resolution.kind === "empty") {
               setTotalChapters(0);
               setChapterText("話一覧を取得できませんでした。再読み込みしてください");
               setLoadError(true);
@@ -275,11 +292,11 @@ export default function ReaderScreen({
                 ? { ...current, totalEpisodes: chapterList.length }
                 : current,
             );
-            if (chapterListResolution.changed) {
-              setChapterIndex(chapterListResolution.chapterIndex);
+            if (resolution.changed) {
+              setChapterIndex(resolution.chapterIndex);
               return;
             }
-            ch = getChapter(db, novelId, chapterListResolution.chapterIndex);
+            ch = getChapter(db, novelId, resolution.chapterIndex);
           } catch (err) {
             console.error(`[Reader] Failed to fetch chapter list:`, err);
           }
@@ -296,9 +313,10 @@ export default function ReaderScreen({
           );
           if (isCurrentRequest()) {
             const savedProgress = getReadingProgress(db, novelId);
-            const openedChapterProgress =
-              savedProgress?.currentChapter === chapterIndex
-                ? clampProgress(savedProgress.scrollPercentage)
+            const openedChapterProgress = startAtLastPage
+              ? 1
+              : savedProgress?.currentChapter === chapterIndex
+                ? savedProgress.scrollPercentage
                 : 0;
             upsertReadingProgressIfChanged(
               db,
@@ -354,13 +372,22 @@ export default function ReaderScreen({
       if (isCurrentRequest()) {
         // Load initial progress for this chapter if available
         const progress = getReadingProgress(db, novelId);
-        if (progress && progress.currentChapter === chapterIndex) {
-          const savedProgress = clampProgress(progress.scrollPercentage);
-          pendingRestoreProgressRef.current = savedProgress;
-          setInitialProgress(savedProgress);
+        if (startAtLastPage) {
+          pendingRestoreRef.current = { progress: 1, positionAnchor: null };
+          setInitialProgress(1);
+          setInitialPositionAnchor(null);
+        } else if (progress && progress.currentChapter === chapterIndex) {
+          const positionAnchor = normalizeReaderPositionAnchor(progress.positionAnchor);
+          pendingRestoreRef.current = {
+            progress: progress.scrollPercentage,
+            positionAnchor,
+          };
+          setInitialProgress(progress.scrollPercentage);
+          setInitialPositionAnchor(positionAnchor);
         } else {
-          pendingRestoreProgressRef.current = 0;
+          pendingRestoreRef.current = { progress: 0, positionAnchor: null };
           setInitialProgress(0);
+          setInitialPositionAnchor(null);
         }
         setLoading(false);
       }
@@ -373,20 +400,12 @@ export default function ReaderScreen({
         setLoadError(true);
         setLoading(false);
       }
-      void reportNonFatal(err, {
-        feature: "reader_entry",
-        operationType: "initialize_chapter",
-        errorCategory: "reader_initialization_failure",
-        screenName: "reader",
-        internalWorkId: novelId,
-        retryCount,
-      });
     });
 
     return () => {
       cancelled = true;
     };
-  }, [db, novelId, chapterIndex, novel, retryCount]);
+  }, [db, novelId, chapterIndex, novel, retryCount, startAtLastPage]);
 
   useEffect(() => {
     if (settingsSaveTimeoutRef.current) {
@@ -426,12 +445,12 @@ export default function ReaderScreen({
 
   const goNextChapter = useCallback(() => {
     if (chapterIndex < totalChapters) {
+      flushLatestProgress();
       setStartAtLastPage(false);
       setChapterIndex((i) => i + 1);
       return;
     }
     if (!novel || nextChapterCheckingRef.current) return;
-
     const adapter = getAdapter(novel.siteType);
     if (!adapter) {
       Alert.alert("次の話を確認できません", "この作品のサイトに対応していません");
@@ -442,90 +461,75 @@ export default function ReaderScreen({
     const requestedTarget = { novelId, chapterIndex };
     nextChapterCheckingRef.current = true;
     setCheckingNextChapter(true);
-    void adapter
-      .getChapterList(novel.siteNovelId)
-      .then((chapterList) => {
-        const currentTarget = readerTargetRef.current;
-        if (
-          nextChapterRequestIdRef.current !== requestId ||
-          currentTarget.novelId !== requestedTarget.novelId ||
-          currentTarget.chapterIndex !== requestedTarget.chapterIndex
-        ) {
-          return;
-        }
-        console.log("[ReaderChapterList]", {
-          novelId,
-          requestedChapter: chapterIndex,
-          chapterCount: chapterList.length,
-          reason: "next_chapter_boundary",
-        });
-        const resolution = resolveReaderNextChapter(
-          chapterIndex,
-          chapterList.length,
-        );
-        if (resolution.kind === "empty") {
-          Alert.alert(
-            "話一覧を取得できませんでした",
-            "通信状態を確認して、もう一度お試しください",
-          );
-          return;
-        }
+    void adapter.getChapterList(novel.siteNovelId).then((chapterList) => {
+      const currentTarget = readerTargetRef.current;
+      if (
+        nextChapterRequestIdRef.current !== requestId ||
+        currentTarget.novelId !== requestedTarget.novelId ||
+        currentTarget.chapterIndex !== requestedTarget.chapterIndex
+      ) return;
 
-        db.withTransactionSync(() => {
-          for (const c of chapterList) {
-            upsertChapter(db, {
-              novelId: novel.id,
-              index: c.index,
-              title: c.title,
-              localPath: null,
-              isDownloaded: false,
-              url: c.url,
-              publishedAt: c.publishedAt,
-              revisedAt: c.revisedAt,
-            });
-          }
-        });
-        updateNovel(db, novel.id, {
-          totalEpisodes: resolution.totalChapters,
-          lastCheckedAt: new Date().toISOString(),
-        });
-        setTotalChapters(resolution.totalChapters);
-        setNovel((current) =>
-          current?.id === novel.id
-            ? { ...current, totalEpisodes: resolution.totalChapters }
-            : current,
-        );
-        if (resolution.kind === "latest") {
-          Alert.alert("最新話です", "現在表示している話が最新です");
-          return;
-        }
-        setStartAtLastPage(false);
-        setChapterIndex(resolution.chapterIndex);
-      })
-      .catch((error) => {
-        if (nextChapterRequestIdRef.current !== requestId) return;
-        console.error("[Reader] Failed to refresh next chapter boundary", error);
-        Alert.alert(
-          "次の話を確認できませんでした",
-          "通信状態を確認して、もう一度お試しください",
-        );
-      })
-      .finally(() => {
-        if (nextChapterRequestIdRef.current === requestId) {
-          nextChapterCheckingRef.current = false;
-          setCheckingNextChapter(false);
+      console.log("[ReaderChapterList]", {
+        novelId,
+        requestedChapter: chapterIndex,
+        chapterCount: chapterList.length,
+        reason: "next_chapter_boundary",
+      });
+      const resolution = resolveReaderNextChapter(chapterIndex, chapterList.length);
+      if (resolution.kind === "empty") {
+        Alert.alert("話一覧を取得できませんでした", "通信状態を確認して、もう一度お試しください");
+        return;
+      }
+      db.withTransactionSync(() => {
+        for (const c of chapterList) {
+          upsertChapter(db, {
+            novelId: novel.id,
+            index: c.index,
+            title: c.title,
+            localPath: null,
+            isDownloaded: false,
+            url: c.url,
+            publishedAt: c.publishedAt,
+            revisedAt: c.revisedAt,
+          });
         }
       });
-  }, [chapterIndex, totalChapters, novel, novelId, db]);
+      updateNovel(db, novel.id, {
+        totalEpisodes: resolution.totalChapters,
+        lastCheckedAt: new Date().toISOString(),
+      });
+      setTotalChapters(resolution.totalChapters);
+      setNovel((current) => current?.id === novel.id
+        ? { ...current, totalEpisodes: resolution.totalChapters }
+        : current);
+      if (resolution.kind === "latest") {
+        Alert.alert("最新話です", "現在表示している話が最新です");
+        return;
+      }
+      flushLatestProgress();
+      setStartAtLastPage(false);
+      setChapterIndex(resolution.chapterIndex);
+    }).catch((error) => {
+      if (nextChapterRequestIdRef.current !== requestId) return;
+      console.error("[Reader] Failed to refresh next chapter boundary", error);
+      Alert.alert("次の話を確認できませんでした", "通信状態を確認して、もう一度お試しください");
+    }).finally(() => {
+      if (nextChapterRequestIdRef.current === requestId) {
+        nextChapterCheckingRef.current = false;
+        setCheckingNextChapter(false);
+      }
+    });
+  }, [chapterIndex, db, flushLatestProgress, novel, novelId, totalChapters]);
 
   const goPrevChapter = useCallback(
     (startAtLast = false) => {
       if (chapterIndex > 1) {
+        flushLatestProgress();
         setStartAtLastPage(startAtLast === true);
         setChapterIndex((i) => i - 1);
       }
     },
-    [chapterIndex],
+    [chapterIndex, flushLatestProgress],
   );
 
   const handleRetry = useCallback(() => {
@@ -607,6 +611,8 @@ export default function ReaderScreen({
   // ========================================================
   // HTML content — generated using external service
   // ========================================================
+  const readerDocumentId = `${novelId}:${chapterIndex}:${retryCount}:${webViewInstanceKey}:${Math.round(containerLayout.width)}x${Math.round(containerLayout.height)}`;
+
   const htmlContent = useMemo(() => {
     if (loading)
       return '<html><body style="display:flex;justify-content:center;align-items:center;height:100vh;"><p>読み込み中...</p></body></html>';
@@ -618,8 +624,10 @@ export default function ReaderScreen({
       containerLayout,
       insets,
       readerTheme,
+      documentId: readerDocumentId,
       startAtLastPage,
       initialProgress,
+      initialPositionAnchor,
       rubyTextToHtml,
     });
   }, [
@@ -628,8 +636,10 @@ export default function ReaderScreen({
     loading,
     insets,
     containerLayout,
+    readerDocumentId,
     startAtLastPage,
     initialProgress,
+    initialPositionAnchor,
   ]);
 
   const webViewSource = useMemo(
@@ -641,33 +651,44 @@ export default function ReaderScreen({
     (event: any) => {
       try {
         const data = JSON.parse(event.nativeEvent.data);
+        if (data.documentId !== readerDocumentId) return;
         if (data.type === "page-info") {
+          if (!shouldProcessReaderPageInfo(appStateRef.current)) return;
           const nextPage =
             typeof data.currentPage === "number" ? data.currentPage : 1;
           const nextTotalPages =
             typeof data.totalPages === "number" ? data.totalPages : 1;
-          const nextProgress = clampProgress(data.progress);
+          const nextProgress = normalizeReaderProgress(data.progress);
+          const nextPositionAnchor = normalizeReaderPositionAnchor(data.positionAnchor);
+          latestTotalPagesRef.current = nextTotalPages;
 
-          const pendingRestore = pendingRestoreProgressRef.current;
+          const pendingRestore = pendingRestoreRef.current;
           if (pendingRestore !== null) {
-            const normalizedRestore = clampProgress(pendingRestore);
             const expectedPage =
               Math.round(
-                normalizedRestore * Math.max(0, nextTotalPages - 1),
+                Math.max(0, Math.min(pendingRestore.progress, 1)) *
+                  Math.max(0, nextTotalPages - 1),
               ) + 1;
-            const restoredProgressMatches =
-              Math.abs(nextProgress - normalizedRestore) < 0.000001;
+            const anchorRestored =
+              pendingRestore.positionAnchor !== null &&
+              data.restoreSource === "anchor" &&
+              data.restoredAnchorHash === pendingRestore.positionAnchor.contextHash;
+            const exactResumePageRestored =
+              data.restoreSource === "resume-page" &&
+              pendingRestore.resumePage === nextPage &&
+              pendingRestore.resumeTotalPages === nextTotalPages;
 
-            if (nextPage !== expectedPage || !restoredProgressMatches) {
+            if (!anchorRestored && !exactResumePageRestored && nextPage !== expectedPage) {
               webViewRef.current?.injectJavaScript(`
-                if (window.__tadayomuRestoreProgress) {
-                  window.__tadayomuRestoreProgress(${normalizedRestore});
+                if (window.__tadayomuRestorePositionForResume) {
+                  window.__tadayomuRestorePositionForResume(${JSON.stringify(pendingRestore.positionAnchor)}, ${pendingRestore.progress}, ${JSON.stringify(pendingRestore.resumePage)}, ${JSON.stringify(pendingRestore.resumeTotalPages)});
                 }
                 true;
               `);
               return;
             }
-            pendingRestoreProgressRef.current = null;
+            pendingRestoreRef.current = null;
+            backgroundRestorePositionRef.current = null;
           }
 
           setCurrentPage((prev) => (prev === nextPage ? prev : nextPage));
@@ -677,16 +698,38 @@ export default function ReaderScreen({
 
           const flushProgress = (force: boolean) => {
             const latest = latestProgressRef.current;
-            if (!latest) return;
-            upsertReadingProgressIfChanged(db, novelId, chapterIndex, latest.progress, {
-              minIntervalMs: 800,
-              minProgressDelta: 0.01,
-              force,
-            });
+            if (!isReaderProgressForChapter(latest, novelId, chapterIndex)) return;
+            upsertReadingProgressIfChanged(
+              db,
+              latest.novelId,
+              latest.chapterIndex,
+              latest.progress,
+              {
+                minIntervalMs: 800,
+                minProgressDelta: 0.001,
+                force,
+                positionAnchor: latest.positionAnchor,
+              },
+            );
           };
 
-          const prevPage = latestProgressRef.current?.page ?? null;
-          latestProgressRef.current = { progress: nextProgress, page: nextPage };
+          const previous = latestProgressRef.current;
+          const prevPage = isReaderProgressForChapter(
+            previous,
+            novelId,
+            chapterIndex,
+          )
+            ? previous.page
+            : null;
+          const nextSnapshot = createReaderProgressSnapshot(
+            novelId,
+            chapterIndex,
+            nextProgress,
+            nextPage,
+            nextPositionAnchor,
+          );
+          if (!nextSnapshot) return;
+          latestProgressRef.current = nextSnapshot;
 
           if (prevPage !== null && prevPage !== nextPage) {
             if (progressSaveTimeoutRef.current) {
@@ -711,6 +754,7 @@ export default function ReaderScreen({
               siteType: novel.siteType,
               currentChapter: chapterIndex,
               scrollPercentage: nextProgress,
+              positionAnchor: nextPositionAnchor,
               lastReadAt: new Date().toISOString(),
             };
             syncTimeoutRef.current = setTimeout(() => {
@@ -719,7 +763,8 @@ export default function ReaderScreen({
                 lastSynced &&
                 lastSynced.novelId === payload.novelId &&
                 lastSynced.chapterIndex === payload.currentChapter &&
-                Math.abs(lastSynced.progress - payload.scrollPercentage) < 0.0001
+                Math.abs(lastSynced.progress - payload.scrollPercentage) < 0.0001 &&
+                lastSynced.anchorKey === JSON.stringify(payload.positionAnchor)
               ) {
                 return;
               }
@@ -731,6 +776,7 @@ export default function ReaderScreen({
                     novelId: payload.novelId,
                     chapterIndex: payload.currentChapter,
                     progress: payload.scrollPercentage,
+                    anchorKey: JSON.stringify(payload.positionAnchor),
                   };
                 })
                 .catch((err) => {
@@ -753,26 +799,53 @@ export default function ReaderScreen({
         console.warn("[Reader] Failed to handle WebView message", err);
       }
     },
-    [db, novelId, chapterIndex, goNextChapter, goPrevChapter, toggleToolbar, novel],
+    [
+      db,
+      novelId,
+      chapterIndex,
+      goNextChapter,
+      goPrevChapter,
+      toggleToolbar,
+      novel,
+      readerDocumentId,
+    ],
   );
 
-  const getLatestRestorableProgress = useCallback(() => {
+  const getLatestRestorablePosition = useCallback(() => {
     const latest = latestProgressRef.current;
-    if (latest) return clampProgress(latest.progress);
+    if (isReaderProgressForChapter(latest, novelId, chapterIndex)) {
+      return { progress: latest.progress, positionAnchor: latest.positionAnchor };
+    }
+
+    if (startAtLastPage) return { progress: 1, positionAnchor: null };
 
     const saved = getReadingProgress(db, novelId);
     if (saved && saved.currentChapter === chapterIndex) {
-      return clampProgress(saved.scrollPercentage);
+      return {
+        progress: normalizeReaderProgress(saved.scrollPercentage),
+        positionAnchor: normalizeReaderPositionAnchor(saved.positionAnchor),
+      };
     }
-    return 0;
-  }, [db, novelId, chapterIndex]);
+    return { progress: 0, positionAnchor: null };
+  }, [db, novelId, chapterIndex, startAtLastPage]);
 
-  const restoreWebViewProgress = useCallback((progress: number) => {
-    const normalizedProgress = clampProgress(progress);
-    pendingRestoreProgressRef.current = normalizedProgress;
+  const restoreWebViewPosition = useCallback((position: {
+    progress: number;
+    positionAnchor: ReaderPositionAnchor | null;
+    resumePage?: number;
+    resumeTotalPages?: number;
+  }) => {
+    const normalizedProgress = normalizeReaderProgress(position.progress);
+    const normalizedAnchor = normalizeReaderPositionAnchor(position.positionAnchor);
+    pendingRestoreRef.current = {
+      progress: normalizedProgress,
+      positionAnchor: normalizedAnchor,
+      resumePage: position.resumePage,
+      resumeTotalPages: position.resumeTotalPages,
+    };
     webViewRef.current?.injectJavaScript(`
-      if (window.__tadayomuRestoreProgress) {
-        window.__tadayomuRestoreProgress(${normalizedProgress});
+      if (window.__tadayomuRestorePositionForResume) {
+        window.__tadayomuRestorePositionForResume(${JSON.stringify(normalizedAnchor)}, ${normalizedProgress}, ${JSON.stringify(position.resumePage)}, ${JSON.stringify(position.resumeTotalPages)});
       }
       true;
     `);
@@ -781,11 +854,43 @@ export default function ReaderScreen({
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => {
       if (nextState !== "active") {
-        flushLatestProgress();
+        if (appStateRef.current === "active") {
+          const positionBeforeScreenOff = getLatestRestorablePosition();
+          const latest = latestProgressRef.current;
+          const positionForResume = isReaderProgressForChapter(
+            latest,
+            novelId,
+            chapterIndex,
+          )
+            ? {
+                ...positionBeforeScreenOff,
+                resumePage: latest.page,
+                resumeTotalPages: latestTotalPagesRef.current,
+              }
+            : positionBeforeScreenOff;
+          backgroundRestorePositionRef.current = positionForResume;
+          pendingRestoreRef.current = positionForResume;
+          flushLatestProgress();
+        }
+        appStateRef.current = nextState;
         return;
       }
 
-      restoreWebViewProgress(getLatestRestorableProgress());
+      appStateRef.current = nextState;
+      const positionToRestore =
+        backgroundRestorePositionRef.current ?? getLatestRestorablePosition();
+      backgroundRestorePositionRef.current = positionToRestore;
+      restoreWebViewPosition(positionToRestore);
+
+      for (const timeout of appResumeRestoreTimeoutsRef.current) {
+        clearTimeout(timeout);
+      }
+      appResumeRestoreTimeoutsRef.current = [150, 500].map((delay) =>
+        setTimeout(() => {
+          const pendingPosition = backgroundRestorePositionRef.current;
+          if (pendingPosition) restoreWebViewPosition(pendingPosition);
+        }, delay),
+      );
     });
 
     return () => {
@@ -800,11 +905,17 @@ export default function ReaderScreen({
       if (progressSaveTimeoutRef.current) {
         clearTimeout(progressSaveTimeoutRef.current);
       }
+      for (const timeout of appResumeRestoreTimeoutsRef.current) {
+        clearTimeout(timeout);
+      }
+      appResumeRestoreTimeoutsRef.current = [];
     };
   }, [
+    chapterIndex,
     flushLatestProgress,
-    getLatestRestorableProgress,
-    restoreWebViewProgress,
+    getLatestRestorablePosition,
+    novelId,
+    restoreWebViewPosition,
   ]);
 
   const settingsTranslateY = settingsAnim.interpolate({
@@ -884,19 +995,10 @@ export default function ReaderScreen({
       {/* WebView fills remaining space — onLayout measures final size */}
       <View style={styles.webviewFull} onLayout={onLayout}>
         {webViewRenderFailed ? (
-          <View
-            style={[
-              styles.webViewError,
-              { backgroundColor: readerTheme.bg },
-            ]}
-          >
-            <Ionicons
-              name="warning-outline"
-              size={28}
-              color={readerTheme.fg}
-            />
+          <View style={styles.webViewErrorState}>
+            <Ionicons name="refresh-circle-outline" size={38} color={readerTheme.fg} />
             <Text style={[styles.webViewErrorText, { color: readerTheme.fg }]}>
-              表示処理が終了しました。再読み込みしてください。
+              表示処理が終了しました。読書位置を保ったまま再読み込みできます。
             </Text>
             <TouchableOpacity
               style={[
@@ -916,33 +1018,15 @@ export default function ReaderScreen({
             source={webViewSource}
             style={{ flex: 1, backgroundColor: readerTheme.bg }}
             onLoadStart={() => {
-              pendingRestoreProgressRef.current = getLatestRestorableProgress();
+              pendingRestoreRef.current = getLatestRestorablePosition();
             }}
             onLoadEnd={() => {
-              restoreWebViewProgress(getLatestRestorableProgress());
+              restoreWebViewPosition(getLatestRestorablePosition());
             }}
             onMessage={handleMessage}
-            onRenderProcessGone={(event) => {
-              const didCrash = event.nativeEvent.didCrash;
+            onRenderProcessGone={() => {
+              flushLatestProgress();
               setWebViewRenderFailed(true);
-              void reportNonFatal(
-                new Error(
-                  didCrash
-                    ? "Android WebView render process crashed"
-                    : "Android WebView render process was killed by the OS",
-                ),
-                {
-                  feature: "reader_webview",
-                  operationType: "render_process_exit",
-                  errorCategory: didCrash
-                    ? "webview_renderer_crash"
-                    : "webview_renderer_os_kill",
-                  screenName: "reader",
-                  internalWorkId: novelId,
-                  didCrash,
-                  retryCount,
-                },
-              );
             }}
             scrollEnabled={false}
             showsVerticalScrollIndicator={false}
@@ -1425,7 +1509,7 @@ export default function ReaderScreen({
 const styles = StyleSheet.create({
   container: { flex: 1 },
   webviewFull: { flex: 1 },
-  webViewError: {
+  webViewErrorState: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",

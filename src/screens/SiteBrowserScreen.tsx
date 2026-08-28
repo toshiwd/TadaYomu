@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, BackHandler,
 } from 'react-native';
@@ -72,6 +72,10 @@ export default function SiteBrowserScreen({ route, navigation }: RootStackScreen
         setPageLoading(true);
         setShowAddButton(isNovelUrl(nextUrl));
     }, []);
+
+    useEffect(() => {
+        if (url) loadUrl(url);
+    }, [loadUrl, url]);
 
     const handleLoadFailure = useCallback((event: any) => {
         const failedUrl = event?.nativeEvent?.url || currentUrl;

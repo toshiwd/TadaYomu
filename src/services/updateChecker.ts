@@ -1,147 +1,145 @@
-/**
- * App self-update checker.
- * Checks a JSON manifest hosted on GitHub Releases.
- */
-import { Alert, Linking, Platform } from "react-native";
+/** In-app APK update flow backed by the latest GitHub Release manifest. */
+import { Alert, Platform } from "react-native";
 import Constants from "expo-constants";
+import * as FileSystem from "expo-file-system/legacy";
+import * as IntentLauncher from "expo-intent-launcher";
+import {
+  compareSemver,
+  parseVersionManifest,
+  type VersionManifest,
+} from "./updateManifest";
 
-/** Version manifest hosted on GitHub Pages / Releases */
-interface VersionManifest {
-  version: string;
-  apkUrl: string;
-  releaseNotes: string;
-}
+export { compareSemver, parseVersionManifest, type VersionManifest } from "./updateManifest";
+
+export type UpdateProgress =
+  | { phase: "checking" }
+  | { phase: "downloading"; progress: number | null }
+  | { phase: "installing" }
+  | { phase: "idle" };
 
 const MANIFEST_URL =
   "https://github.com/toshiwd/TadaYomu/releases/latest/download/version.json";
+const APK_MIME_TYPE = "application/vnd.android.package-archive";
+const FLAG_GRANT_READ_URI_PERMISSION = 1;
+const FLAG_ACTIVITY_NEW_TASK = 0x10000000;
+let activeUpdatePromise: Promise<void> | null = null;
 
-/** Get the current app version */
 export function getCurrentVersion(): string {
   return Constants.expoConfig?.version ?? "1.0.0";
 }
 
-/** Compare semver strings: returns 1 if a > b, -1 if a < b, 0 if equal */
-function compareSemver(a: string, b: string): number {
-  const pa = a.split(".").map(Number);
-  const pb = b.split(".").map(Number);
-  for (let i = 0; i < 3; i++) {
-    const va = pa[i] || 0;
-    const vb = pb[i] || 0;
-    if (va > vb) return 1;
-    if (va < vb) return -1;
+async function fetchManifest(): Promise<VersionManifest> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+  try {
+    const response = await fetch(`${MANIFEST_URL}?t=${Date.now()}`, {
+      signal: controller.signal,
+      headers: { "Cache-Control": "no-cache" },
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return parseVersionManifest(await response.text());
+  } finally {
+    clearTimeout(timeoutId);
   }
-  return 0;
 }
 
-/**
- * Check for app updates and prompt user if available.
- * Returns true if an update was found.
- */
+async function downloadAndOpenInstaller(
+  manifest: VersionManifest,
+  onProgress?: (progress: UpdateProgress) => void,
+): Promise<void> {
+  if (!FileSystem.cacheDirectory) throw new Error("APKの保存先を利用できません");
+  const destination = `${FileSystem.cacheDirectory}TadaYomu-${manifest.version}.apk`;
+  await FileSystem.deleteAsync(destination, { idempotent: true });
+  onProgress?.({ phase: "downloading", progress: 0 });
+
+  const download = FileSystem.createDownloadResumable(
+    manifest.apkUrl,
+    destination,
+    {},
+    ({ totalBytesWritten, totalBytesExpectedToWrite }) => {
+      onProgress?.({
+        phase: "downloading",
+        progress: totalBytesExpectedToWrite > 0
+          ? Math.max(0, Math.min(1, totalBytesWritten / totalBytesExpectedToWrite))
+          : null,
+      });
+    },
+  );
+  const result = await download.downloadAsync();
+  if (!result || result.status < 200 || result.status >= 300) {
+    throw new Error(`APKのダウンロードに失敗しました (${result?.status ?? "unknown"})`);
+  }
+
+  onProgress?.({ phase: "installing" });
+  const contentUri = await FileSystem.getContentUriAsync(result.uri);
+  await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
+    data: contentUri,
+    type: APK_MIME_TYPE,
+    flags: FLAG_GRANT_READ_URI_PERMISSION | FLAG_ACTIVITY_NEW_TASK,
+  });
+}
+
+function startAvailableUpdate(
+  manifest: VersionManifest,
+  onProgress?: (progress: UpdateProgress) => void,
+): Promise<void> {
+  if (activeUpdatePromise) return activeUpdatePromise;
+  const task = downloadAndOpenInstaller(manifest, onProgress)
+    .catch((error: any) => {
+      console.error("[UpdateChecker] In-app update failed", error);
+      Alert.alert(
+        "アップデート失敗",
+        `APKを準備できませんでした。通信状態と「不明なアプリのインストール」許可を確認してください。\n\n${error?.message ?? "不明なエラー"}`,
+      );
+    })
+    .finally(() => {
+      activeUpdatePromise = null;
+      onProgress?.({ phase: "idle" });
+    });
+  activeUpdatePromise = task;
+  return task;
+}
+
 export async function checkForUpdates(
-  silent = false
+  silent = false,
+  onProgress?: (progress: UpdateProgress) => void,
 ): Promise<boolean> {
   if (Platform.OS !== "android") return false;
-
+  onProgress?.({ phase: "checking" });
   try {
-    // Fetch with 10 second timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-    let res: Response;
-    try {
-      res = await fetch(`${MANIFEST_URL}?t=${Date.now()}`, {
-        signal: controller.signal,
-      });
-    } finally {
-      clearTimeout(timeoutId);
-    }
-
-    if (!res.ok) {
-      if (!silent)
-        Alert.alert(
-          "確認失敗",
-          `サーバーエラー (${res.status})\nしばらくしてからお試しください。`,
-        );
-      return false;
-    }
-
-    let text = await res.text();
-    // Remove BOM if present
-    if (text.charCodeAt(0) === 0xfeff) {
-      text = text.substring(1);
-    }
-    text = text.trim();
-
-    // Validate JSON format before parsing
-    if (!text.startsWith("{") && !text.startsWith("[")) {
-      console.warn(
-        "[UpdateChecker] Non-JSON response:",
-        text.substring(0, 200),
-      );
-      if (!silent)
-        Alert.alert(
-          "確認失敗",
-          "更新情報の形式が不正です。\nGitHubリリースの version.json を確認してください。",
-        );
-      return false;
-    }
-
-    let manifest: VersionManifest;
-    try {
-      manifest = JSON.parse(text);
-    } catch (e: any) {
-      console.warn(
-        "[UpdateChecker] JSON parse error:",
-        e.message,
-        "Content:",
-        text.substring(0, 200),
-      );
-      if (!silent)
-        Alert.alert(
-          "確認失敗",
-          `更新情報の解析に失敗しました。\nしばらくしてからお試しください。`,
-        );
-      return false;
-    }
-
+    const manifest = await fetchManifest();
     const current = getCurrentVersion();
+    if (compareSemver(manifest.version, current) <= 0) {
+      onProgress?.({ phase: "idle" });
+      if (!silent) Alert.alert("最新版です", `現在のバージョン ${current} は最新です`);
+      return false;
+    }
 
-    if (compareSemver(manifest.version, current) > 0) {
-      if (!silent) {
-        // User manually checked: open browser immediately to start download
-        await Linking.openURL(manifest.apkUrl);
-      } else {
-        // Background check: prompt first
-        Alert.alert(
-          "アップデートあり",
-          `新しいバージョン ${manifest.version} が利用可能です。\n\n${manifest.releaseNotes}`,
-          [
-            { text: "あとで", style: "cancel" },
-            {
-              text: "ダウンロード",
-              onPress: () => {
-                void Linking.openURL(manifest.apkUrl).catch((error) => {
-                  console.error("Failed to open update URL", error);
-                });
-              },
-            },
-          ],
-        );
-      }
-      return true;
-    } else if (!silent) {
-      Alert.alert("最新版です", `現在のバージョン ${current} は最新です`);
-    }
-    return false;
-  } catch (e: any) {
     if (!silent) {
-      const msg =
-        e.name === "AbortError"
-          ? "接続がタイムアウトしました。\nネットワーク接続を確認してください。"
-          : `ネットワークエラーが発生しました。\nWi-Fiまたはモバイルデータの接続を確認してください。\n\n詳細: ${e.message}`;
-      Alert.alert("確認失敗", msg);
+      await startAvailableUpdate(manifest, onProgress);
+    } else {
+      onProgress?.({ phase: "idle" });
+      Alert.alert(
+        "アップデートあり",
+        `新しいバージョン ${manifest.version} が利用可能です。\n\n${manifest.releaseNotes}`,
+        [
+          { text: "あとで", style: "cancel" },
+          { text: "アップデート", onPress: () => void startAvailableUpdate(manifest, onProgress) },
+        ],
+      );
     }
-    console.error(e);
+    return true;
+  } catch (error: any) {
+    onProgress?.({ phase: "idle" });
+    console.error("[UpdateChecker] Update check failed", error);
+    if (!silent) {
+      Alert.alert(
+        "確認失敗",
+        error?.name === "AbortError"
+          ? "接続がタイムアウトしました。ネットワーク接続を確認してください。"
+          : `更新情報を確認できませんでした。\n\n${error?.message ?? "通信エラー"}`,
+      );
+    }
     return false;
   }
 }
