@@ -81,14 +81,21 @@ jobs:
       - name: Generate version.json
         env:
           RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
+          REPOSITORY: ${{ github.repository }}
         run: |
-          cat > version.json << EOF
-          {
-            "version": "${{ steps.version.outputs.VERSION }}",
-            "apkUrl": "https://github.com/${{ github.repository }}/releases/download/${RELEASE_TAG}/TadaYomu-${{ steps.version.outputs.VERSION }}.apk",
-            "releaseNotes": "バージョン ${{ steps.version.outputs.VERSION }} リリース"
+          node <<'NODE'
+          const fs = require("fs");
+          const manifestPath = "version.json";
+          let manifest = {};
+          if (fs.existsSync(manifestPath)) {
+            manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8").replace(/^\uFEFF/, ""));
           }
-          EOF
+          manifest.version = process.env.VERSION;
+          manifest.apkUrl = `https://github.com/${process.env.REPOSITORY}/releases/download/${process.env.RELEASE_TAG}/TadaYomu-${process.env.VERSION}.apk`;
+          manifest.releaseNotes = manifest.releaseNotes || `バージョン ${process.env.VERSION} リリース`;
+          fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+          NODE
 
       - name: Rename APK
         run: cp android/app/build/outputs/apk/release/app-release.apk TadaYomu-${{ steps.version.outputs.VERSION }}.apk

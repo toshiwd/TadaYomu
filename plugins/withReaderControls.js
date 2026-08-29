@@ -5,9 +5,50 @@ const {
   withDangerousMod,
   withMainActivity,
   withMainApplication,
+  withProjectBuildGradle,
 } = require("@expo/config-plugins");
 
 const READER_CONTROLS_PACKAGE = "TadayomuReaderControlsPackage";
+const CRASHLYTICS_GRADLE_PLUGIN = "com.google.firebase:firebase-crashlytics-gradle:3.0.6";
+
+function withCrashlytics(config) {
+  config = withProjectBuildGradle(config, (nextConfig) => {
+    if (nextConfig.modResults.language !== "groovy") {
+      throw new Error("Tadayomu Crashlytics requires a Groovy project build file");
+    }
+
+    let contents = nextConfig.modResults.contents;
+    if (!contents.includes("firebase-crashlytics-gradle")) {
+      const buildscriptDependencies = contents.match(
+        /buildscript\s*\{[\s\S]*?(\n\s+dependencies\s*\{\n)/,
+      );
+      if (!buildscriptDependencies) {
+        throw new Error("Unable to locate Android buildscript dependencies block");
+      }
+      contents = contents.replace(
+        buildscriptDependencies[1],
+        `${buildscriptDependencies[1]}    classpath('${CRASHLYTICS_GRADLE_PLUGIN}')\n`,
+      );
+    }
+
+    nextConfig.modResults.contents = contents;
+    return nextConfig;
+  });
+
+  return withAppBuildGradle(config, (nextConfig) => {
+    if (nextConfig.modResults.language !== "groovy") {
+      throw new Error("Tadayomu Crashlytics requires a Groovy app build file");
+    }
+
+    let contents = nextConfig.modResults.contents;
+    if (!contents.includes("com.google.firebase.crashlytics")) {
+      contents = `apply plugin: "com.google.firebase.crashlytics"\n${contents}`;
+    }
+
+    nextConfig.modResults.contents = contents;
+    return nextConfig;
+  });
+}
 
 function withReleaseSigning(config) {
   return withAppBuildGradle(config, (nextConfig) => {
@@ -166,6 +207,7 @@ function withReaderNativeSources(config) {
 }
 
 module.exports = function withReaderControls(config) {
+  config = withCrashlytics(config);
   config = withReleaseSigning(config);
   config = withReaderMainActivity(config);
   config = withReaderMainApplication(config);
