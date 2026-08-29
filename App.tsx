@@ -5,15 +5,6 @@ import { SQLiteProvider, useSQLiteContext } from 'expo-sqlite';
 import {
   useFonts,
 } from 'expo-font';
-import {
-  NotoSerifJP_400Regular,
-  NotoSerifJP_600SemiBold,
-  NotoSerifJP_700Bold,
-} from '@expo-google-fonts/noto-serif-jp';
-import {
-  PlusJakartaSans_400Regular,
-  PlusJakartaSans_600SemiBold,
-} from '@expo-google-fonts/plus-jakarta-sans';
 
 import { ThemeProvider, useTheme, type ThemeMode } from './src/theme/ThemeContext';
 import AppNavigator from './src/navigation/AppNavigator';
@@ -149,11 +140,6 @@ export default function App() {
     NotoSansJP_400Regular: require('./assets/fonts/NotoSansJP-Regular.ttf'),
     NotoSansJP_600SemiBold: require('./assets/fonts/NotoSansJP-SemiBold.ttf'),
     NotoSansJP_700Bold: require('./assets/fonts/NotoSansJP-Bold.ttf'),
-    NotoSerifJP_400Regular,
-    NotoSerifJP_600SemiBold,
-    NotoSerifJP_700Bold,
-    PlusJakartaSans_400Regular,
-    PlusJakartaSans_600SemiBold,
   });
 
   if (!fontsLoaded) {

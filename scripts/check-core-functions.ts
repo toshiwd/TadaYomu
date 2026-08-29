@@ -48,6 +48,12 @@ import {
   compareSemver,
   parseVersionManifest,
 } from "../src/services/updateManifest";
+import {
+  DOWNLOADED_FONT_PREFIX,
+  OPTIONAL_READER_FONT_ID,
+  OPTIONAL_READER_FONTS,
+  getDownloadedFontId,
+} from "../src/services/fontCatalog";
 
 let failed = 0;
 
@@ -385,6 +391,60 @@ check(
   "reader HTML preserves progress across reflow",
   readerHtml.includes("repaginatePreservingProgress"),
   true,
+);
+const downloadedFontHtml = generateReaderHtml({
+  chapterText: "font test",
+  settings: DEFAULT_READER_SETTINGS,
+  containerLayout: { width: 360, height: 720 },
+  insets: { top: 0, right: 0, bottom: 0, left: 0 },
+  readerTheme: { bg: "#fff", fg: "#000", selection: "transparent" },
+  documentId: "7:134:0:0:360x720-font",
+  startAtLastPage: false,
+  initialProgress: 0,
+  initialPositionAnchor: null,
+  rubyTextToHtml: (text) => text,
+  fontFaces: [
+    {
+      family: "TadayomuDownloadedNotoSerifJP",
+      weight: 400,
+      uri: "file:///data/user/0/com.enish.tadayomu/files/fonts/noto-serif-jp/NotoSerifJP-400.ttf",
+    },
+  ],
+});
+check(
+  "reader HTML embeds downloaded font faces",
+  downloadedFontHtml.includes("@font-face") &&
+    downloadedFontHtml.includes("TadayomuDownloadedNotoSerifJP") &&
+    downloadedFontHtml.includes("NotoSerifJP-400.ttf"),
+  true,
+);
+check(
+  "downloaded reader font skips Google Fonts CDN",
+  downloadedFontHtml.includes("fonts.googleapis.com"),
+  false,
+);
+
+const optionalFont = OPTIONAL_READER_FONTS.find(
+  (font) => font.id === OPTIONAL_READER_FONT_ID,
+);
+check("optional reader font catalog has one family", OPTIONAL_READER_FONTS.length, 1);
+check("optional reader font catalog has required weights", optionalFont?.files.length, 3);
+check(
+  "optional reader font URLs are fixed HTTPS release assets",
+  optionalFont?.files.every(
+    (file) => file.url.startsWith("https://github.com/toshiwd/TadaYomu/releases/download/v1.3.75/") && file.size > 0,
+  ),
+  true,
+);
+check(
+  "unknown downloaded font selection is rejected",
+  getDownloadedFontId(`${DOWNLOADED_FONT_PREFIX}unknown`),
+  null,
+);
+check(
+  "known downloaded font selection resolves",
+  getDownloadedFontId(`${DOWNLOADED_FONT_PREFIX}${OPTIONAL_READER_FONT_ID}`),
+  OPTIONAL_READER_FONT_ID,
 );
 check(
   "reader geometry searches paragraph boundaries efficiently",

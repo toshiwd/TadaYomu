@@ -33,6 +33,14 @@ import {
   type BackgroundTaskDiagnostics,
 } from "../services/backgroundTask";
 import { calculateSliderValue } from "../services/runtimeGuards";
+import {
+  DOWNLOADED_FONT_PREFIX,
+  OPTIONAL_READER_FONT_ID,
+  deleteFontFamily,
+  downloadFontFamily,
+  getOptionalReaderFont,
+  isInstalledFontFamily,
+} from "../services/fontManager";
 
 type ThemeColors = ReturnType<typeof useTheme>["colors"];
 
@@ -190,11 +198,27 @@ export default function SettingsScreen(
   const [isTestingBackground, setIsTestingBackground] = useState(false);
   const [backgroundDiagnostics, setBackgroundDiagnostics] =
     useState<BackgroundTaskDiagnostics | null>(null);
+  const [optionalFontInstalled, setOptionalFontInstalled] = useState(false);
+  const [isDownloadingFont, setIsDownloadingFont] = useState(false);
+
+  const optionalFont = getOptionalReaderFont(OPTIONAL_READER_FONT_ID);
 
   const loadSettings = useCallback(() => {
     setSettings(getReaderSettings(db));
     const bgSetting = getSetting(db, 'background_enabled');
     setBgEnabled(bgSetting !== '0'); // default ON
+  }, [db]);
+
+  const refreshOptionalFont = useCallback(() => {
+    const fontFamily = `${DOWNLOADED_FONT_PREFIX}${OPTIONAL_READER_FONT_ID}`;
+    const installed = isInstalledFontFamily(fontFamily);
+    setOptionalFontInstalled(installed);
+    const currentSettings = getReaderSettings(db);
+    if (currentSettings.fontFamily === fontFamily && !installed) {
+      const repaired = { ...currentSettings, fontFamily: "serif" as const };
+      saveReaderSettings(db, repaired);
+      setSettings(repaired);
+    }
   }, [db]);
 
   useEffect(() => {
@@ -207,6 +231,7 @@ export default function SettingsScreen(
   useFocusEffect(
     useCallback(() => {
       loadSettings();
+      refreshOptionalFont();
       let active = true;
       void getBackgroundTaskDiagnostics(db)
         .then((diagnostics) => {
@@ -218,7 +243,7 @@ export default function SettingsScreen(
       return () => {
         active = false;
       };
-    }, [db, loadSettings]),
+    }, [db, loadSettings, refreshOptionalFont]),
   );
 
   const refreshBackgroundDiagnostics = useCallback(async () => {
@@ -233,6 +258,31 @@ export default function SettingsScreen(
     const updated = { ...settings, [key]: value };
     setSettings(updated);
     saveReaderSettings(db, updated);
+  };
+
+  const handleDownloadOptionalFont = async () => {
+    if (!optionalFont || isDownloadingFont) return;
+    setIsDownloadingFont(true);
+    try {
+      await downloadFontFamily(optionalFont.id);
+      setOptionalFontInstalled(true);
+      updateSetting("fontFamily", `${DOWNLOADED_FONT_PREFIX}${optionalFont.id}`);
+      Alert.alert("フォントを追加しました", "読書画面で明朝フォントを使用します。");
+    } catch (error) {
+      console.error("[Font] Failed to download optional reader font", error);
+      Alert.alert("フォントを追加できませんでした", "通信状態を確認して、もう一度お試しください。");
+    } finally {
+      setIsDownloadingFont(false);
+    }
+  };
+
+  const handleDeleteOptionalFont = () => {
+    if (!optionalFont || isDownloadingFont) return;
+    if (settings?.fontFamily === `${DOWNLOADED_FONT_PREFIX}${optionalFont.id}`) {
+      updateSetting("fontFamily", "serif");
+    }
+    deleteFontFamily(optionalFont.id);
+    setOptionalFontInstalled(false);
   };
 
   const handleSignIn = async () => {
@@ -455,6 +505,55 @@ export default function SettingsScreen(
                 })}
               </View>
             </View>
+
+            {optionalFont && (
+              <View style={styles.optionalFontBlock}>
+                <View style={styles.optionalFontHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.settingLabel, { color: colors.text.primary }]}>
+                      {optionalFont.displayName}
+                    </Text>
+                    <Text style={[styles.bgDescription, { color: colors.text.secondary }]}>
+                      追加ダウンロード（{optionalFont.license}）
+                    </Text>
+                  </View>
+                  <Text style={[styles.fontStatus, { color: colors.text.secondary }]}>
+                    {optionalFontInstalled ? "追加済み" : "未追加"}
+                  </Text>
+                </View>
+                <View style={styles.actionRow}>
+                  {!optionalFontInstalled ? (
+                    <TouchableOpacity
+                      style={[styles.primaryBtn, { backgroundColor: colors.ui.primary }]}
+                      onPress={handleDownloadOptionalFont}
+                      disabled={isDownloadingFont}
+                    >
+                      {isDownloadingFont ? (
+                        <ActivityIndicator size="small" color={colors.ui.onPrimary} />
+                      ) : (
+                        <Ionicons name="download-outline" size={18} color={colors.ui.onPrimary} />
+                      )}
+                      <Text style={[styles.primaryBtnText, { color: colors.ui.onPrimary }]}>追加する</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <>
+                      <TouchableOpacity
+                        style={[styles.primaryBtn, { backgroundColor: colors.ui.primary }]}
+                        onPress={() => updateSetting("fontFamily", `${DOWNLOADED_FONT_PREFIX}${optionalFont.id}`)}
+                      >
+                        <Text style={[styles.primaryBtnText, { color: colors.ui.onPrimary }]}>この明朝を使う</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.actionBtn, { backgroundColor: colors.surfaceContainerHigh }]}
+                        onPress={handleDeleteOptionalFont}
+                      >
+                        <Text style={[styles.actionBtnText, { color: colors.ui.error }]}>削除</Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+                </View>
+              </View>
+            )}
 
             <View style={styles.inlineRow}>
               <Text style={[styles.settingLabel, { color: colors.text.primary }]}>組み方向</Text>
@@ -766,6 +865,20 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     gap: Spacing.lg,
     marginBottom: Spacing.md,
+  },
+  optionalFontBlock: {
+    gap: Spacing.sm,
+    paddingTop: Spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(128, 96, 64, 0.25)",
+  },
+  optionalFontHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  fontStatus: {
+    ...Typography.caption,
   },
   sliderCard: {
     borderRadius: Radius.lg,

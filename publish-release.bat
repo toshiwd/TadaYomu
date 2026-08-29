@@ -1,7 +1,7 @@
 @echo off
 setlocal
 
-set VERSION=1.3.74
+set VERSION=1.3.75
 set APK=TadaYomu-%VERSION%.apk
 
 if not exist "%APK%" (

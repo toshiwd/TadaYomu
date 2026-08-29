@@ -121,42 +121,42 @@ export const Radius = {
     full: 999,
 } as const;
 
-/** Typography scale — uses Noto Serif JP and Plus Jakarta Sans */
+/** Typography scale — uses the three bundled Noto Sans JP UI faces */
 export const Typography = {
     displaySmall: {
         fontSize: 28,
-        fontFamily: 'NotoSerifJP_700Bold',
+        fontFamily: 'NotoSansJP_700Bold',
         letterSpacing: 0.3,
     },
     title: {
         fontSize: 22,
-        fontFamily: 'NotoSerifJP_700Bold',
+        fontFamily: 'NotoSansJP_700Bold',
         letterSpacing: 0.5,
     },
     subtitle: {
         fontSize: 16,
-        fontFamily: 'NotoSerifJP_600SemiBold', // Fallback if SemiBold not exactly available, usually 600 or 700
+        fontFamily: 'NotoSansJP_600SemiBold',
         letterSpacing: 0.3,
     },
     body: {
         fontSize: 14,
-        fontFamily: 'NotoSerifJP_400Regular',
+        fontFamily: 'NotoSansJP_400Regular',
         letterSpacing: 0.2,
     },
     bodyLg: {
         fontSize: 16,
-        fontFamily: 'NotoSerifJP_400Regular',
+        fontFamily: 'NotoSansJP_400Regular',
         lineHeight: 28,
         letterSpacing: 0.2,
     },
     uiLabel: {
         fontSize: 14,
-        fontFamily: 'PlusJakartaSans_600SemiBold',
+        fontFamily: 'NotoSansJP_600SemiBold',
         letterSpacing: 0.1,
     },
     caption: {
         fontSize: 12,
-        fontFamily: 'PlusJakartaSans_400Regular',
+        fontFamily: 'NotoSansJP_400Regular',
         letterSpacing: 0.1,
     },
 } as const;

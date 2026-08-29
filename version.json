@@ -1,5 +1,5 @@
 ﻿{
-    "version":  "1.3.74",
-    "apkUrl":  "https://github.com/toshiwd/TadaYomu/releases/download/v1.3.74/TadaYomu-1.3.74.apk",
-    "releaseNotes":  "読書画面の表示安定性と長文処理の効率を改善しました"
+    "version":  "1.3.75",
+    "apkUrl":  "https://github.com/toshiwd/TadaYomu/releases/download/v1.3.75/TadaYomu-1.3.75.apk",
+    "releaseNotes":  "アプリを軽量化し、明朝フォントを必要な場合だけ追加できるようにしました"
 }

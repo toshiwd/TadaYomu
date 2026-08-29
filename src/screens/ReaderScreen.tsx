@@ -43,6 +43,7 @@ import { getAdapter } from "../services/siteAdapter";
 import { rubyTextToHtml } from "../services/textFormatter";
 import { syncService } from "../services/syncService";
 import { generateReaderHtml } from "../services/readerHtmlGenerator";
+import { getReaderFontFaces, type ReaderFontFace } from "../services/fontManager";
 import {
   normalizeReaderChapterIndex,
   resolveReaderChapterList,
@@ -93,6 +94,9 @@ export default function ReaderScreen({
   const [settings, setSettings] = useState<ReaderSettings>(() =>
     getReaderSettings(db),
   );
+  const [readerFontFaces, setReaderFontFaces] = useState<ReaderFontFace[]>(() =>
+    getReaderFontFaces(getReaderSettings(db).fontFamily),
+  );
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [containerLayout, setContainerLayout] = useState({
@@ -116,6 +120,10 @@ export default function ReaderScreen({
   // Keep a ref to settings so htmlContent doesn't depend on it
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
+
+  useEffect(() => {
+    setReaderFontFaces(getReaderFontFaces(settings.fontFamily));
+  }, [settings.fontFamily]);
 
   const onLayout = useCallback((event: any) => {
     const { width, height } = event.nativeEvent.layout;
@@ -582,6 +590,10 @@ export default function ReaderScreen({
       const updated = { ...settingsRef.current, [key]: value };
       settingsRef.current = updated;
       setSettings(updated);
+      if (key === "fontFamily") {
+        setReaderFontFaces(getReaderFontFaces(String(value)));
+        setWebViewInstanceKey((current) => current + 1);
+      }
 
       // Keep the WebView side effect outside the state updater. React may
       // evaluate an updater more than once, but posting a style update is not
@@ -628,6 +640,7 @@ export default function ReaderScreen({
       startAtLastPage,
       initialProgress,
       initialPositionAnchor,
+      fontFaces: readerFontFaces,
       rubyTextToHtml,
     });
   }, [
@@ -640,6 +653,7 @@ export default function ReaderScreen({
     startAtLastPage,
     initialProgress,
     initialPositionAnchor,
+    readerFontFaces,
   ]);
 
   const webViewSource = useMemo(

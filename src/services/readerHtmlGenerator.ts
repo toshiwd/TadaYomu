@@ -1,4 +1,5 @@
 import type { ReaderSettings } from '../types/novel';
+import type { ReaderFontFace } from './fontManager';
 import {
   READER_FLICK_AXIS_RATIO,
   READER_FLICK_MAX_DURATION_MS,
@@ -16,6 +17,7 @@ export interface GenerateHtmlParams {
   startAtLastPage: boolean;
   initialProgress?: number;
   initialPositionAnchor?: ReaderPositionAnchor | null;
+  fontFaces?: ReaderFontFace[];
   rubyTextToHtml: (text: string) => string;
 }
 
@@ -33,6 +35,7 @@ export function generateReaderHtml({
   startAtLastPage,
   initialProgress,
   initialPositionAnchor,
+  fontFaces = [],
   rubyTextToHtml,
 }: GenerateHtmlParams): string {
   const isVertical = settings.writingMode === 'vertical';
@@ -56,10 +59,21 @@ export function generateReaderHtml({
   const processedText = rubyTextToHtml(chapterContentWithImages);
   const hasContent = processedText.trim().length > 0;
 
-  // Google Fonts CDN
-  const fontLink = settings.fontFamily === 'serif'
+  // Keep built-in reader faces network-backed; optional downloaded faces are
+  // local and are never fetched during application startup.
+  const fontLink = fontFaces.length > 0
+    ? ''
+    : settings.fontFamily === 'serif'
     ? '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700&display=swap" rel="stylesheet">'
     : '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">';
+
+  const fontFaceCss = fontFaces.map((face) => `
+@font-face {
+  font-family: ${JSON.stringify(face.family)};
+  font-style: normal;
+  font-weight: ${face.weight};
+  src: url(${JSON.stringify(face.uri)}) format("truetype");
+}`).join('');
 
   // Paragraph builder
   const contentHtml = hasContent ? (() => {
@@ -135,7 +149,9 @@ export function generateReaderHtml({
     }
   }
 
-  let fontFamilyCSS = settings.fontFamily === 'sans-serif'
+  let fontFamilyCSS = fontFaces.length > 0
+    ? `${JSON.stringify(fontFaces[0].family)}, "Noto Serif JP", "游明朝", "YuMincho", "ヒラギノ明朝 ProN", serif`
+    : settings.fontFamily === 'sans-serif'
     ? '"Noto Sans JP", "游ゴシック", "YuGothic", "ヒラギノ角ゴ ProN", sans-serif'
     : '"Noto Serif JP", "游明朝", "YuMincho", "ヒラギノ明朝 ProN", serif';
 
@@ -148,7 +164,8 @@ export function generateReaderHtml({
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 ${fontLink}
 <style>
-  :root {
+${fontFaceCss}
+:root {
     --fontSize: ${fontSize}px;
     --lineHeight: ${lineHeight};
     --marginLR: ${marginLR}px;
