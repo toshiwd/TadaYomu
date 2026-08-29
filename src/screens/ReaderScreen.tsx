@@ -579,31 +579,31 @@ export default function ReaderScreen({
 
   const updateSetting = useCallback(
     (key: keyof ReaderSettings, value: any) => {
-      setSettings((prev) => {
-        const updated = { ...prev, [key]: value };
+      const updated = { ...settingsRef.current, [key]: value };
+      settingsRef.current = updated;
+      setSettings(updated);
 
-        // Send style update to WebView via postMessage (no reload)
-        webViewRef.current?.postMessage(
-          JSON.stringify({
-            type: "update-style",
-            settings: {
-              fontSize: updated.fontSize,
-              lineHeight: updated.lineHeight,
-              fontFamily: updated.fontFamily,
-              margin: updated.margin,
-              marginTop: updated.marginTop,
-              marginBottom: updated.marginBottom,
-              paragraphSpacing: updated.paragraphSpacing,
-              writingMode: updated.writingMode,
-              reversePageDirection: updated.reversePageDirection,
-              pageTurnAnimation: updated.pageTurnAnimation,
-              showImages: updated.showImages,
-            },
-          }),
-        );
-
-        return updated;
-      });
+      // Keep the WebView side effect outside the state updater. React may
+      // evaluate an updater more than once, but posting a style update is not
+      // a pure state calculation.
+      webViewRef.current?.postMessage(
+        JSON.stringify({
+          type: "update-style",
+          settings: {
+            fontSize: updated.fontSize,
+            lineHeight: updated.lineHeight,
+            fontFamily: updated.fontFamily,
+            margin: updated.margin,
+            marginTop: updated.marginTop,
+            marginBottom: updated.marginBottom,
+            paragraphSpacing: updated.paragraphSpacing,
+            writingMode: updated.writingMode,
+            reversePageDirection: updated.reversePageDirection,
+            pageTurnAnimation: updated.pageTurnAnimation,
+            showImages: updated.showImages,
+          },
+        }),
+      );
     },
     [],
   );

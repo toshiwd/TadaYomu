@@ -66,6 +66,13 @@ export function generateReaderHtml({
     const lines = processedText.split('\n');
     const paragraphs: string[] = [];
     let currentLines: string[] = [];
+    const nextNonBlankLine: (string | undefined)[] = new Array(lines.length);
+    let nextContent: string | undefined;
+    for (let i = lines.length - 1; i >= 0; i--) {
+      nextNonBlankLine[i] = nextContent;
+      if (lines[i].trim()) nextContent = lines[i];
+    }
+    let previousContent: string | undefined;
     const isDialogue = (str: string) => /^[「『（]/.test(str.trim());
     const toDisplayLine = (str: string) => isVertical ? str.replace(/^[\s　]+/, '') : str;
     const flushCurrent = () => {
@@ -78,16 +85,17 @@ export function generateReaderHtml({
       const line = lines[i];
       if (!line.trim()) {
         flushCurrent();
-        const prevContent = paragraphs.length > 0 ? lines.slice(0, i).filter(l => l.trim()).pop() : undefined;
-        const nextContent = lines.slice(i + 1).find(l => l.trim());
-        if ((prevContent && isDialogue(prevContent)) || (nextContent && isDialogue(nextContent))) {
+        const followingContent = nextNonBlankLine[i];
+        if ((previousContent && isDialogue(previousContent)) || (followingContent && isDialogue(followingContent))) {
           paragraphs.push('<p class="blank">&nbsp;</p>');
         }
       } else if (line.indexOf('<div class="image-page">') !== -1) {
         flushCurrent();
         paragraphs.push(line);
+        previousContent = line;
       } else {
         currentLines.push(toDisplayLine(line));
+        previousContent = line;
       }
     }
     flushCurrent();
@@ -305,8 +313,18 @@ ${fontLink}
       var cursor = 0;
       while (cursor + viewportW < totalW) {
         var target = cursor + viewportW;
+        var low = 0;
+        var high = paraStarts.length - 1;
         var bestIdx = 0;
-        for (var j = 0; j < paraStarts.length; j++) { if (paraStarts[j] <= target + 0.5) bestIdx = j; }
+        while (low <= high) {
+          var middle = Math.floor((low + high) / 2);
+          if (paraStarts[middle] <= target + 0.5) {
+            bestIdx = middle;
+            low = middle + 1;
+          } else {
+            high = middle - 1;
+          }
+        }
         var nextStart = paraStarts[bestIdx];
         if (nextStart <= cursor + 0.5) nextStart = cursor + viewportW;
         if (nextStart >= totalW) break;

@@ -356,7 +356,7 @@ check(
 );
 
 const readerHtml = generateReaderHtml({
-  chapterText: "first paragraph\n\nsecond paragraph",
+  chapterText: "first paragraph\n\n「second paragraph」",
   settings: DEFAULT_READER_SETTINGS,
   containerLayout: { width: 360, height: 720 },
   insets: { top: 0, right: 0, bottom: 0, left: 0 },
@@ -384,6 +384,17 @@ check(
 check(
   "reader HTML preserves progress across reflow",
   readerHtml.includes("repaginatePreservingProgress"),
+  true,
+);
+check(
+  "reader geometry searches paragraph boundaries efficiently",
+  readerHtml.includes("while (low <= high)") &&
+    readerHtml.includes("if (paraStarts[middle] <= target + 0.5)"),
+  true,
+);
+check(
+  "reader preserves dialogue spacing around blank lines",
+  readerHtml.includes('class="blank">&nbsp;</p>'),
   true,
 );
 check(
