@@ -72,23 +72,23 @@ function check(label: string, actual: unknown, expected: unknown): void {
   failed += 1;
 }
 
-check("newer update version", compareSemver("1.3.73", "1.3.72"), 1);
-check("same update version", compareSemver("1.3.73", "1.3.73"), 0);
+check("newer update version", compareSemver("1.3.74", "1.3.73"), 1);
+check("same update version", compareSemver("1.3.74", "1.3.74"), 0);
 check(
   "valid GitHub update manifest",
   parseVersionManifest(
-    '\uFEFF{"version":"1.3.73","apkUrl":"https://github.com/toshiwd/TadaYomu/releases/download/v1.3.73/TadaYomu-v1.3.73.apk","releaseNotes":"更新"}',
+    '\uFEFF{"version":"1.3.74","apkUrl":"https://github.com/toshiwd/TadaYomu/releases/download/v1.3.74/TadaYomu-1.3.74.apk","releaseNotes":"更新"}',
   ).version,
-  "1.3.73",
+  "1.3.74",
 );
 checkThrows("reject non-HTTPS update URL", () =>
   parseVersionManifest(
-    '{"version":"1.3.73","apkUrl":"http://github.com/example.apk","releaseNotes":"更新"}',
+    '{"version":"1.3.74","apkUrl":"http://github.com/example.apk","releaseNotes":"更新"}',
   ),
 );
 checkThrows("reject lookalike update host", () =>
   parseVersionManifest(
-    '{"version":"1.3.73","apkUrl":"https://github.com.evil.example/update.apk","releaseNotes":"更新"}',
+    '{"version":"1.3.74","apkUrl":"https://github.com.evil.example/update.apk","releaseNotes":"更新"}',
   ),
 );
 

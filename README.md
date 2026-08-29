@@ -52,4 +52,5 @@ npm run android
 
 ## リリースビルド手順
 1. `app.json`, `package.json`, `release.bat` のバージョン番号をインクリメント。
-2. Windows環境から `./release.bat` を実行（内部で `gradlew assembleRelease` と `gh release` コマンドを叩いてGitHubのReleasesに自動公開されます）。
+2. Windows環境から `./release.bat` を実行して署名付きAPKと`version.json`を検証。
+3. APKとエミュレーター起動を確認後、`./publish-release.bat` でGitHub Releaseへ公開。

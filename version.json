@@ -1,5 +1,5 @@
 ﻿{
-    "version":  "1.3.73",
-    "apkUrl":  "https://github.com/toshiwd/TadaYomu/releases/download/v1.3.73/TadaYomu-1.3.73.apk",
-    "releaseNotes":  "更新ボタンからAPKを直接ダウンロードし、そのままAndroidのインストール画面を開けるようにしました"
+    "version":  "1.3.74",
+    "apkUrl":  "https://github.com/toshiwd/TadaYomu/releases/download/v1.3.74/TadaYomu-1.3.74.apk",
+    "releaseNotes":  "読書画面の表示安定性と長文処理の効率を改善しました"
 }

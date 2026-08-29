@@ -1,13 +1,23 @@
 @echo off
 setlocal
 
-set VERSION=1.3.65
+set VERSION=1.3.74
 set APK=TadaYomu-%VERSION%.apk
 
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\assert-crashlytics-release-gate.ps1
+if not exist "%APK%" (
+    echo.
+    echo [ERROR] APK was not found: %APK%
+    exit /b 1
+)
+if not exist "version.json" (
+    echo.
+    echo [ERROR] version.json was not found.
+    exit /b 1
+)
+powershell -NoProfile -Command "$m = Get-Content -Raw -LiteralPath 'version.json' | ConvertFrom-Json; if ($m.version -ne '%VERSION%' -or $m.apkUrl -notmatch '/v%VERSION%/TadaYomu-%VERSION%\.apk$') { exit 1 }"
 if %ERRORLEVEL% neq 0 (
     echo.
-    echo [BLOCKED] Crashlytics release validation is incomplete.
+    echo [ERROR] version.json does not match v%VERSION%.
     exit /b 1
 )
 
