@@ -373,8 +373,10 @@ export default function ReaderScreen({
           }
         }
       } else {
-        if (isCurrentRequest())
+        if (isCurrentRequest()) {
           setChapterText("この話はまだダウンロードされていません");
+          setLoadError(true);
+        }
       }
 
       if (isCurrentRequest()) {
@@ -667,7 +669,12 @@ export default function ReaderScreen({
         const data = JSON.parse(event.nativeEvent.data);
         if (data.documentId !== readerDocumentId) return;
         if (data.type === "page-info") {
+          // Error/loading documents must never replace a saved reading position.
+          if (loading || loadError || webViewRenderFailed) return;
           if (!shouldProcessReaderPageInfo(appStateRef.current)) return;
+          if (!Number.isSafeInteger(data.currentPage) || data.currentPage < 1 ||
+              !Number.isSafeInteger(data.totalPages) || data.totalPages < data.currentPage ||
+              typeof data.progress !== "number" || !Number.isFinite(data.progress)) return;
           const nextPage =
             typeof data.currentPage === "number" ? data.currentPage : 1;
           const nextTotalPages =
@@ -822,6 +829,9 @@ export default function ReaderScreen({
       toggleToolbar,
       novel,
       readerDocumentId,
+      loading,
+      loadError,
+      webViewRenderFailed,
     ],
   );
 

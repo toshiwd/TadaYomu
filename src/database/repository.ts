@@ -5,6 +5,8 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import type { Novel, Chapter, ReadingProgress, Bookmark, ReaderSettings, SiteType } from '../types/novel';
 import type { ReaderPositionAnchor } from '../services/readerProgress';
 import { DEFAULT_READER_SETTINGS } from '../types/novel';
+import { normalizeReaderPositionAnchor } from '../services/readerProgress';
+import { normalizeReaderSettings } from '../services/readerSettings';
 
 export type ReadingProgressWithAnchor = ReadingProgress & {
     positionAnchor?: ReaderPositionAnchor | null;
@@ -242,7 +244,10 @@ export function upsertReadingProgress(
     chapter: number,
     scroll: number,
     positionAnchor?: ReaderPositionAnchor | null,
+    lastReadAt: string = new Date().toISOString(),
 ): void {
+    if (!Number.isSafeInteger(chapter) || chapter < 1) throw new Error('Invalid reading chapter');
+    if (!parseReadingTimestampMs(lastReadAt)) throw new Error('Invalid reading timestamp');
     const normalizedScroll = clampReadingProgress(scroll);
     const existing = db.getFirstSync(
         `SELECT current_chapter, anchor_block_index, anchor_character_offset, anchor_context_hash
@@ -261,25 +266,19 @@ export function upsertReadingProgress(
             contextHash: existing.anchor_context_hash,
         }
         : positionAnchor;
-    const validAnchor =
-        preservedAnchor &&
-        Number.isInteger(preservedAnchor.blockIndex) &&
-        Number.isInteger(preservedAnchor.characterOffset) &&
-        typeof preservedAnchor.contextHash === 'string'
-            ? preservedAnchor
-            : null;
+    const validAnchor = normalizeReaderPositionAnchor(preservedAnchor);
     db.runSync(
         `INSERT INTO reading_progress (
            novel_id, current_chapter, scroll_percentage,
            anchor_block_index, anchor_character_offset, anchor_context_hash, last_read_at
-         ) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+         ) VALUES (?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(novel_id) DO UPDATE SET
        current_chapter = excluded.current_chapter,
        scroll_percentage = excluded.scroll_percentage,
        anchor_block_index = excluded.anchor_block_index,
        anchor_character_offset = excluded.anchor_character_offset,
        anchor_context_hash = excluded.anchor_context_hash,
-       last_read_at = datetime('now')`,
+       last_read_at = excluded.last_read_at`,
         [
             novelId,
             chapter,
@@ -287,6 +286,7 @@ export function upsertReadingProgress(
             validAnchor?.blockIndex ?? null,
             validAnchor?.characterOffset ?? null,
             validAnchor?.contextHash ?? null,
+            lastReadAt,
         ]
     );
 }
@@ -395,7 +395,7 @@ export function setSetting(db: SQLiteDatabase, key: string, value: string): void
 export function getReaderSettings(db: SQLiteDatabase): ReaderSettings {
     const json = getSetting(db, 'reader_settings');
     if (json) {
-        try { return { ...DEFAULT_READER_SETTINGS, ...JSON.parse(json) }; } catch { }
+        try { return normalizeReaderSettings(JSON.parse(json)); } catch { }
     }
     return { ...DEFAULT_READER_SETTINGS };
 }
@@ -451,7 +451,7 @@ function safeParseJson<T>(str: string, fallback: T): T {
 }
 
 export function parseReadingTimestampMs(raw: string | null | undefined): number {
-    if (!raw) return 0;
+    if (typeof raw !== 'string' || !raw) return 0;
     if (raw.includes('T')) {
         const t = Date.parse(raw);
         return Number.isNaN(t) ? 0 : t;

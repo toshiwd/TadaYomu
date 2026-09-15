@@ -465,6 +465,9 @@ ${fontFaceCss}
     var targetOffset = isVertical
       ? (pageBoundaries[currentPage] || 0)
       : currentPage * pageStepPx;
+    var targetEnd = isVertical && pageBoundaries[currentPage + 1] !== undefined
+      ? pageBoundaries[currentPage + 1]
+      : targetOffset + pageStepPx;
     var bestAnchor = null;
     var bestScore = Number.POSITIVE_INFINITY;
     var blocks = reader.querySelectorAll('[data-reader-block]');
@@ -483,9 +486,15 @@ ${fontFaceCss}
     for (var blockCursor = 0; blockCursor < blocks.length; blockCursor++) {
       var block = blocks[blockCursor];
       var blockRect = block.getBoundingClientRect();
-      var blockIsVisible =
-        blockRect.right > rect.left && blockRect.left < rect.right &&
-        blockRect.bottom > rect.top && blockRect.top < rect.bottom;
+      // Use document coordinates: the visual viewport may still show the
+      // previous page while a page-turn animation is running.
+      var blockStart = isVertical && contentRect
+        ? contentRect.right - blockRect.right
+        : blockRect.left - rect.left + reader.scrollLeft;
+      var blockEnd = isVertical && contentRect
+        ? contentRect.right - blockRect.left
+        : blockRect.right - rect.left + reader.scrollLeft;
+      var blockIsVisible = blockEnd > targetOffset && blockStart < targetEnd;
       if (!blockIsVisible) continue;
       var textLength = (block.textContent || '').length;
       if (textLength < 1) continue;
@@ -505,15 +514,11 @@ ${fontFaceCss}
         var range = rangeAtCharacterOffset(block, characterOffset);
         if (!range) continue;
         var measured = logicalOffsetForRange(range);
-        var charRect = measured.rect;
         var isVisible =
-          charRect.right > rect.left && charRect.left < rect.right &&
-          charRect.bottom > rect.top && charRect.top < rect.bottom;
+          measured.offset + 1 >= targetOffset && measured.offset < targetEnd;
         var score;
         if (isVisible) {
-          var primaryEdgeDistance = isVertical
-            ? Math.abs(rect.right - charRect.right)
-            : Math.abs(charRect.left - rect.left);
+          var primaryEdgeDistance = Math.abs(measured.offset - targetOffset);
           score = primaryEdgeDistance * 1000 + measured.crossOffset;
         } else {
           var behindBoundaryPenalty = measured.offset + 1 < targetOffset ? pageStepPx * 4 : 0;

@@ -8,6 +8,7 @@ import {
 
 import { ThemeProvider, useTheme, type ThemeMode } from './src/theme/ThemeContext';
 import AppNavigator from './src/navigation/AppNavigator';
+import AppErrorBoundary from './src/AppErrorBoundary';
 import { initDatabase } from './src/database/schema';
 import { registerAdapter } from './src/services/siteAdapter';
 import { syosetuAdapter } from './src/services/adapters/syosetuAdapter';
@@ -79,6 +80,8 @@ function AppContent() {
                 novel.id,
                 cloudProgress.currentChapter,
                 cloudProgress.scrollPercentage || 0,
+                cloudProgress.positionAnchor ?? null,
+                cloudProgress.lastReadAt,
               );
             } else if (localProgress && localIsNewer) {
               // Local is ahead, upload in batch
@@ -135,13 +138,14 @@ async function onDbInit(db: any) {
   initDatabase(db);
 }
 
-export default function App() {
-  const [fontsLoaded] = useFonts({
+function AppRoot() {
+  const [fontsLoaded, fontError] = useFonts({
     NotoSansJP_400Regular: require('./assets/fonts/NotoSansJP-Regular.ttf'),
     NotoSansJP_600SemiBold: require('./assets/fonts/NotoSansJP-SemiBold.ttf'),
     NotoSansJP_700Bold: require('./assets/fonts/NotoSansJP-Bold.ttf'),
   });
 
+  if (fontError) throw fontError;
   if (!fontsLoaded) {
     return (
       <View style={loadingStyles.container}>
@@ -155,6 +159,10 @@ export default function App() {
       <ThemedApp />
     </SQLiteProvider>
   );
+}
+
+export default function App() {
+  return <AppErrorBoundary><AppRoot /></AppErrorBoundary>;
 }
 
 const loadingStyles = StyleSheet.create({

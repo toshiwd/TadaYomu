@@ -224,7 +224,7 @@ export default function NovelDetailScreen({
           if (!remoteProgress) return;
           if (
             isRemoteReadingProgressNewer(
-              progress?.lastReadAt,
+              getReadingProgress(db, novelId)?.lastReadAt,
               remoteProgress.lastReadAt,
             )
           ) {
@@ -234,7 +234,8 @@ export default function NovelDetailScreen({
               novelId,
               remoteProgress.currentChapter,
               remoteProgress.scrollPercentage,
-              remoteProgress.positionAnchor,
+              remoteProgress.positionAnchor ?? null,
+              remoteProgress.lastReadAt,
             );
           }
         })
