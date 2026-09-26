@@ -42,24 +42,57 @@ const SITE_HOME_URLS: Record<string, string> = {
     'akatsuki-novels.com': 'https://www.akatsuki-novels.com/',
 };
 
-// The browser displays the site's HTML directly. Hide only ad containers on
-// Narou pages; the reader's extracted chapter HTML is handled separately.
-const HIDE_NAROU_ADS_SCRIPT = `
+// The browser displays each site's HTML directly. Keep selectors scoped to
+// verified site hosts so ordinary content and unrelated pages stay visible.
+const HIDE_SITE_ADS_SCRIPT = `
 (function () {
     var host = window.location.hostname.toLowerCase();
-    if (host !== 'syosetu.com' && host !== 'www.syosetu.com' &&
-        host !== 'ncode.syosetu.com' && host !== 'yomou.syosetu.com') return true;
+    var selectors;
+    var watchGenieeOverlay = false;
+    if (host === 'syosetu.com' || host === 'www.syosetu.com' ||
+        host === 'ncode.syosetu.com' || host === 'yomou.syosetu.com') {
+        selectors = '.c-ad, #flexible-sticky-outer';
+    } else if (host === 'noc.syosetu.com' || host === 'novel18.syosetu.com' ||
+        host === 'mnlt.syosetu.com' || host === 'mid.syosetu.com') {
+        selectors = '.c-ad, .koukoku, .koukoku_rectangle, .koukoku100, #flexible-sticky-outer, #geniee_overlay_outer, div[class*="gn_wipead_outer_"]';
+        watchGenieeOverlay = true;
+    } else if (host === 'syosetu.org' || host === 'www.syosetu.org') {
+        selectors = '.ad, [data-cptid], [id^="vw_"]';
+    } else if (host === 'kakuyomu.jp' || host === 'www.kakuyomu.jp') {
+        selectors = '[id^="js-ad-episode-"], [id^="adg-slot-wrapper-js-ad-"], #episode-bottomAd-touch, #contentMain-nextEpisode-ad';
+    } else {
+        return true;
+    }
     function installStyle() {
-        if (document.getElementById('tadayomu-narou-ad-style')) return;
+        if (document.getElementById('tadayomu-site-ad-style')) return;
         var root = document.head || document.documentElement;
         if (!root) return;
         var style = document.createElement('style');
-        style.id = 'tadayomu-narou-ad-style';
-        style.textContent = '.c-ad, #flexible-sticky-outer { display: none !important; }';
+        style.id = 'tadayomu-site-ad-style';
+        style.textContent = selectors + ' { display: none !important; }';
         root.appendChild(style);
     }
     installStyle();
     if (!document.documentElement) document.addEventListener('DOMContentLoaded', installStyle, { once: true });
+    if (watchGenieeOverlay && document.documentElement &&
+        !document.documentElement.__tadayomuOverlayObserver) {
+        var observedOverlay = null;
+        var hideOverlay = function () {
+            var overlay = document.getElementById('geniee_overlay_outer');
+            if (overlay && overlay !== observedOverlay) {
+                observedOverlay = overlay;
+                new MutationObserver(hideOverlay).observe(overlay,
+                    { attributes: true, attributeFilter: ['style'] });
+            }
+            if (overlay && overlay.style.getPropertyValue('display') !== 'none') {
+                overlay.style.setProperty('display', 'none', 'important');
+            }
+        };
+        var observer = new MutationObserver(hideOverlay);
+        observer.observe(document.documentElement, { childList: true, subtree: true });
+        document.documentElement.__tadayomuOverlayObserver = observer;
+        hideOverlay();
+    }
     return true;
 })();
 `;
@@ -200,8 +233,8 @@ export default function SiteBrowserScreen({ route, navigation }: RootStackScreen
                 }}
                 setSupportMultipleWindows={false}
                 javaScriptEnabled
-                injectedJavaScriptBeforeContentLoaded={HIDE_NAROU_ADS_SCRIPT}
-                injectedJavaScript={HIDE_NAROU_ADS_SCRIPT}
+                injectedJavaScriptBeforeContentLoaded={HIDE_SITE_ADS_SCRIPT}
+                injectedJavaScript={HIDE_SITE_ADS_SCRIPT}
                 domStorageEnabled
                 nestedScrollEnabled
                 startInLoadingState

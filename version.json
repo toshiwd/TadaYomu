@@ -1,5 +1,5 @@
 ﻿{
-  "version": "1.3.78",
-  "apkUrl": "https://github.com/toshiwd/TadaYomu/releases/download/v1.3.78/TadaYomu-1.3.78.apk",
-  "releaseNotes": "なろうのアプリ内ブラウザで広告枠を非表示にしました"
+  "version": "1.3.79",
+  "apkUrl": "https://github.com/toshiwd/TadaYomu/releases/download/v1.3.79/TadaYomu-1.3.79.apk",
+  "releaseNotes": "アプリ内ブラウザでノクターン、カクヨム、ハーメルンの広告枠も非表示にしました"
 }
