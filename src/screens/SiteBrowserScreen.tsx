@@ -42,6 +42,28 @@ const SITE_HOME_URLS: Record<string, string> = {
     'akatsuki-novels.com': 'https://www.akatsuki-novels.com/',
 };
 
+// The browser displays the site's HTML directly. Hide only ad containers on
+// Narou pages; the reader's extracted chapter HTML is handled separately.
+const HIDE_NAROU_ADS_SCRIPT = `
+(function () {
+    var host = window.location.hostname.toLowerCase();
+    if (host !== 'syosetu.com' && host !== 'www.syosetu.com' &&
+        host !== 'ncode.syosetu.com' && host !== 'yomou.syosetu.com') return true;
+    function installStyle() {
+        if (document.getElementById('tadayomu-narou-ad-style')) return;
+        var root = document.head || document.documentElement;
+        if (!root) return;
+        var style = document.createElement('style');
+        style.id = 'tadayomu-narou-ad-style';
+        style.textContent = '.c-ad, #flexible-sticky-outer { display: none !important; }';
+        root.appendChild(style);
+    }
+    installStyle();
+    if (!document.documentElement) document.addEventListener('DOMContentLoaded', installStyle, { once: true });
+    return true;
+})();
+`;
+
 function getBrowserFallbackUrl(url: string): string | null {
     if (/^https:\/\/yomou\.syosetu\.com\/rank\/top\/?/i.test(url)) {
         return 'https://syosetu.com/';
@@ -178,6 +200,8 @@ export default function SiteBrowserScreen({ route, navigation }: RootStackScreen
                 }}
                 setSupportMultipleWindows={false}
                 javaScriptEnabled
+                injectedJavaScriptBeforeContentLoaded={HIDE_NAROU_ADS_SCRIPT}
+                injectedJavaScript={HIDE_NAROU_ADS_SCRIPT}
                 domStorageEnabled
                 nestedScrollEnabled
                 startInLoadingState

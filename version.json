@@ -1,5 +1,5 @@
 ﻿{
-  "version": "1.3.77",
-  "apkUrl": "https://github.com/toshiwd/TadaYomu/releases/download/v1.3.77/TadaYomu-1.3.77.apk",
-  "releaseNotes": "横画面の縦書き本文を画面幅に合わせ、読書画面の失敗原因を調べるログを追加しました"
+  "version": "1.3.78",
+  "apkUrl": "https://github.com/toshiwd/TadaYomu/releases/download/v1.3.78/TadaYomu-1.3.78.apk",
+  "releaseNotes": "なろうのアプリ内ブラウザで広告枠を非表示にしました"
 }
