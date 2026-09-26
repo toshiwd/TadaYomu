@@ -27,9 +27,13 @@ export function createChapterReadKey(
 export function runChapterReadSingleFlight(
   key: string,
   read: () => Promise<string>,
+  onShared?: () => void,
 ): Promise<string> {
   const existing = chapterReadsInFlight.get(key);
-  if (existing) return existing;
+  if (existing) {
+    onShared?.();
+    return existing;
+  }
 
   const pending = read();
   chapterReadsInFlight.set(key, pending);

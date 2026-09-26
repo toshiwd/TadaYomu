@@ -50,6 +50,7 @@ import {
   resolveReaderNextChapter,
 } from "../services/readerEntry";
 import { getNextChapterIndexToPrefetch } from "../services/readerPrefetch";
+import { beginReaderAttempt, getReaderDiagnostic, logReaderFailure, logReaderWebViewFailure, setReaderStage } from "../services/readerDiagnostics";
 import {
   addVolumePageTurnListener,
   setVolumePagingEnabled,
@@ -127,15 +128,24 @@ export default function ReaderScreen({
 
   const onLayout = useCallback((event: any) => {
     const { width, height } = event.nativeEvent.layout;
-    setContainerLayout((prev) => {
-      if (
-        Math.abs(prev.width - width) < 2 &&
-        Math.abs(prev.height - height) < 2
-      )
-        return prev;
-      return { width, height };
-    });
-  }, []);
+    if (
+      Math.abs(containerLayout.width - width) < 2 &&
+      Math.abs(containerLayout.height - height) < 2
+    ) return;
+
+    // The new document can report page 1 before WebView's load callbacks run.
+    // Capture the current position before changing its viewport dimensions.
+    const latest = latestProgressRef.current;
+    if (isReaderProgressForChapter(latest, novelId, chapterIndex)) {
+      pendingRestoreRef.current = {
+        progress: latest.progress,
+        positionAnchor: latest.positionAnchor,
+        resumePage: latest.page,
+        resumeTotalPages: latestTotalPagesRef.current,
+      };
+    }
+    setContainerLayout({ width, height });
+  }, [containerLayout, novelId, chapterIndex]);
 
   const settingsAnim = useRef(new Animated.Value(0)).current;
   const toolbarAnim = useRef(new Animated.Value(1)).current;
@@ -210,6 +220,7 @@ export default function ReaderScreen({
   useEffect(() => {
     const n = getNovelById(db, novelId);
     if (!n) {
+      logReaderFailure('novel_lookup_failed', new Error('Novel not found in local library'));
       setChapterText("作品情報が見つかりません。書庫に戻って再読み込みしてください");
       setLoadError(true);
       setLoading(false);
@@ -227,6 +238,7 @@ export default function ReaderScreen({
     });
     setTotalChapters(n.totalEpisodes);
     if (n.totalEpisodes <= 0) {
+      logReaderFailure('chapter_count_failed', new Error('Novel has no known chapters'));
       setNovel(null);
       setChapterText("話一覧を取得できませんでした。再読み込みしてください");
       setLoadError(true);
@@ -250,12 +262,14 @@ export default function ReaderScreen({
     void (async () => {
       let availableChapterCount = novel.totalEpisodes;
       let ch = getChapter(db, novelId, chapterIndex);
+      beginReaderAttempt(ch?.url ?? null, retryCount);
 
       // チャプターがDBに存在しない場合（同期済みだが未取得）
       if (!ch && novel) {
         const adapter = getAdapter(novel.siteType);
         if (adapter) {
           try {
+            setReaderStage('chapter_list_fetch');
             console.log(`[Reader] No chapter in DB, fetching chapter list from site...`);
             const chapterList = await adapter.getChapterList(novel.siteNovelId);
             if (!isCurrentRequest()) return;
@@ -269,6 +283,8 @@ export default function ReaderScreen({
               chapterList.length,
             );
             if (resolution.kind === "empty") {
+              setReaderStage('chapter_list_parse', { htmlParse: 'failed' });
+              logReaderFailure('chapter_list_parse_failed', new Error('Chapter list was empty'), { url: null });
               setTotalChapters(0);
               setChapterText("話一覧を取得できませんでした。再読み込みしてください");
               setLoadError(true);
@@ -305,14 +321,19 @@ export default function ReaderScreen({
               return;
             }
             ch = getChapter(db, novelId, resolution.chapterIndex);
+            setReaderStage('chapter_lookup', { url: ch?.url ?? null, htmlParse: 'success' });
           } catch (err) {
-            console.error(`[Reader] Failed to fetch chapter list:`, err);
+            if (isCurrentRequest()) logReaderFailure('chapter_list_failed', err);
           }
         }
       }
 
       if (ch && ch.url) {
         try {
+          setReaderStage('chapter_read', {
+            url: ch.url, finalUrl: null, httpStatus: null,
+            htmlFetch: 'not_attempted', htmlParse: 'not_attempted',
+          });
           const rawText = await readChapterText(
             ch,
             novel.siteNovelId,
@@ -320,6 +341,7 @@ export default function ReaderScreen({
             novel.siteType,
           );
           if (isCurrentRequest()) {
+            setReaderStage('chapter_text_ready', { readerRender: 'pending' });
             const savedProgress = getReadingProgress(db, novelId);
             const openedChapterProgress = startAtLastPage
               ? 1
@@ -364,8 +386,8 @@ export default function ReaderScreen({
             setChapterTitle(ch.title || `第${chapterIndex}話`);
           }
         } catch (err: any) {
-          console.error(`[Reader] Failed to load chapter:`, err);
           if (isCurrentRequest()) {
+            logReaderFailure('chapter_read_failed', err);
             setChapterText(
               `テキストの読み込みに失敗しました\n${err?.message || ""}`,
             );
@@ -374,6 +396,7 @@ export default function ReaderScreen({
         }
       } else {
         if (isCurrentRequest()) {
+          logReaderFailure('chapter_lookup_failed', new Error('Chapter URL is missing'));
           setChapterText("この話はまだダウンロードされていません");
           setLoadError(true);
         }
@@ -402,8 +425,8 @@ export default function ReaderScreen({
         setLoading(false);
       }
     })().catch((err: any) => {
-      console.error("[Reader] Failed to initialize chapter:", err);
       if (isCurrentRequest()) {
+        logReaderFailure('chapter_initialization_failed', err);
         setChapterText(
           `テキストの読み込みに失敗しました\n${err?.message || ""}`,
         );
@@ -632,19 +655,27 @@ export default function ReaderScreen({
       return '<html><body style="display:flex;justify-content:center;align-items:center;height:100vh;"><p>読み込み中...</p></body></html>';
     if (containerLayout.width === 0 || containerLayout.height === 0) return "";
 
-    return generateReaderHtml({
-      chapterText: chapterText,
-      settings: settingsRef.current,
-      containerLayout,
-      insets,
-      readerTheme,
-      documentId: readerDocumentId,
-      startAtLastPage,
-      initialProgress,
-      initialPositionAnchor,
-      fontFaces: readerFontFaces,
-      rubyTextToHtml,
-    });
+    setReaderStage('reader_html_generation');
+    try {
+      const html = generateReaderHtml({
+        chapterText: chapterText,
+        settings: settingsRef.current,
+        containerLayout,
+        insets,
+        readerTheme,
+        documentId: readerDocumentId,
+        startAtLastPage,
+        initialProgress,
+        initialPositionAnchor,
+        fontFaces: readerFontFaces,
+        rubyTextToHtml,
+      });
+      setReaderStage('reader_html_generated', { readerRender: 'pending' });
+      return html;
+    } catch (error) {
+      logReaderFailure('reader_render_failed', error);
+      throw error;
+    }
   }, [
     chapterText,
     readerTheme,
@@ -675,6 +706,7 @@ export default function ReaderScreen({
           if (!Number.isSafeInteger(data.currentPage) || data.currentPage < 1 ||
               !Number.isSafeInteger(data.totalPages) || data.totalPages < data.currentPage ||
               typeof data.progress !== "number" || !Number.isFinite(data.progress)) return;
+          setReaderStage('reader_rendered', { readerRender: 'success' });
           const nextPage =
             typeof data.currentPage === "number" ? data.currentPage : 1;
           const nextTotalPages =
@@ -685,6 +717,13 @@ export default function ReaderScreen({
 
           const pendingRestore = pendingRestoreRef.current;
           if (pendingRestore !== null) {
+            // During rotation WebView can briefly report one page before its
+            // vertical columns are laid out. Keep the old anchor until the
+            // real page count arrives instead of persisting a false page 1.
+            if (
+              nextTotalPages === 1 &&
+              (pendingRestore.resumeTotalPages ?? 0) > 3
+            ) return;
             const expectedPage =
               Math.round(
                 Math.max(0, Math.min(pendingRestore.progress, 1)) *
@@ -817,7 +856,7 @@ export default function ReaderScreen({
           console.log("[WebView]", data.message);
         }
       } catch (err) {
-        console.warn("[Reader] Failed to handle WebView message", err);
+        logReaderFailure('reader_message_failed', err);
       }
     },
     [
@@ -838,7 +877,12 @@ export default function ReaderScreen({
   const getLatestRestorablePosition = useCallback(() => {
     const latest = latestProgressRef.current;
     if (isReaderProgressForChapter(latest, novelId, chapterIndex)) {
-      return { progress: latest.progress, positionAnchor: latest.positionAnchor };
+      return {
+        progress: latest.progress,
+        positionAnchor: latest.positionAnchor,
+        resumePage: latest.page,
+        resumeTotalPages: latestTotalPagesRef.current,
+      };
     }
 
     if (startAtLastPage) return { progress: 1, positionAnchor: null };
@@ -1042,13 +1086,25 @@ export default function ReaderScreen({
             source={webViewSource}
             style={{ flex: 1, backgroundColor: readerTheme.bg }}
             onLoadStart={() => {
+              setReaderStage('webview_loading', { readerRender: 'pending' });
               pendingRestoreRef.current = getLatestRestorablePosition();
             }}
             onLoadEnd={() => {
+              if (getReaderDiagnostic().readerRender !== 'success') {
+                setReaderStage('webview_loaded', { readerRender: 'pending' });
+              }
               restoreWebViewPosition(getLatestRestorablePosition());
+            }}
+            onError={(event) => {
+              logReaderWebViewFailure(event.nativeEvent.url, new Error(event.nativeEvent.description));
+            }}
+            onHttpError={(event) => {
+              logReaderWebViewFailure(event.nativeEvent.url,
+                new Error(`HTTP ${event.nativeEvent.statusCode}`), event.nativeEvent.statusCode);
             }}
             onMessage={handleMessage}
             onRenderProcessGone={() => {
+              logReaderFailure('reader_render_failed', new Error('WebView render process exited'));
               flushLatestProgress();
               setWebViewRenderFailed(true);
             }}

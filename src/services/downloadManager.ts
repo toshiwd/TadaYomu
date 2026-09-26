@@ -18,6 +18,7 @@ import {
   createChapterReadKey,
   runChapterReadSingleFlight,
 } from "./readerPrefetch";
+import { noteReaderSharedRead } from "./readerDiagnostics";
 
 /** Get the novels base directory */
 function getNovelsDir(): Directory {
@@ -376,6 +377,7 @@ export function readChapterText(
   const key = createChapterReadKey(siteType, siteNovelId, chapter.index);
   return runChapterReadSingleFlight(key, () =>
     readChapterTextOnce(chapter, siteNovelId, db, siteType),
+    () => noteReaderSharedRead(chapter.url),
   );
 }
 

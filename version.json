@@ -1,5 +1,5 @@
 ﻿{
-  "version": "1.3.76",
-  "apkUrl": "https://github.com/toshiwd/TadaYomu/releases/download/v1.3.76/TadaYomu-1.3.76.apk",
-  "releaseNotes": "起動時のクラッシュ回復、読書位置の保存・復元、ページ送り中の位置ずれを改善しました"
+  "version": "1.3.77",
+  "apkUrl": "https://github.com/toshiwd/TadaYomu/releases/download/v1.3.77/TadaYomu-1.3.77.apk",
+  "releaseNotes": "横画面の縦書き本文を画面幅に合わせ、読書画面の失敗原因を調べるログを追加しました"
 }

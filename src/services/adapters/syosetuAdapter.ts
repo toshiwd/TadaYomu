@@ -9,6 +9,10 @@ import type {
 } from '../siteAdapter';
 import type { SiteType } from '../../types/novel';
 import { getNextChapterListPage } from '../runtimeGuards';
+import {
+    noteReaderHttpStart, noteReaderHttpResponse, noteReaderHtmlFetched,
+    noteReaderHtmlParsed, noteReaderHtmlParseFailure, noteReaderHttpFailure,
+} from '../readerDiagnostics';
 
 const NAROU_API = 'https://api.syosetu.com/novelapi/api/';
 const NAROU_BASE = 'https://ncode.syosetu.com';
@@ -37,7 +41,8 @@ async function rateLimitedFetch(url: string): Promise<string> {
     }
     lastRequestTime = Date.now();
 
-    console.log(`[Adapter] Fetching: ${url}`);
+    noteReaderHttpStart(url);
+    try {
     const res = await fetch(url, {
         headers: {
             'User-Agent': USER_AGENT,
@@ -46,12 +51,15 @@ async function rateLimitedFetch(url: string): Promise<string> {
             'Cookie': 'over18=yes',
         },
     });
-    console.log(`[Adapter] Status: ${res.status}`);
-    console.log(`[Adapter] Final URL: ${res.url}`);
+    noteReaderHttpResponse(url, res.status, res.url || url);
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${url}`);
     const text = await res.text();
-    console.log(`[Adapter] Response Length: ${text.length}`);
+    noteReaderHtmlFetched(url);
     return text;
+    } catch (error) {
+        noteReaderHttpFailure(url, error);
+        throw error;
+    }
 }
 
 /**
@@ -455,6 +463,7 @@ export const syosetuAdapter: SiteAdapter = {
 
     async getChapterContent(novelId: string, chapterUrl: string): Promise<ChapterContent> {
         const html = await rateLimitedFetch(chapterUrl);
+        try {
         console.log(`[Adapter] Full HTML length: ${html.length}`);
 
         // Extract chapter title
@@ -500,7 +509,7 @@ export const syosetuAdapter: SiteAdapter = {
 
         if (!bodyHtml) {
             console.warn('[Adapter] WARNING: No body content found in HTML!');
-            console.warn('[Adapter] HTML snippet:', html.substring(0, 500));
+            noteReaderHtmlParsed(chapterUrl, false);
         }
 
         // Extract index from URL
@@ -511,13 +520,12 @@ export const syosetuAdapter: SiteAdapter = {
         const rubyText = htmlToNovelFormat(bodyHtml);
         console.log(`[Adapter] Body HTML length: ${bodyHtml.length}`);
         console.log(`[Adapter] Converted text length: ${rubyText.length}`);
-        if (rubyText.length > 0) {
-            console.log(`[Adapter] Preview: ${rubyText.substring(0, 100)}`);
-        } else {
+        if (rubyText.length === 0) {
             console.warn('[Adapter] WARNING: Converted text is empty!');
         }
 
         const cleanedHtml = cleanHtmlForReader(bodyHtml);
+        noteReaderHtmlParsed(chapterUrl, rubyText.trim().length > 0);
 
         return {
             index,
@@ -525,6 +533,10 @@ export const syosetuAdapter: SiteAdapter = {
             bodyHtml: cleanedHtml,
             bodyText: rubyText,
         };
+        } catch (error) {
+            noteReaderHtmlParseFailure(chapterUrl, error);
+            throw error;
+        }
     },
 };
 

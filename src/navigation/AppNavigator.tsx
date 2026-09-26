@@ -25,6 +25,7 @@ import {
   type ExternalSiteBrowserParams,
 } from "../services/externalSiteLinks";
 import TadayomuShareIntent from "../../modules/tadayomu-share-intent";
+import { setDiagnosticScreen } from "../services/readerDiagnostics";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -149,6 +150,7 @@ export default function AppNavigator() {
   }, [openSharedText]);
 
   const handleNavigationReady = React.useCallback(() => {
+    setDiagnosticScreen(navigationRef.getCurrentRoute()?.name ?? 'Main');
     const pendingLink = pendingExternalLinkRef.current;
     if (!pendingLink) return;
     pendingExternalLinkRef.current = null;
@@ -156,7 +158,8 @@ export default function AppNavigator() {
   }, []);
 
   return (
-    <NavigationContainer ref={navigationRef} onReady={handleNavigationReady}>
+    <NavigationContainer ref={navigationRef} onReady={handleNavigationReady}
+      onStateChange={() => setDiagnosticScreen(navigationRef.getCurrentRoute()?.name ?? 'Main')}>
       <Stack.Navigator
         screenOptions={{
           headerShown: false,

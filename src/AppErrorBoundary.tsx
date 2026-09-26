@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, Button } from 'react-native';
 import { reportNonFatal } from './services/crashReporter';
+import { classifyReaderError, getReaderDiagnostic } from './services/readerDiagnostics';
 
 /** Keep local data intact when initialization or a screen fails. */
 export default class AppErrorBoundary extends React.Component<React.PropsWithChildren, { failed: boolean; attempt: number }> {
@@ -8,9 +9,24 @@ export default class AppErrorBoundary extends React.Component<React.PropsWithChi
 
   static getDerivedStateFromError() { return { failed: true }; }
 
-  componentDidCatch(error: Error) {
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    const diagnostic = getReaderDiagnostic();
+    const classified = classifyReaderError(error);
+    console.error('[AppRenderFailure]', JSON.stringify({
+      ...diagnostic, ...classified,
+      httpStatus: diagnostic.httpStatus ?? classified.httpStatus,
+      readerRender: diagnostic.screen === 'Reader' ? 'failed' : diagnostic.readerRender,
+      failureStage: 'react_render',
+      exceptionMessage: error.message,
+      componentStack: info.componentStack,
+      boundaryRetryCount: this.state.attempt,
+    }));
     void reportNonFatal(error, {
-      feature: 'app_lifecycle', operationType: 'render', errorCategory: 'app_render_failed',
+      feature: diagnostic.screen === 'Reader' ? 'reader' : 'app_lifecycle',
+      operationType: diagnostic.stage,
+      errorCategory: 'app_render_failed',
+      retryCount: diagnostic.screen === 'Reader' ? diagnostic.retryCount : this.state.attempt,
+      technicalStatusCode: diagnostic.httpStatus ?? classified.httpStatus ?? undefined,
     });
   }
 
