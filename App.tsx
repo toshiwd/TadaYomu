@@ -25,6 +25,8 @@ import {
   isRemoteReadingProgressNewer,
 } from './src/database/repository';
 
+const SQLITE_OPTIONS = { useNewConnection: true } as const;
+
 // Register site adapters
 registerAdapter(syosetuAdapter);
 registerAdapter(nocturneAdapter);
@@ -155,7 +157,7 @@ function AppRoot() {
   }
 
   return (
-    <SQLiteProvider databaseName="tadayomu.db" onInit={onDbInit}>
+    <SQLiteProvider databaseName="tadayomu.db" options={SQLITE_OPTIONS} onInit={onDbInit}>
       <ThemedApp />
     </SQLiteProvider>
   );

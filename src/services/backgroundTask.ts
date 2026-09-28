@@ -71,7 +71,7 @@ async function executeBackgroundUpdate(manual: boolean): Promise<BackgroundOutco
     };
 
     try {
-        db = openDatabaseSync('tadayomu.db');
+        db = openDatabaseSync('tadayomu.db', { useNewConnection: true });
         initDatabase(db);
         setSetting(db, 'background_last_started_at', new Date().toISOString());
         setSetting(db, 'background_last_source', manual ? 'manual' : 'automatic');

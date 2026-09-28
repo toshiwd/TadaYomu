@@ -15,12 +15,20 @@ echo  TadaYomu Release Build
 echo ========================================
 echo.
 
-set VERSION=1.3.79
+set VERSION=1.3.80
 echo Version: %VERSION%
 echo.
 
+:: Refresh the generated Android version and config before compiling.
+echo [1/4] Updating Android project...
+call npx expo prebuild --platform android --no-install
+if %ERRORLEVEL% neq 0 (
+    echo PREBUILD FAILED!
+    exit /b 1
+)
+
 :: Build release APK
-echo [1/3] Building release APK...
+echo [2/4] Building release APK...
 cd android
 call gradlew.bat assembleRelease
 if %ERRORLEVEL% neq 0 (
@@ -30,14 +38,14 @@ if %ERRORLEVEL% neq 0 (
 cd ..
 
 :: Copy APK using xcopy (reliable binary copy)
-echo [2/3] Copying APK...
+echo [3/4] Copying APK...
 set APK_SRC=android\app\build\outputs\apk\release\app-release.apk
 set APK_DST=TadaYomu-%VERSION%.apk
 xcopy /y /q "%APK_SRC%" "%APK_DST%*" > nul
 echo   -^> %APK_DST%
 
 :: Verify the committed update manifest without rewriting it.
-echo [3/3] Verifying version.json...
+echo [4/4] Verifying version.json...
 powershell -NoProfile -Command "$m = Get-Content -Raw -LiteralPath 'version.json' | ConvertFrom-Json; if ($m.version -ne '%VERSION%') { exit 1 }"
 if %ERRORLEVEL% neq 0 (
     echo VERSION MANIFEST MISMATCH!

@@ -7,12 +7,12 @@ import { downloadAsync } from "expo-file-system/legacy";
 import type { SQLiteDatabase } from "expo-sqlite";
 import type { Novel, Chapter } from "../types/novel";
 import {
-  insertNovel,
   updateNovel,
   getNovelBySiteId,
   upsertChapter,
 } from "../database/repository";
 import { getAdapterForUrl, getAdapter } from "./siteAdapter";
+import { persistNovelImport } from "./novelImport";
 import { formatNovelText } from "./textFormatter";
 import {
   createChapterReadKey,
@@ -75,14 +75,14 @@ export async function addNovelByUrl(
     return { status: "error", message };
   }
 
-  const existing = getNovelBySiteId(db, novelId, adapter.siteType);
-  if (existing) {
-    const message = "This novel already exists in your library";
-    onProgress?.({ phase: "error", current: 0, total: 0, message });
-    return { status: "duplicate", novel: existing, message };
-  }
-
   try {
+    const existing = getNovelBySiteId(db, novelId, adapter.siteType);
+    if (existing) {
+      const message = "This novel already exists in your library";
+      onProgress?.({ phase: "error", current: 0, total: 0, message });
+      return { status: "duplicate", novel: existing, message };
+    }
+
     onProgress?.({
       phase: "info",
       current: 0,
@@ -99,40 +99,7 @@ export async function addNovelByUrl(
     });
     const chapterList = await adapter.getChapterList(novelId);
 
-    const dbId = insertNovel(db, {
-      siteNovelId: info.siteNovelId,
-      siteType: info.siteType,
-      title: info.title,
-      author: info.author,
-      synopsis: info.synopsis,
-      totalEpisodes: chapterList.length,
-      downloadedEpisodes: 0,
-      url: info.url,
-      coverPath: null,
-      tags: [],
-      isComplete: info.isComplete,
-      isArchived: false,
-      siteUpdatedAt: info.lastUpdatedAt,
-      lastCheckedAt: new Date().toISOString(),
-      addedAt: new Date().toISOString(),
-    });
-
-    db.withTransactionSync(() => {
-      for (const ch of chapterList) {
-        upsertChapter(db, {
-          novelId: dbId,
-          index: ch.index,
-          title: ch.title,
-          localPath: null,
-          isDownloaded: false,
-          url: ch.url,
-          publishedAt: ch.publishedAt,
-          revisedAt: ch.revisedAt,
-        });
-      }
-    });
-
-    const savedNovel = getNovelBySiteId(db, novelId, adapter.siteType);
+    const savedNovel = persistNovelImport(db, info, chapterList);
     onProgress?.({
       phase: "done",
       current: 0,
@@ -140,12 +107,6 @@ export async function addNovelByUrl(
       message: "Added to library",
     });
 
-    if (!savedNovel) {
-      return {
-        status: "error",
-        message: "Novel was added but could not be read back from DB",
-      };
-    }
     return { status: "success", novel: savedNovel };
   } catch (err: any) {
     const message = `Error: ${err?.message || "unknown error"}`;

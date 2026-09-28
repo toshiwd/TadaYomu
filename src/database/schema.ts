@@ -8,7 +8,7 @@ const DB_NAME = 'tadayomu.db';
 
 /** Open (or create) the database */
 export function getDatabase(): SQLiteDatabase {
-  return openDatabaseSync(DB_NAME);
+  return openDatabaseSync(DB_NAME, { useNewConnection: true });
 }
 
 /** Initialize all tables */
